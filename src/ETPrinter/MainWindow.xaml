@@ -1,0 +1,337 @@
+<Window x:Class="ETPrinter.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:ETPrinter.ViewModels"
+        Title="{Binding WindowTitle}"
+        Height="900" Width="1400"
+        MinHeight="700" MinWidth="1000"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+
+    <Window.InputBindings>
+        <KeyBinding Gesture="Ctrl+N" Command="{Binding NewProjectCommand}"/>
+        <KeyBinding Gesture="Ctrl+P" Command="{Binding PrintCommand}"/>
+    </Window.InputBindings>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Menu Bar -->
+        <Menu Grid.Row="0">
+            <MenuItem Header="_Datei">
+                <MenuItem Header="_Neu" Command="{Binding NewProjectCommand}" InputGestureText="Ctrl+N"/>
+                <Separator/>
+                <MenuItem Header="_Drucken..." Command="{Binding PrintCommand}" InputGestureText="Ctrl+P"/>
+                <Separator/>
+                <MenuItem Header="_Beenden" Click="MenuExit_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Bearbeiten">
+                <MenuItem Header="Alle _loeschen" Command="{Binding ClearAllCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_Hilfe">
+                <MenuItem Header="_Info" Click="MenuAbout_Click"/>
+            </MenuItem>
+        </Menu>
+
+        <!-- Toolbar -->
+        <ToolBar Grid.Row="1">
+            <Button Command="{Binding NewProjectCommand}" ToolTip="Neues Projekt (Ctrl+N)">
+                <TextBlock Text="Neu" Margin="5,0"/>
+            </Button>
+            <Separator/>
+            <Button Command="{Binding PrintCommand}" ToolTip="Drucken (Ctrl+P)">
+                <TextBlock Text="Drucken" Margin="5,0" FontWeight="Bold"/>
+            </Button>
+        </ToolBar>
+
+        <!-- Main Content - 2 Spalten -->
+        <Grid Grid.Row="2" Margin="5">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="*" MinWidth="400"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- LINKS: Eingabe-Panel -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="5">
+
+                    <!-- Ausgewaehltes Etikett -->
+                    <GroupBox Margin="0,0,0,10">
+                        <GroupBox.Header>
+                            <TextBlock>
+                                <Run Text="Bearbeite: " FontWeight="Bold"/>
+                                <Run Text="{Binding SelectedLabelInfo, Mode=OneWay}" Foreground="#0078D4"/>
+                            </TextBlock>
+                        </GroupBox.Header>
+                        <StackPanel Margin="5">
+                            <TextBlock FontSize="11" Foreground="Gray">
+                                <Run Text="Format: "/>
+                                <Run Text="{Binding SelectedFormat.DisplayName, Mode=OneWay}"/>
+                            </TextBlock>
+                            <TextBlock FontSize="11" Foreground="Gray">
+                                <Run Text="Raster: "/>
+                                <Run Text="{Binding LabelsPerRow, Mode=OneWay}"/>
+                                <Run Text=" x "/>
+                                <Run Text="{Binding LabelRows, Mode=OneWay}"/>
+                                <Run Text=" = "/>
+                                <Run Text="{Binding SelectedFormat.LabelsPerPage, Mode=OneWay}"/>
+                                <Run Text=" Etiketten"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Druckformat -->
+                    <GroupBox Header="Druckformat" Margin="0,0,0,10">
+                        <StackPanel Margin="5">
+                            <ComboBox ItemsSource="{Binding AvailableFormats}"
+                                      SelectedItem="{Binding SelectedFormat}"
+                                      DisplayMemberPath="DisplayName"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Etikett-Eingabe -->
+                    <GroupBox Header="Etikett-Text" Margin="0,0,0,10"
+                              IsEnabled="{Binding SelectedLabel,
+                                          Converter={StaticResource NullToBoolConverter}}">
+                        <StackPanel Margin="5">
+                            <!-- Header (nur bei +Header Formaten) -->
+                            <StackPanel Visibility="{Binding HasHeader,
+                                                     Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Label Content="Kopfzeile:" Padding="0" Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding InputHeader, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,8"/>
+                            </StackPanel>
+
+                            <!-- Zeile 1 -->
+                            <Label Content="Zeile 1:" Padding="0" Margin="0,0,0,2"/>
+                            <TextBox x:Name="Line1TextBox"
+                                     Text="{Binding InputLine1, UpdateSourceTrigger=PropertyChanged}"
+                                     Margin="0,0,0,8"/>
+
+                            <!-- Zeile 2 (nur bei zweizeiligen Formaten) -->
+                            <StackPanel Visibility="{Binding IsDoubleLine,
+                                                     Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Label Content="Zeile 2:" Padding="0" Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding InputLine2, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,8"/>
+                            </StackPanel>
+
+                            <!-- Uebertragen-Button -->
+                            <Button Content="Uebertragen (naechstes Etikett)"
+                                    Command="{Binding ApplyCommand}"
+                                    FontWeight="Bold"
+                                    Padding="10,8"
+                                    Background="#0078D4"
+                                    Foreground="White"
+                                    Margin="0,5,0,0"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Einstellungen -->
+                    <GroupBox Header="Einstellungen" Margin="0,0,0,10">
+                        <StackPanel Margin="5">
+                            <!-- Schriftgroesse -->
+                            <Grid Margin="0,0,0,5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Schriftgroesse:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <ComboBox Grid.Column="1"
+                                          ItemsSource="{Binding FontSizes}"
+                                          SelectedItem="{Binding InputFontSize}"/>
+                            </Grid>
+
+                            <!-- Fett / Kursiv -->
+                            <CheckBox Content="Fett" IsChecked="{Binding InputIsBold}" Margin="0,0,0,3"/>
+                            <CheckBox Content="Kursiv" IsChecked="{Binding InputIsItalic}" Margin="0,0,0,8"/>
+
+                            <!-- Seitenraender -->
+                            <TextBlock Text="Seitenraender (mm):" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition/>
+                                    <RowDefinition/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Oben:" VerticalAlignment="Center" Margin="0,2"/>
+                                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding InputMarginTop, StringFormat={}{0:0.0}}" Margin="5,2"/>
+                                <TextBlock Grid.Row="0" Grid.Column="3" Text="Rechts:" VerticalAlignment="Center" Margin="0,2"/>
+                                <TextBox Grid.Row="0" Grid.Column="4" Text="{Binding InputMarginRight, StringFormat={}{0:0.0}}" Margin="5,2"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Links:" VerticalAlignment="Center" Margin="0,2"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding InputMarginLeft, StringFormat={}{0:0.0}}" Margin="5,2"/>
+                                <TextBlock Grid.Row="1" Grid.Column="3" Text="Unten:" VerticalAlignment="Center" Margin="0,2"/>
+                                <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding InputMarginBottom, StringFormat={}{0:0.0}}" Margin="5,2"/>
+                            </Grid>
+
+                            <!-- Buttons -->
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button Content="Zuruecksetzen" Padding="10,5"
+                                        Command="{Binding ResetSettingsCommand}"/>
+                                <Button Content="Uebernehmen" Padding="10,5" Margin="10,0,0,0"
+                                        Command="{Binding ApplySettingsCommand}"
+                                        Background="#0078D4" Foreground="White"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Alle loeschen -->
+                    <Button Content="Alle Etiketten loeschen"
+                            Command="{Binding ClearAllCommand}"
+                            Padding="10,8" Margin="0,0,0,10"/>
+
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Splitter -->
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch"/>
+
+            <!-- RECHTS: A4-Vorschau -->
+            <Border Grid.Column="2" BorderBrush="Gray" BorderThickness="1" Background="#E0E0E0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header mit Zoom -->
+                    <StackPanel Grid.Row="0" Background="#D0D0D0" Margin="0,0,0,5">
+                        <TextBlock Text="A4-Druckvorschau" FontWeight="Bold" Margin="10,5,10,2"/>
+                        <Grid Margin="10,0,10,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Zoom:" FontSize="11" VerticalAlignment="Center"/>
+                            <Slider Grid.Column="1" Value="{Binding Zoom}" Minimum="0.5" Maximum="4"
+                                    TickFrequency="0.5" IsSnapToTickEnabled="True" Margin="5,0"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Zoom, StringFormat={}{0:0.0}x}"
+                                       FontSize="11" VerticalAlignment="Center" Width="30"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- A4-Blatt -->
+                    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <Border Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Border.LayoutTransform>
+                                <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}"/>
+                            </Border.LayoutTransform>
+                            <!-- A4-Papier (210x297mm bei 3px/mm = 630x891px) -->
+                            <Border Background="White"
+                                    BorderBrush="#808080"
+                                    BorderThickness="1"
+                                    Width="630" Height="891"
+                                    Padding="0">
+                                <Border.Effect>
+                                    <DropShadowEffect ShadowDepth="3" Opacity="0.3"/>
+                                </Border.Effect>
+
+                                <!-- Etikettenraster (Margin = Seitenraender * 3px/mm) -->
+                                <!-- Standard: Links:30*3=90, Oben:20*3=60, Rechts:25*3=75, Unten:21*3=63 -->
+                                <ItemsControl ItemsSource="{Binding Labels}"
+                                              Margin="90,60,75,63">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <UniformGrid Columns="{Binding LabelsPerRow}"
+                                                         Rows="{Binding LabelRows}"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#A0A0A0"
+                                                    BorderThickness="0.5"
+                                                    Margin="0"
+                                                    Cursor="Hand"
+                                                    MouseLeftButtonDown="Label_Click">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="#F0F0F0"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasText}" Value="True">
+                                                                <Setter Property="Background" Value="#D0E8D0"/>
+                                                            </DataTrigger>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Background" Value="#E0E8F0"/>
+                                                            </Trigger>
+                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                <Setter Property="Background" Value="#B8D4F0"/>
+                                                                <Setter Property="BorderBrush" Value="#0078D4"/>
+                                                                <Setter Property="BorderThickness" Value="1.5"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Grid ClipToBounds="True">
+                                                    <!-- Positionsnummer -->
+                                                    <TextBlock Text="{Binding DisplayPosition}"
+                                                               FontSize="5"
+                                                               Foreground="#B0B0B0"
+                                                               Margin="1,0,0,0"
+                                                               VerticalAlignment="Top"
+                                                               HorizontalAlignment="Left"/>
+                                                    <!-- Textinhalt -->
+                                                    <StackPanel VerticalAlignment="Center"
+                                                                HorizontalAlignment="Center"
+                                                                Margin="1">
+                                                        <TextBlock Text="{Binding Line1}"
+                                                                   FontSize="5"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   HorizontalAlignment="Center"
+                                                                   Foreground="#1A237E"/>
+                                                        <TextBlock Text="{Binding Line2}"
+                                                                   FontSize="4.5"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   HorizontalAlignment="Center"
+                                                                   Foreground="#37474F"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
+                        </Border>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+        </Grid>
+
+        <!-- Status Bar -->
+        <StatusBar Grid.Row="3">
+            <StatusBarItem>
+                <TextBlock Text="{Binding StatusMessage}"/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock>
+                    <Run Text="Etikett: "/>
+                    <Run Text="{Binding SelectedLabel.DisplayPosition, Mode=OneWay, FallbackValue=-}"/>
+                    <Run Text=" / "/>
+                    <Run Text="{Binding SelectedFormat.LabelsPerPage, Mode=OneWay}"/>
+                </TextBlock>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock Text="{Binding SelectedFormat.DisplayName, Mode=OneWay}"/>
+            </StatusBarItem>
+        </StatusBar>
+
+    </Grid>
+</Window>
