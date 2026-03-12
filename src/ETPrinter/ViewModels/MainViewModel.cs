@@ -12,10 +12,19 @@ public class MainViewModel : ViewModelBase
     private LabelSettings _settings;
     private double _zoom = 1.5;
 
-    // Eingabefelder
+    // Eingabefelder (manuell)
     private string _inputHeader = string.Empty;
     private string _inputLine1 = string.Empty;
     private string _inputLine2 = string.Empty;
+
+    // Adress-Generator Felder
+    private string _genModuleName = string.Empty;
+    private ModuleTypeInfo _genModuleType;
+    private int _genStartByte;
+    private int _genCount = 2;
+    private bool _genAutoAdvanceAddress = true;
+    private string _genPreviewLine1 = string.Empty;
+    private string _genPreviewLine2 = string.Empty;
 
     // Einstellungen Eingabefelder
     private int _inputFontSize = 7;
@@ -32,12 +41,15 @@ public class MainViewModel : ViewModelBase
     {
         _settings = new LabelSettings();
         _selectedFormat = FormatDefinitions.All[0];
+        _genModuleType = AddressGenerator.ModuleTypes[0]; // DI
 
         AvailableFormats = new ObservableCollection<FormatInfo>(FormatDefinitions.All);
         Labels = new ObservableCollection<LabelViewModel>();
         FontSizes = [6, 7, 8, 9, 10];
 
         ApplyCommand = new RelayCommand(ApplyToLabel, () => SelectedLabel is not null);
+        GenerateAndApplyCommand = new RelayCommand(GenerateAndApply, () => SelectedLabel is not null);
+        GeneratePreviewCommand = new RelayCommand(UpdateGeneratorPreview);
         ClearAllCommand = new RelayCommand(ClearAllLabels);
         ResetSettingsCommand = new RelayCommand(ResetSettings);
         ApplySettingsCommand = new RelayCommand(ApplySettings);
@@ -50,6 +62,9 @@ public class MainViewModel : ViewModelBase
     public ObservableCollection<FormatInfo> AvailableFormats { get; }
     public ObservableCollection<LabelViewModel> Labels { get; }
     public int[] FontSizes { get; }
+
+    // Modultypen fuer ComboBox
+    public ModuleTypeInfo[] AvailableModuleTypes => AddressGenerator.ModuleTypes;
 
     public FormatInfo SelectedFormat
     {
@@ -82,7 +97,6 @@ public class MainViewModel : ViewModelBase
                 if (value is not null)
                 {
                     value.IsSelected = true;
-                    // Lade Text des ausgewaehlten Etiketts in die Eingabefelder
                     InputHeader = value.Header;
                     InputLine1 = value.Line1;
                     InputLine2 = value.Line2;
@@ -104,7 +118,7 @@ public class MainViewModel : ViewModelBase
 
     public string WindowTitle => $"ET-Printer - {_selectedFormat.DisplayName}";
 
-    // Eingabefelder
+    // === Manuelle Eingabefelder ===
     public string InputHeader
     {
         get => _inputHeader;
@@ -123,7 +137,61 @@ public class MainViewModel : ViewModelBase
         set => SetProperty(ref _inputLine2, value);
     }
 
-    // Einstellungen
+    // === Adress-Generator Felder ===
+    public string GenModuleName
+    {
+        get => _genModuleName;
+        set { if (SetProperty(ref _genModuleName, value)) UpdateGeneratorPreview(); }
+    }
+
+    public ModuleTypeInfo GenModuleType
+    {
+        get => _genModuleType;
+        set
+        {
+            if (SetProperty(ref _genModuleType, value))
+            {
+                OnPropertyChanged(nameof(GenCountLabel));
+                OnPropertyChanged(nameof(GenTypicalCounts));
+                UpdateGeneratorPreview();
+            }
+        }
+    }
+
+    public int GenStartByte
+    {
+        get => _genStartByte;
+        set { if (SetProperty(ref _genStartByte, value)) UpdateGeneratorPreview(); }
+    }
+
+    public int GenCount
+    {
+        get => _genCount;
+        set { if (SetProperty(ref _genCount, value)) UpdateGeneratorPreview(); }
+    }
+
+    public bool GenAutoAdvanceAddress
+    {
+        get => _genAutoAdvanceAddress;
+        set => SetProperty(ref _genAutoAdvanceAddress, value);
+    }
+
+    public string GenPreviewLine1
+    {
+        get => _genPreviewLine1;
+        private set => SetProperty(ref _genPreviewLine1, value);
+    }
+
+    public string GenPreviewLine2
+    {
+        get => _genPreviewLine2;
+        private set => SetProperty(ref _genPreviewLine2, value);
+    }
+
+    public string GenCountLabel => AddressGenerator.GetCountLabel(_genModuleType.Type);
+    public int[] GenTypicalCounts => AddressGenerator.GetTypicalCounts(_genModuleType.Type);
+
+    // === Einstellungen ===
     public int InputFontSize
     {
         get => _inputFontSize;
@@ -180,8 +248,10 @@ public class MainViewModel : ViewModelBase
 
     public LabelSettings Settings => _settings;
 
-    // Commands
+    // === Commands ===
     public ICommand ApplyCommand { get; }
+    public ICommand GenerateAndApplyCommand { get; }
+    public ICommand GeneratePreviewCommand { get; }
     public ICommand ClearAllCommand { get; }
     public ICommand ResetSettingsCommand { get; }
     public ICommand ApplySettingsCommand { get; }
@@ -211,7 +281,59 @@ public class MainViewModel : ViewModelBase
         SelectedLabel.Line1 = InputLine1;
         SelectedLabel.Line2 = InputLine2;
 
-        // Zum naechsten Etikett springen
+        AdvanceToNextLabel();
+    }
+
+    private void GenerateAndApply()
+    {
+        if (SelectedLabel is null) return;
+
+        var result = AddressGenerator.Generate(GenModuleName, GenModuleType.Type, GenStartByte, GenCount);
+
+        // In Eingabefelder und direkt aufs Etikett
+        InputHeader = result.Header;
+        InputLine1 = result.Line1;
+        InputLine2 = result.Line2;
+
+        SelectedLabel.Header = result.Header;
+        SelectedLabel.Line1 = result.Line1;
+        SelectedLabel.Line2 = result.Line2;
+
+        StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte}";
+
+        // Startadresse fuer naechstes Modul automatisch weiterschalten
+        if (GenAutoAdvanceAddress)
+        {
+            GenStartByte = AddressGenerator.GetNextStartByte(GenModuleType.Type, GenStartByte, GenCount);
+        }
+
+        AdvanceToNextLabel();
+    }
+
+    private void UpdateGeneratorPreview()
+    {
+        if (GenCount <= 0) return;
+
+        try
+        {
+            var result = AddressGenerator.Generate(
+                string.IsNullOrWhiteSpace(GenModuleName) ? "..." : GenModuleName,
+                GenModuleType.Type, GenStartByte, GenCount);
+
+            GenPreviewLine1 = result.Line1;
+            GenPreviewLine2 = result.Line2;
+        }
+        catch
+        {
+            GenPreviewLine1 = string.Empty;
+            GenPreviewLine2 = string.Empty;
+        }
+    }
+
+    private void AdvanceToNextLabel()
+    {
+        if (SelectedLabel is null) return;
+
         int nextIndex = SelectedLabel.Index + 1;
         if (nextIndex < Labels.Count)
         {
@@ -258,6 +380,9 @@ public class MainViewModel : ViewModelBase
     {
         _settings.Reset();
         ResetSettings();
+        GenModuleName = string.Empty;
+        GenStartByte = 0;
+        GenCount = 2;
         SelectedFormat = FormatDefinitions.All[0];
         StatusMessage = "Neues Projekt erstellt";
     }

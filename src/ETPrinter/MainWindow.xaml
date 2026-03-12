@@ -98,43 +98,107 @@
                         </StackPanel>
                     </GroupBox>
 
-                    <!-- Etikett-Eingabe -->
-                    <GroupBox Header="Etikett-Text" Margin="0,0,0,10"
-                              IsEnabled="{Binding SelectedLabel,
-                                          Converter={StaticResource NullToBoolConverter}}">
-                        <StackPanel Margin="5">
-                            <!-- Header (nur bei +Header Formaten) -->
-                            <StackPanel Visibility="{Binding HasHeader,
-                                                     Converter={StaticResource BoolToVisibilityConverter}}">
-                                <Label Content="Kopfzeile:" Padding="0" Margin="0,0,0,2"/>
-                                <TextBox Text="{Binding InputHeader, UpdateSourceTrigger=PropertyChanged}"
-                                         Margin="0,0,0,8"/>
+                    <!-- Etikett-Eingabe als Tabs -->
+                    <TabControl Margin="0,0,0,10"
+                                IsEnabled="{Binding SelectedLabel,
+                                            Converter={StaticResource NullToBoolConverter}}">
+
+                        <!-- Tab 1: Adress-Generator -->
+                        <TabItem Header="Adress-Generator">
+                            <StackPanel Margin="5">
+                                <!-- Modulname -->
+                                <Label Content="Modulname (Kopfzeile):" Padding="0" Margin="0,4,0,2"/>
+                                <TextBox Text="{Binding GenModuleName, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <!-- Modultyp -->
+                                <Label Content="Modultyp:" Padding="0" Margin="0,8,0,2"/>
+                                <ComboBox ItemsSource="{Binding AvailableModuleTypes}"
+                                          SelectedItem="{Binding GenModuleType}"
+                                          DisplayMemberPath="DisplayName"/>
+
+                                <!-- Startadresse -->
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="10"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <Label Content="Start-Byte:" Padding="0" Margin="0,0,0,2"/>
+                                        <TextBox Text="{Binding GenStartByte, UpdateSourceTrigger=PropertyChanged}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <Label Content="{Binding GenCountLabel}" Padding="0" Margin="0,0,0,2"/>
+                                        <ComboBox ItemsSource="{Binding GenTypicalCounts}"
+                                                  SelectedItem="{Binding GenCount}"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Auto-Weiterschalten -->
+                                <CheckBox Content="Startadresse automatisch weiterschalten"
+                                          IsChecked="{Binding GenAutoAdvanceAddress}"
+                                          Margin="0,8,0,0" FontSize="11"/>
+
+                                <!-- Vorschau -->
+                                <Border Background="#F8F8F0" BorderBrush="#D0D0C0" BorderThickness="1"
+                                        CornerRadius="3" Margin="0,8,0,0" Padding="5">
+                                    <StackPanel>
+                                        <TextBlock Text="Vorschau:" FontWeight="SemiBold" FontSize="10" Foreground="Gray"/>
+                                        <TextBlock Text="{Binding GenPreviewLine1}" FontSize="10"
+                                                   Foreground="#1A237E" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                        <TextBlock Text="{Binding GenPreviewLine2}" FontSize="10"
+                                                   Foreground="#37474F" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Generieren + Uebertragen -->
+                                <Button Content="Generieren + Uebertragen"
+                                        Command="{Binding GenerateAndApplyCommand}"
+                                        FontWeight="Bold"
+                                        Padding="10,8"
+                                        Background="#107C10"
+                                        Foreground="White"
+                                        Margin="0,8,0,0"/>
                             </StackPanel>
+                        </TabItem>
 
-                            <!-- Zeile 1 -->
-                            <Label Content="Zeile 1:" Padding="0" Margin="0,0,0,2"/>
-                            <TextBox x:Name="Line1TextBox"
-                                     Text="{Binding InputLine1, UpdateSourceTrigger=PropertyChanged}"
-                                     Margin="0,0,0,8"/>
+                        <!-- Tab 2: Manuelle Eingabe -->
+                        <TabItem Header="Manuell">
+                            <StackPanel Margin="5">
+                                <!-- Header (nur bei +Header Formaten) -->
+                                <StackPanel Visibility="{Binding HasHeader,
+                                                         Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Label Content="Kopfzeile:" Padding="0" Margin="0,4,0,2"/>
+                                    <TextBox Text="{Binding InputHeader, UpdateSourceTrigger=PropertyChanged}"
+                                             Margin="0,0,0,8"/>
+                                </StackPanel>
 
-                            <!-- Zeile 2 (nur bei zweizeiligen Formaten) -->
-                            <StackPanel Visibility="{Binding IsDoubleLine,
-                                                     Converter={StaticResource BoolToVisibilityConverter}}">
-                                <Label Content="Zeile 2:" Padding="0" Margin="0,0,0,2"/>
-                                <TextBox Text="{Binding InputLine2, UpdateSourceTrigger=PropertyChanged}"
+                                <!-- Zeile 1 -->
+                                <Label Content="Zeile 1:" Padding="0" Margin="0,4,0,2"/>
+                                <TextBox x:Name="Line1TextBox"
+                                         Text="{Binding InputLine1, UpdateSourceTrigger=PropertyChanged}"
                                          Margin="0,0,0,8"/>
-                            </StackPanel>
 
-                            <!-- Uebertragen-Button -->
-                            <Button Content="Uebertragen (naechstes Etikett)"
-                                    Command="{Binding ApplyCommand}"
-                                    FontWeight="Bold"
-                                    Padding="10,8"
-                                    Background="#0078D4"
-                                    Foreground="White"
-                                    Margin="0,5,0,0"/>
-                        </StackPanel>
-                    </GroupBox>
+                                <!-- Zeile 2 (nur bei zweizeiligen Formaten) -->
+                                <StackPanel Visibility="{Binding IsDoubleLine,
+                                                         Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Label Content="Zeile 2:" Padding="0" Margin="0,0,0,2"/>
+                                    <TextBox Text="{Binding InputLine2, UpdateSourceTrigger=PropertyChanged}"
+                                             Margin="0,0,0,8"/>
+                                </StackPanel>
+
+                                <!-- Uebertragen-Button -->
+                                <Button Content="Uebertragen (naechstes Etikett)"
+                                        Command="{Binding ApplyCommand}"
+                                        FontWeight="Bold"
+                                        Padding="10,8"
+                                        Background="#0078D4"
+                                        Foreground="White"
+                                        Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </TabItem>
+
+                    </TabControl>
 
                     <!-- Einstellungen -->
                     <GroupBox Header="Einstellungen" Margin="0,0,0,10">

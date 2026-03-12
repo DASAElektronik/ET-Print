@@ -125,10 +125,35 @@ Konfigurierbare Parameter (analog zum Excel Template):
 
 ---
 
+## F08: SPS-Adress-Generator
+Automatische Generierung von ET200SP-Beschriftungstexten:
+
+- **Eingabe:** Modulname, Modultyp (DI/DO/AI/AO), Start-Byte, Anzahl
+- **Digital (DI/DO):** Bit-Adressierung, ET200SP Klemmenanordnung:
+  - Zeile 1 (oben): Ungerade Bits (E 0.1, E 0.3, E 0.5, E 0.7, ...)
+  - Zeile 2 (unten): Gerade Bits (E 0.0, E 0.2, E 0.4, E 0.6, ...)
+- **Analog (AI/AO):** Wort-Adressierung (EW 0, EW 2, EW 4, ...)
+- **Auto-Weiterschalten:** Startadresse springt automatisch zum naechsten freien Byte
+- **Live-Vorschau:** Generierte Adressen werden sofort angezeigt
+- Tab-basiertes UI: "Adress-Generator" | "Manuell"
+
+---
+
+## F09: PDF-Schaltplan-Parser (Zukunft)
+Automatische Extraktion von SPS-Adressen aus Schaltplan-PDFs:
+
+- **Eingabe:** PDF-Datei eines Schaltplans (z.B. aus EPLAN, WSCAD)
+- **Parsing:** Erkennung von Modulnamen, Adressen, Kanalzuordnungen
+- **Ausgabe:** Automatisches Befuellen der Etiketten
+- **Technologie:** PDF-Parser-Modul (z.B. iText, PdfPig)
+
+---
+
 ## Prioritaeten
 
-| Prioritaet | Features                                              |
-|------------|-------------------------------------------------------|
-| **MVP**    | F01 (6 Formate), F02 (Layout+Editor), F03, F04, F05   |
-| **v1.1**   | F06 (Speichern/Laden)                                 |
-| **v1.2**   | F07 (Mehrere Seiten)                                  |
+| Prioritaet | Features                                                    |
+|------------|-------------------------------------------------------------|
+| **MVP**    | F01 (6 Formate), F02 (Layout+Editor), F03, F04, F05, F08   |
+| **v1.1**   | F06 (Speichern/Laden)                                       |
+| **v1.2**   | F07 (Mehrere Seiten)                                        |
+| **v2.0**   | F09 (PDF-Schaltplan-Parser)                                 |
