@@ -6,18 +6,21 @@
 - **Papier:** A4 Hochformat, 210 x 297 mm
 - **Papiersorte:** Karton 176-220g (empfohlen)
 - **Druckart:** Keine Skalierung, Originalgroesse
+- **Etikettengroesse:** 12,5mm (Hoehe) x 32mm (Breite) pro Etikett
+- **Raster:** 5 Spalten x 20 Zeilen = 100 Etiketten pro A4
+- **Etikettenfeld:** 5 x 32mm = 160mm Breite, 20 x 12,5mm = 250mm Hoehe
 
 ### Standard-Seitenraender
 | Rand   | Wert   |
 |--------|--------|
-| Oben   | 20 mm  |
-| Links  | 30 mm  |
-| Unten  | 21 mm  |
-| Rechts | 25 mm  |
+| Oben   | 23.5 mm |
+| Links  | 25 mm   |
+| Unten  | 23.5 mm |
+| Rechts | 25 mm   |
 
 ### Druckbereich
-- **Breite:** 210 - 30 - 25 = **155 mm**
-- **Hoehe:** 297 - 20 - 21 = **256 mm**
+- **Breite:** 210 - 25 - 25 = **160 mm** (5 x 32mm)
+- **Hoehe:** 297 - 23.5 - 23.5 = **250 mm** (20 x 12,5mm)
 
 ---
 

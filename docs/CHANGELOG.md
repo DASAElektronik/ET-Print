@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 ### Geplant
-- Mehrseitenunterstuetzung (v1.2)
+- Keine offenen Features
 
 ---
 
@@ -11,7 +11,7 @@
 ### Phase 0: Planung & Setup
 - Siemens PDF-Dokumentation (Beitrags-ID 81524595) analysiert
 - Excel Template (Excel_Template_ET200SP.xls) analysiert: 6 Sheets, Zellengroessen, Spaltenbreiten, Zeilenhoehen, Textrotation
-- Physisches Etikettenblatt identifiziert: 6ES7193-6LA10-0AA0 (13mm x 31mm, 100 Stueck pro A4)
+- Physisches Etikettenblatt identifiziert: 6ES7193-6LA10-0AA0 (12,5mm x 32mm, 100 Stueck pro A4)
 - GravurApp-Layout als Referenz analysiert (C:\claude\Gravur)
 - Dokumentation erstellt: PRODUCT.md, FEATURES.md, ARCHITECTURE.md, PRINT-FORMATS.md
 - UI-Konzept: Zwei-Spalten-Layout (Eingabe links, A4-Vorschau rechts) adaptiert von GravurApp
@@ -109,6 +109,60 @@
 - Gespeicherte Daten: Format, 100 Etiketten, Raender, Kalibrierung, Druckoptionen
 - RelayCommand<T> fuer typisierte Command-Parameter (OpenRecentCommand)
 
+### Phase 7: Mehrseitenunterstuetzung (v1.2)
+- LabelPage Datenmodell (Models/LabelPage.cs)
+- LabelProject auf Pages-basiert umgestellt (Version 2)
+- ProjectService: v1-zu-v2 Migration (flache Labels -> LabelPage)
+- Seitennavigation: Vor/Zurueck-Buttons, Seitenanzeige
+- Tastenkuerzel: Ctrl+PageUp/Down fuer Seitennavigation
+- Seiten hinzufuegen/entfernen (+ Seite / - Seite)
+- Auto-Seitenwechsel bei letztem Etikett einer Seite
+- Mehrseitendruck: Alle Seiten in einem FixedDocument
+- PrintService auf IReadOnlyList<IReadOnlyList<LabelViewModel>> umgestellt
+
+### Phase 8: PDF-Schaltplan-Parser (v2.0)
+- PdfPig NuGet-Paket (UglyToad.PdfPig) integriert
+- SchematicParserService (Services/SchematicParserService.cs)
+  - Texterkennung mit Positionsinformationen pro PDF-Seite
+  - Erkennung von ET200SP Modulmustern (BMK, Adresstypen)
+  - Regex-Patterns fuer Digital- (E/A x.x) und Analog-Adressen (EW/AW x)
+  - Raeumliche Gruppierung nach Y-Koordinaten
+- SchematicParseResult Modell (ParsedModule, ParsedChannel)
+- PdfImportDialog (Views/PdfImportDialog.xaml)
+  - DataGrid mit Modulauswahl (Checkbox, Name, Typ, Startadresse, Kanalanzahl)
+  - Alle/Keine auswaehlen Buttons
+  - Warnungsanzeige
+- PdfImportViewModel mit SelectableParsedModule
+- Integration: Importieren-Untermenue im Datei-Menue
+
+### Phase 9: Erweiterte Features (v2.1)
+- Variable Schriftarten:
+  - FontFamily-Property in LabelCell, LabelSettings, LabelViewModel
+  - Schriftart-ComboBox mit Vorschau aller Windows-Fonts
+  - Per-Etikett Schriftart in Vorschau und Druck (PrintService)
+- Selektiver Etikettendruck:
+  - IsPrintEnabled-Property pro Etikett
+  - Visuelle Dimming (Opacity 0.4) fuer deaktivierte Etiketten
+  - Druckauswahl-Menue: Alle/Keine/Befuellte drucken
+  - Kontextmenue: Druck umschalten per Rechtsklick
+- CSV-Import (Services/CsvImportService.cs):
+  - Auto-Detect Trennzeichen (Semikolon/Komma)
+  - Header-Erkennung (Header, Zeile1/Line1, Zeile2/Line2)
+  - Encoding-Fallback (UTF-8 -> Windows-1252)
+- Excel-Import (Services/ExcelImportService.cs):
+  - ClosedXML NuGet-Paket fuer .xlsx-Dateien
+  - Auto-Detect Spalten-Mapping
+- PopulateFromImportedCells: Seitenuebergreifendes Befuellen
+
+### Critic-Review Fixes
+- FontFamily-Binding fuer vertikale Vorschau und Header ergaenzt
+- Standard-Seitenraender vereinheitlicht (23.5/25/23.5/25mm = exakt 12.5x32mm Etiketten)
+- CalibrationService: Speicherpfad auf %LocalAppData%\ETPrinter verschoben
+- RelayCommand<T>: Sichere Type-Checks statt direkter Casts
+- DoOpen: Font-Settings werden korrekt restauriert
+- ApplySettings: Font-Settings werden in _settings geschrieben
+- PopulateFromParsedModules: Adress-Duplikation bei unbekannten Modultypen behoben
+
 ---
 
 ## Versionsplan
@@ -125,12 +179,20 @@
 - [x] Projekt speichern/laden (.etprint JSON)
 - [x] Zuletzt geoeffnete Dateien
 
-### v1.2.0
-- Mehrseitenunterstuetzung
-- Seiten hinzufuegen/entfernen
+### v1.2.0 [DONE]
+- [x] Mehrseitenunterstuetzung
+- [x] Seiten hinzufuegen/entfernen
+- [x] Mehrseitendruck
 
-### v2.0.0
-- PDF-Schaltplan-Parser (automatische SPS-Adress-Extraktion)
+### v2.0.0 [DONE]
+- [x] PDF-Schaltplan-Parser (automatische SPS-Adress-Extraktion)
+- [x] PdfImportDialog mit Modulauswahl
+
+### v2.1.0 [DONE]
+- [x] Variable Schriftarten (alle Windows-Fonts)
+- [x] Selektiver Etikettendruck
+- [x] CSV-Import
+- [x] Excel-Import (.xlsx)
 
 ---
 
@@ -145,3 +207,6 @@
 | 2026-03-12 | v1.0.0 MVP komplett                                  |
 | 2026-03-12 | Druckkalibrierung mit Fadenkreuz-Testseite            |
 | 2026-03-12 | v1.1.0: Speichern/Laden (.etprint), Recent Files      |
+| 2026-03-12 | v1.2.0: Mehrseitenunterstuetzung                      |
+| 2026-03-12 | v2.0.0: PDF-Schaltplan-Parser                         |
+| 2026-03-12 | v2.1.0: Variable Fonts, Selektiver Druck, CSV/Excel   |

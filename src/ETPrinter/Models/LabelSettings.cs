@@ -5,9 +5,10 @@ public class LabelSettings
     public int FontSize { get; set; } = 7;
     public bool IsBold { get; set; } = false;
     public bool IsItalic { get; set; } = false;
-    public double MarginTop { get; set; } = 20.0;    // mm
-    public double MarginLeft { get; set; } = 30.0;   // mm
-    public double MarginBottom { get; set; } = 21.0;  // mm
+    public string FontFamily { get; set; } = "Arial";
+    public double MarginTop { get; set; } = 23.5;    // mm (20x12.5=250mm Etikettenhoehe)
+    public double MarginLeft { get; set; } = 25.0;   // mm (5x32=160mm Etikettenbreite)
+    public double MarginBottom { get; set; } = 23.5;  // mm
     public double MarginRight { get; set; } = 25.0;   // mm
 
     public void Reset()
@@ -15,9 +16,10 @@ public class LabelSettings
         FontSize = 7;
         IsBold = false;
         IsItalic = false;
-        MarginTop = 20.0;
-        MarginLeft = 30.0;
-        MarginBottom = 21.0;
+        FontFamily = "Arial";
+        MarginTop = 23.5;
+        MarginLeft = 25.0;
+        MarginBottom = 23.5;
         MarginRight = 25.0;
     }
 
@@ -26,6 +28,7 @@ public class LabelSettings
         FontSize = FontSize,
         IsBold = IsBold,
         IsItalic = IsItalic,
+        FontFamily = FontFamily,
         MarginTop = MarginTop,
         MarginLeft = MarginLeft,
         MarginBottom = MarginBottom,

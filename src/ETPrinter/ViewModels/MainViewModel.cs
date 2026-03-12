@@ -1,9 +1,12 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using ETPrinter.Models;
 using ETPrinter.Services;
+using ETPrinter.Views;
 
 namespace ETPrinter.ViewModels;
 
@@ -34,6 +37,7 @@ public class MainViewModel : ViewModelBase
     private int _inputFontSize = 7;
     private bool _inputIsBold;
     private bool _inputIsItalic;
+    private string _inputFontFamily = "Arial";
     private double _inputMarginTop = 20.0;
     private double _inputMarginLeft = 30.0;
     private double _inputMarginBottom = 21.0;
@@ -45,6 +49,10 @@ public class MainViewModel : ViewModelBase
     private string? _currentFilePath;
     private string _statusMessage = "Bereit";
 
+    // Multi-page support
+    private List<List<LabelViewModel>> _allPages = [];
+    private int _currentPageIndex;
+
     public MainViewModel()
     {
         _settings = new LabelSettings();
@@ -54,6 +62,10 @@ public class MainViewModel : ViewModelBase
         AvailableFormats = new ObservableCollection<FormatInfo>(FormatDefinitions.All);
         Labels = new ObservableCollection<LabelViewModel>();
         FontSizes = [4, 5, 6, 7, 8, 9, 10];
+        AvailableFonts = new ObservableCollection<string>(
+            Fonts.SystemFontFamilies
+                .Select(f => f.Source)
+                .OrderBy(f => f, StringComparer.CurrentCultureIgnoreCase));
 
         ApplyCommand = new RelayCommand(ApplyToLabel, () => SelectedLabel is not null);
         GenerateAndApplyCommand = new RelayCommand(GenerateAndApply, () => SelectedLabel is not null);
@@ -70,6 +82,23 @@ public class MainViewModel : ViewModelBase
         OpenRecentCommand = new RelayCommand<string>(OpenRecentFile);
         UpdateHeaderCommand = new RelayCommand(UpdateHeader, () => SelectedLabel is not null);
 
+        // Page navigation commands
+        NextPageCommand = new RelayCommand(NextPage, () => _currentPageIndex < _allPages.Count - 1);
+        PrevPageCommand = new RelayCommand(PrevPage, () => _currentPageIndex > 0);
+        AddPageCommand = new RelayCommand(AddPage);
+        RemovePageCommand = new RelayCommand(RemovePage, () => _allPages.Count > 1);
+
+        // Import commands
+        ImportCsvCommand = new RelayCommand(ImportCsv);
+        ImportExcelCommand = new RelayCommand(ImportExcel);
+        ImportSchematicCommand = new RelayCommand(ImportSchematic);
+
+        // Selective print commands
+        SelectAllForPrintCommand = new RelayCommand(SelectAllForPrint);
+        DeselectAllForPrintCommand = new RelayCommand(DeselectAllForPrint);
+        SelectFilledForPrintCommand = new RelayCommand(SelectFilledForPrint);
+        TogglePrintCommand = new RelayCommand(TogglePrint, () => SelectedLabel is not null);
+
         LoadCalibration();
         RefreshRecentFiles();
         InitializeLabels();
@@ -78,6 +107,7 @@ public class MainViewModel : ViewModelBase
     public ObservableCollection<FormatInfo> AvailableFormats { get; }
     public ObservableCollection<LabelViewModel> Labels { get; }
     public ObservableCollection<RecentFileItem> RecentFiles { get; } = new();
+    public ObservableCollection<string> AvailableFonts { get; }
     public int[] FontSizes { get; }
 
     // Modultypen fuer ComboBox
@@ -124,7 +154,8 @@ public class MainViewModel : ViewModelBase
                     InputFontSize = value.CellFontSize;
                     InputIsBold = value.CellIsBold;
                     InputIsItalic = value.CellIsItalic;
-                    StatusMessage = $"Etikett {value.DisplayPosition}/{Labels.Count}";
+                    InputFontFamily = value.CellFontFamily;
+                    StatusMessage = $"Etikett {value.DisplayPosition}/{Labels.Count} (Seite {_currentPageIndex + 1}/{PageCount})";
                 }
                 OnPropertyChanged(nameof(SelectedLabelInfo));
             }
@@ -132,7 +163,7 @@ public class MainViewModel : ViewModelBase
     }
 
     public string SelectedLabelInfo => SelectedLabel is not null
-        ? $"Etikett {SelectedLabel.DisplayPosition} von {Labels.Count}"
+        ? $"Etikett {SelectedLabel.DisplayPosition} von {Labels.Count} (Seite {_currentPageIndex + 1})"
         : "Kein Etikett ausgewaehlt";
 
     public bool HasHeader => _selectedFormat.HasHeader;
@@ -147,6 +178,24 @@ public class MainViewModel : ViewModelBase
     public string WindowTitle => _currentFilePath is not null
         ? $"ET-Printer - {Path.GetFileName(_currentFilePath)}"
         : $"ET-Printer - {_selectedFormat.DisplayName}";
+
+    // === Multi-page properties ===
+    public int CurrentPageIndex
+    {
+        get => _currentPageIndex;
+        set
+        {
+            if (SetProperty(ref _currentPageIndex, value))
+            {
+                OnPropertyChanged(nameof(PageCount));
+                OnPropertyChanged(nameof(PageIndicator));
+            }
+        }
+    }
+
+    public int PageCount => _allPages.Count;
+
+    public string PageIndicator => $"Seite {_currentPageIndex + 1} / {PageCount}";
 
     // === Manuelle Eingabefelder ===
     public string InputHeader
@@ -240,6 +289,12 @@ public class MainViewModel : ViewModelBase
         set => SetProperty(ref _inputIsItalic, value);
     }
 
+    public string InputFontFamily
+    {
+        get => _inputFontFamily;
+        set => SetProperty(ref _inputFontFamily, value);
+    }
+
     public double InputMarginTop
     {
         get => _inputMarginTop;
@@ -317,19 +372,108 @@ public class MainViewModel : ViewModelBase
     public ICommand OpenRecentCommand { get; }
     public ICommand UpdateHeaderCommand { get; }
 
+    // Page navigation commands
+    public ICommand NextPageCommand { get; }
+    public ICommand PrevPageCommand { get; }
+    public ICommand AddPageCommand { get; }
+    public ICommand RemovePageCommand { get; }
+
+    // Import commands
+    public ICommand ImportCsvCommand { get; }
+    public ICommand ImportExcelCommand { get; }
+    public ICommand ImportSchematicCommand { get; }
+
+    // Selective print commands
+    public ICommand SelectAllForPrintCommand { get; }
+    public ICommand DeselectAllForPrintCommand { get; }
+    public ICommand SelectFilledForPrintCommand { get; }
+    public ICommand TogglePrintCommand { get; }
+
     private void InitializeLabels()
     {
         Labels.Clear();
         SelectedLabel = null;
+        _allPages.Clear();
 
         int count = _selectedFormat.LabelsPerPage;
-        for (int i = 0; i < count; i++)
-        {
-            Labels.Add(new LabelViewModel(new LabelCell { Index = i }));
-        }
+        var firstPage = CreateEmptyPage(count);
+        _allPages.Add(firstPage);
+        _currentPageIndex = 0;
+
+        foreach (var lvm in firstPage)
+            Labels.Add(lvm);
+
+        NotifyPageProperties();
 
         if (Labels.Count > 0)
             SelectedLabel = Labels[0];
+    }
+
+    private List<LabelViewModel> CreateEmptyPage(int count)
+    {
+        var page = new List<LabelViewModel>(count);
+        for (int i = 0; i < count; i++)
+            page.Add(new LabelViewModel(new LabelCell { Index = i }));
+        return page;
+    }
+
+    private void NavigateToPage(int index)
+    {
+        if (index < 0 || index >= _allPages.Count) return;
+
+        // Save current ObservableCollection state back to _allPages
+        // (LabelViewModels are shared by reference, so data is already in sync)
+
+        _currentPageIndex = index;
+        Labels.Clear();
+        SelectedLabel = null;
+
+        foreach (var lvm in _allPages[index])
+            Labels.Add(lvm);
+
+        NotifyPageProperties();
+
+        if (Labels.Count > 0)
+            SelectedLabel = Labels[0];
+    }
+
+    private void NotifyPageProperties()
+    {
+        OnPropertyChanged(nameof(CurrentPageIndex));
+        OnPropertyChanged(nameof(PageCount));
+        OnPropertyChanged(nameof(PageIndicator));
+    }
+
+    private void NextPage()
+    {
+        if (_currentPageIndex < _allPages.Count - 1)
+            NavigateToPage(_currentPageIndex + 1);
+    }
+
+    private void PrevPage()
+    {
+        if (_currentPageIndex > 0)
+            NavigateToPage(_currentPageIndex - 1);
+    }
+
+    private void AddPage()
+    {
+        int count = _selectedFormat.LabelsPerPage;
+        var newPage = CreateEmptyPage(count);
+        _allPages.Add(newPage);
+        NavigateToPage(_allPages.Count - 1);
+        StatusMessage = $"Seite {PageCount} hinzugefuegt";
+    }
+
+    private void RemovePage()
+    {
+        if (_allPages.Count <= 1) return;
+
+        int removedIndex = _currentPageIndex;
+        _allPages.RemoveAt(removedIndex);
+        int newIndex = Math.Min(removedIndex, _allPages.Count - 1);
+        NavigateToPage(newIndex);
+        StatusMessage = $"Seite {removedIndex + 1} entfernt ({PageCount} Seiten verbleibend)";
     }
 
     private void ApplyToLabel()
@@ -400,27 +544,58 @@ public class MainViewModel : ViewModelBase
         {
             SelectedLabel = Labels[nextIndex];
         }
+        else if (_currentPageIndex < _allPages.Count - 1)
+        {
+            // At last label of current page, advance to first label of next page
+            NavigateToPage(_currentPageIndex + 1);
+        }
+        else
+        {
+            // At last label of last page, auto-create new page
+            AddPage();
+        }
     }
 
     private void ClearAllLabels()
     {
-        foreach (var label in Labels)
-            label.Clear();
+        // Clear all pages and reset to single empty page
+        _allPages.Clear();
+        Labels.Clear();
+        SelectedLabel = null;
+
+        int count = _selectedFormat.LabelsPerPage;
+        var firstPage = CreateEmptyPage(count);
+        _allPages.Add(firstPage);
+        _currentPageIndex = 0;
+
+        foreach (var lvm in firstPage)
+            Labels.Add(lvm);
+
+        NotifyPageProperties();
+
         InputHeader = string.Empty;
         InputLine1 = string.Empty;
         InputLine2 = string.Empty;
+
+        if (Labels.Count > 0)
+            SelectedLabel = Labels[0];
+
         StatusMessage = "Alle Etiketten geloescht";
     }
 
     private void ResetSettings()
     {
-        InputFontSize = 7;
-        InputIsBold = false;
-        InputIsItalic = false;
-        InputMarginTop = 20.0;
-        InputMarginLeft = 30.0;
-        InputMarginBottom = 21.0;
-        InputMarginRight = 25.0;
+        _settings.Reset();
+        InputFontSize = _settings.FontSize;
+        InputIsBold = _settings.IsBold;
+        InputIsItalic = _settings.IsItalic;
+        InputFontFamily = _settings.FontFamily;
+        InputMarginTop = _settings.MarginTop;
+        InputMarginLeft = _settings.MarginLeft;
+        InputMarginBottom = _settings.MarginBottom;
+        InputMarginRight = _settings.MarginRight;
+        OnPropertyChanged(nameof(Settings));
+        OnPropertyChanged(nameof(PreviewMargin));
         StatusMessage = "Einstellungen zurueckgesetzt";
     }
 
@@ -431,6 +606,10 @@ public class MainViewModel : ViewModelBase
         _settings.MarginLeft = InputMarginLeft;
         _settings.MarginBottom = InputMarginBottom;
         _settings.MarginRight = InputMarginRight;
+        _settings.FontSize = InputFontSize;
+        _settings.IsBold = InputIsBold;
+        _settings.IsItalic = InputIsItalic;
+        _settings.FontFamily = InputFontFamily;
         OnPropertyChanged(nameof(Settings));
         OnPropertyChanged(nameof(PreviewMargin));
 
@@ -459,6 +638,7 @@ public class MainViewModel : ViewModelBase
         label.CellFontSize = InputFontSize;
         label.CellIsBold = InputIsBold;
         label.CellIsItalic = InputIsItalic;
+        label.CellFontFamily = InputFontFamily;
     }
 
     private void NewProject()
@@ -496,11 +676,17 @@ public class MainViewModel : ViewModelBase
     {
         try
         {
+            // Build pages from _allPages (LabelViewModels -> LabelCells)
+            var pages = _allPages.Select(pageVms => new LabelPage
+            {
+                Labels = pageVms.Select(vm => vm.GetCell()).ToList()
+            }).ToList();
+
             var project = new LabelProject
             {
                 Format = _selectedFormat.Format,
                 Settings = _settings.Clone(),
-                Labels = Labels.Select(vm => vm.GetCell()).ToList(),
+                Pages = pages,
                 CalibrationOffsetX = CalibrationOffsetX,
                 CalibrationOffsetY = CalibrationOffsetY,
                 PrintGridLines = PrintGridLines
@@ -509,7 +695,7 @@ public class MainViewModel : ViewModelBase
             _currentFilePath = filePath;
             OnPropertyChanged(nameof(WindowTitle));
             RefreshRecentFiles();
-            StatusMessage = $"Gespeichert: {Path.GetFileName(filePath)}";
+            StatusMessage = $"Gespeichert: {Path.GetFileName(filePath)} ({PageCount} Seiten)";
         }
         catch (Exception ex)
         {
@@ -542,31 +728,67 @@ public class MainViewModel : ViewModelBase
         {
             var project = ProjectService.Load(filePath);
 
-            // Format setzen (loest InitializeLabels aus)
+            // Format setzen (loest InitializeLabels aus -> resets to 1 empty page)
             var formatInfo = FormatDefinitions.Get(project.Format);
             SelectedFormat = formatInfo;
 
-            // Labels befuellen
-            for (int i = 0; i < project.Labels.Count && i < Labels.Count; i++)
+            // Build _allPages from project.Pages
+            _allPages.Clear();
+            int labelsPerPage = _selectedFormat.LabelsPerPage;
+
+            foreach (var projectPage in project.Pages)
             {
-                var src = project.Labels[i];
-                Labels[i].Header = src.Header;
-                Labels[i].Line1 = src.Line1;
-                Labels[i].Line2 = src.Line2;
-                Labels[i].CellFontSize = src.FontSize;
-                Labels[i].CellIsBold = src.IsBold;
-                Labels[i].CellIsItalic = src.IsItalic;
+                var pageVms = new List<LabelViewModel>(labelsPerPage);
+                for (int i = 0; i < labelsPerPage; i++)
+                {
+                    var cell = new LabelCell { Index = i };
+                    if (i < projectPage.Labels.Count)
+                    {
+                        var src = projectPage.Labels[i];
+                        cell.Header = src.Header;
+                        cell.Line1 = src.Line1;
+                        cell.Line2 = src.Line2;
+                        cell.FontSize = src.FontSize;
+                        cell.IsBold = src.IsBold;
+                        cell.IsItalic = src.IsItalic;
+                        cell.FontFamily = src.FontFamily;
+                        cell.IsPrintEnabled = src.IsPrintEnabled;
+                    }
+                    pageVms.Add(new LabelViewModel(cell));
+                }
+                _allPages.Add(pageVms);
             }
+
+            // Ensure at least one page
+            if (_allPages.Count == 0)
+                _allPages.Add(CreateEmptyPage(labelsPerPage));
+
+            // Navigate to first page (populates Labels ObservableCollection)
+            _currentPageIndex = 0;
+            Labels.Clear();
+            SelectedLabel = null;
+            foreach (var lvm in _allPages[0])
+                Labels.Add(lvm);
+
+            NotifyPageProperties();
 
             // Einstellungen
             _settings.MarginTop = project.Settings.MarginTop;
             _settings.MarginLeft = project.Settings.MarginLeft;
             _settings.MarginBottom = project.Settings.MarginBottom;
             _settings.MarginRight = project.Settings.MarginRight;
+            _settings.FontSize = project.Settings.FontSize;
+            _settings.IsBold = project.Settings.IsBold;
+            _settings.IsItalic = project.Settings.IsItalic;
+            _settings.FontFamily = project.Settings.FontFamily;
             InputMarginTop = project.Settings.MarginTop;
             InputMarginLeft = project.Settings.MarginLeft;
             InputMarginBottom = project.Settings.MarginBottom;
             InputMarginRight = project.Settings.MarginRight;
+            InputFontSize = project.Settings.FontSize;
+            InputIsBold = project.Settings.IsBold;
+            InputIsItalic = project.Settings.IsItalic;
+            InputFontFamily = project.Settings.FontFamily;
             OnPropertyChanged(nameof(Settings));
             OnPropertyChanged(nameof(PreviewMargin));
 
@@ -579,7 +801,7 @@ public class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(WindowTitle));
             RefreshRecentFiles();
             if (Labels.Count > 0) SelectedLabel = Labels[0];
-            StatusMessage = $"Geladen: {Path.GetFileName(filePath)}";
+            StatusMessage = $"Geladen: {Path.GetFileName(filePath)} ({PageCount} Seiten)";
         }
         catch (Exception ex)
         {
@@ -599,9 +821,15 @@ public class MainViewModel : ViewModelBase
         try
         {
             SaveCalibration();
-        PrintService.Print(Labels, _selectedFormat, _settings, PrintGridLines,
-            CalibrationOffsetX, CalibrationOffsetY);
-            StatusMessage = "Druckauftrag gesendet";
+
+            // Build page list for PrintService: all pages as IReadOnlyList
+            var printPages = _allPages
+                .Select(page => (IReadOnlyList<LabelViewModel>)page.AsReadOnly())
+                .ToList();
+
+            PrintService.Print(printPages, _selectedFormat, _settings, PrintGridLines,
+                CalibrationOffsetX, CalibrationOffsetY);
+            StatusMessage = $"Druckauftrag gesendet ({PageCount} Seiten)";
         }
         catch (Exception ex)
         {
@@ -643,6 +871,261 @@ public class MainViewModel : ViewModelBase
             OffsetX = CalibrationOffsetX,
             OffsetY = CalibrationOffsetY
         });
+    }
+
+    // === Import Methods ===
+
+    private void ImportCsv()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "CSV-Dateien|*.csv|Alle Dateien|*.*",
+            Title = "CSV-Datei importieren"
+        };
+        if (dlg.ShowDialog() == true)
+        {
+            try
+            {
+                var cells = CsvImportService.Import(dlg.FileName);
+                if (cells.Count == 0)
+                {
+                    StatusMessage = "CSV-Datei enthaelt keine Daten";
+                    return;
+                }
+                PopulateFromImportedCells(cells);
+                StatusMessage = $"{cells.Count} Etiketten aus CSV importiert";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"CSV-Importfehler: {ex.Message}";
+                MessageBox.Show(
+                    $"Fehler beim CSV-Import:\n{ex.Message}",
+                    "Importfehler",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+    }
+
+    private void ImportExcel()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Excel-Dateien|*.xlsx|Alle Dateien|*.*",
+            Title = "Excel-Datei importieren"
+        };
+        if (dlg.ShowDialog() == true)
+        {
+            try
+            {
+                var cells = ExcelImportService.Import(dlg.FileName);
+                if (cells.Count == 0)
+                {
+                    StatusMessage = "Excel-Datei enthaelt keine Daten";
+                    return;
+                }
+                PopulateFromImportedCells(cells);
+                StatusMessage = $"{cells.Count} Etiketten aus Excel importiert";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Excel-Importfehler: {ex.Message}";
+                MessageBox.Show(
+                    $"Fehler beim Excel-Import:\n{ex.Message}",
+                    "Importfehler",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+    }
+
+    private void ImportSchematic()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "PDF-Dateien|*.pdf|Alle Dateien|*.*",
+            Title = "PDF-Schaltplan importieren"
+        };
+        if (dlg.ShowDialog() == true)
+        {
+            try
+            {
+                var result = SchematicParserService.Parse(dlg.FileName);
+                var importVm = new PdfImportViewModel();
+                importVm.LoadFromResult(result);
+                var dialog = new PdfImportDialog(importVm)
+                {
+                    Owner = Application.Current.MainWindow
+                };
+                if (dialog.ShowDialog() == true)
+                {
+                    var selectedModules = importVm.GetSelectedModules();
+                    if (selectedModules.Count == 0)
+                    {
+                        StatusMessage = "Keine Module ausgewaehlt";
+                        return;
+                    }
+                    PopulateFromParsedModules(selectedModules);
+                    StatusMessage = $"{selectedModules.Count} Module aus Schaltplan importiert";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"PDF-Importfehler: {ex.Message}";
+                MessageBox.Show(
+                    $"Fehler beim PDF-Import:\n{ex.Message}",
+                    "Importfehler",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+    }
+
+    private void PopulateFromImportedCells(List<LabelCell> cells)
+    {
+        int labelsPerPage = _selectedFormat.LabelsPerPage;
+        int startIndex = SelectedLabel?.Index ?? 0;
+        int startPage = _currentPageIndex;
+        int cellIndex = 0;
+
+        int pageIdx = startPage;
+        int labelIdx = startIndex;
+
+        while (cellIndex < cells.Count)
+        {
+            // Ensure page exists
+            while (pageIdx >= _allPages.Count)
+            {
+                int count = _selectedFormat.LabelsPerPage;
+                _allPages.Add(CreateEmptyPage(count));
+            }
+
+            var pageVms = _allPages[pageIdx];
+            if (labelIdx < pageVms.Count)
+            {
+                var src = cells[cellIndex];
+                var target = pageVms[labelIdx];
+                target.Header = src.Header;
+                target.Line1 = src.Line1;
+                target.Line2 = src.Line2;
+                cellIndex++;
+            }
+
+            labelIdx++;
+            if (labelIdx >= labelsPerPage)
+            {
+                labelIdx = 0;
+                pageIdx++;
+            }
+        }
+
+        // Navigate to the start page to show results
+        NavigateToPage(startPage);
+        NotifyPageProperties();
+
+        MessageBox.Show(
+            $"{cells.Count} Etiketten importiert.\n" +
+            $"Verteilt auf {_allPages.Count} Seite(n).",
+            "Import abgeschlossen",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void PopulateFromParsedModules(List<ParsedModule> modules)
+    {
+        // Convert parsed modules to label cells using the address generator
+        var cells = new List<LabelCell>();
+
+        foreach (var module in modules)
+        {
+            // Map parsed module type to AddressGenerator ModuleType
+            ModuleType? moduleType = module.ModuleType.ToUpperInvariant() switch
+            {
+                "DI" => ModuleType.DI,
+                "DO" => ModuleType.DO,
+                "AI" => ModuleType.AI,
+                "AO" => ModuleType.AO,
+                _ => null
+            };
+
+            if (moduleType is not null)
+            {
+                var info = AddressGenerator.ModuleTypes.First(m => m.Type == moduleType.Value);
+
+                // Determine count parameter based on module type
+                int count;
+                if (info.IsBitAddressed)
+                {
+                    // Digital modules: channels / 8 = bytes
+                    count = Math.Max(1, module.ChannelCount / 8);
+                    if (count == 0) count = 1;
+                }
+                else
+                {
+                    // Analog modules: count = channel count
+                    count = Math.Max(1, module.ChannelCount);
+                }
+
+                var generated = AddressGenerator.Generate(module.ModuleName, moduleType.Value, module.StartByte, count);
+                cells.Add(new LabelCell
+                {
+                    Header = generated.Header,
+                    Line1 = generated.Line1,
+                    Line2 = generated.Line2
+                });
+            }
+            else
+            {
+                // Unknown type: just use the module name and channel addresses
+                var addresses = module.Channels.Select(c => c.Address).ToList();
+                int half = (addresses.Count + 1) / 2;
+
+                cells.Add(new LabelCell
+                {
+                    Header = module.ModuleName,
+                    Line1 = string.Join("  ", addresses.Take(half)),
+                    Line2 = addresses.Count > half ? string.Join("  ", addresses.Skip(half)) : string.Empty
+                });
+            }
+        }
+
+        if (cells.Count > 0)
+            PopulateFromImportedCells(cells);
+    }
+
+    // === Selective Print Methods ===
+
+    private void SelectAllForPrint()
+    {
+        foreach (var page in _allPages)
+            foreach (var label in page)
+                label.IsPrintEnabled = true;
+        StatusMessage = "Alle Etiketten zum Drucken aktiviert";
+    }
+
+    private void DeselectAllForPrint()
+    {
+        foreach (var page in _allPages)
+            foreach (var label in page)
+                label.IsPrintEnabled = false;
+        StatusMessage = "Alle Etiketten vom Drucken ausgeschlossen";
+    }
+
+    private void SelectFilledForPrint()
+    {
+        foreach (var page in _allPages)
+            foreach (var label in page)
+                label.IsPrintEnabled = label.HasText;
+        StatusMessage = "Nur befuellte Etiketten zum Drucken aktiviert";
+    }
+
+    private void TogglePrint()
+    {
+        if (SelectedLabel is null) return;
+        SelectedLabel.IsPrintEnabled = !SelectedLabel.IsPrintEnabled;
+        StatusMessage = SelectedLabel.IsPrintEnabled
+            ? $"Etikett {SelectedLabel.DisplayPosition}: Druck aktiviert"
+            : $"Etikett {SelectedLabel.DisplayPosition}: Druck deaktiviert";
     }
 
     public void SelectLabel(LabelViewModel label)

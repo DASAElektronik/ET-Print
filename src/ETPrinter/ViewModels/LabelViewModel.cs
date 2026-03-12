@@ -68,10 +68,25 @@ public class LabelViewModel : ViewModelBase
         }
     }
 
+    public string CellFontFamily
+    {
+        get => _cell.FontFamily;
+        set { _cell.FontFamily = value; OnPropertyChanged(); OnPropertyChanged(nameof(PreviewFontFamily)); }
+    }
+
+    public bool IsPrintEnabled
+    {
+        get => _cell.IsPrintEnabled;
+        set { _cell.IsPrintEnabled = value; OnPropertyChanged(); OnPropertyChanged(nameof(PrintOpacity)); }
+    }
+
+    public double PrintOpacity => IsPrintEnabled ? 1.0 : 0.4;
+
     // Vorschau-Eigenschaften (skaliert fuer A4-Preview)
     public double PreviewFontSize => _cell.FontSize * 1.06;
     public FontWeight PreviewFontWeight => _cell.IsBold ? FontWeights.Bold : FontWeights.Normal;
     public FontStyle PreviewFontStyle => _cell.IsItalic ? FontStyles.Italic : FontStyles.Normal;
+    public System.Windows.Media.FontFamily PreviewFontFamily => new(_cell.FontFamily);
 
     /// <summary>Einzelne Adressen aus Line1 (getrennt durch doppeltes Leerzeichen)</summary>
     public string[] Line1Parts => string.IsNullOrWhiteSpace(Line1) ? [] : Line1.Split("  ", StringSplitOptions.RemoveEmptyEntries);

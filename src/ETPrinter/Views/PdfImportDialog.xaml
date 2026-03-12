@@ -1,0 +1,87 @@
+<Window x:Class="ETPrinter.Views.PdfImportDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:ETPrinter.ViewModels"
+        Title="PDF-Schaltplan importieren"
+        Width="700" Height="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip">
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Modulliste -->
+        <DataGrid Grid.Row="0"
+                  ItemsSource="{Binding Items}"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  CanUserReorderColumns="False"
+                  SelectionMode="Single"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="Horizontal"
+                  IsReadOnly="False"
+                  Margin="0,0,0,10">
+            <DataGrid.Columns>
+                <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
+                                        Header=""
+                                        Width="30"/>
+                <DataGridTextColumn Binding="{Binding ModuleName}"
+                                    Header="Modulname"
+                                    Width="*"
+                                    IsReadOnly="True"/>
+                <DataGridTextColumn Binding="{Binding ModuleType}"
+                                    Header="Typ"
+                                    Width="60"
+                                    IsReadOnly="True"/>
+                <DataGridTextColumn Binding="{Binding StartByte}"
+                                    Header="Startadresse"
+                                    Width="90"
+                                    IsReadOnly="True"/>
+                <DataGridTextColumn Binding="{Binding ChannelCount}"
+                                    Header="Kanalanzahl"
+                                    Width="80"
+                                    IsReadOnly="True"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Warnungen -->
+        <Border Grid.Row="1"
+                Background="#FFF8E1"
+                BorderBrush="#FFD54F"
+                BorderThickness="1"
+                CornerRadius="3"
+                Padding="8"
+                Margin="0,0,0,10"
+                Visibility="{Binding WarningsText, Converter={StaticResource StringToVisibilityConverter}}">
+            <TextBlock Text="{Binding WarningsText}"
+                       TextWrapping="Wrap"
+                       Foreground="#F57F17"
+                       FontSize="11"/>
+        </Border>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Alle auswaehlen"
+                    Command="{Binding SelectAllCommand}"
+                    Padding="10,5" Margin="0,0,5,0"/>
+            <Button Content="Keine auswaehlen"
+                    Command="{Binding SelectNoneCommand}"
+                    Padding="10,5" Margin="0,0,15,0"/>
+            <Button Content="Uebernehmen"
+                    Click="Accept_Click"
+                    IsDefault="True"
+                    Padding="15,5" Margin="0,0,5,0"
+                    Background="#0078D4" Foreground="White"
+                    FontWeight="Bold"/>
+            <Button Content="Abbrechen"
+                    Click="Cancel_Click"
+                    IsCancel="True"
+                    Padding="15,5"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -24,6 +24,18 @@ public partial class MainWindow : Window
         }
     }
 
+    private void TogglePrint_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem menuItem &&
+            menuItem.Parent is ContextMenu contextMenu &&
+            contextMenu.PlacementTarget is Border border &&
+            border.DataContext is LabelViewModel label)
+        {
+            ViewModel.SelectLabel(label);
+            label.IsPrintEnabled = !label.IsPrintEnabled;
+        }
+    }
+
     private void MenuExit_Click(object sender, RoutedEventArgs e)
     {
         Close();

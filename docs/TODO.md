@@ -89,20 +89,33 @@
 - [x] Titelleiste zeigt Dateinamen
 - [x] Toolbar: Neu, Oeffnen, Speichern, Drucken
 
-## Phase 7: v1.2 - Mehrseiten
-- [ ] Seiten hinzufuegen/entfernen
-- [ ] Seitennavigation
-- [ ] Mehrseitendruck
+## Phase 7: v1.2 - Mehrseiten [DONE]
+- [x] Seiten hinzufuegen/entfernen (+ Seite / - Seite Buttons)
+- [x] Seitennavigation (Vor/Zurueck, Ctrl+PageUp/Down, Seitenanzeige)
+- [x] Mehrseitendruck (alle Seiten in einem Druckauftrag)
+- [x] LabelPage Datenmodell mit v1-zu-v2 Migration
+- [x] Speichern/Laden mit Mehrseitenunterstuetzung
 
-## Phase 8: v2.0 - PDF-Schaltplan-Parser
-- [ ] PDF-Parser-Modul (z.B. PdfPig)
-- [ ] Erkennung von Modulnamen, Adressen, Kanalzuordnungen
-- [ ] Automatisches Befuellen der Etiketten aus Schaltplan
+## Phase 8: v2.0 - PDF-Schaltplan-Parser [DONE]
+- [x] PDF-Parser-Modul (PdfPig NuGet-Paket)
+- [x] SchematicParserService: Erkennung von Modulnamen, Adressen, Kanalzuordnungen
+- [x] PdfImportDialog: Modulauswahl mit Vorschau
+- [x] Automatisches Befuellen der Etiketten aus Schaltplan
+- [x] Importieren-Untermenue im Datei-Menue
 
 ---
 
-## Offene Fragen
-- [ ] Exakte Zellengroessen durch Testdruck verifizieren
-- [ ] Soll die Schriftart waehlbar sein oder fest auf Arial?
-- [ ] Sollen Etiketten auch einzeln gedruckt werden koennen?
-- [ ] Import aus CSV/Excel-Dateien gewuenscht?
+## Phase 9: v2.1 - Erweiterte Features [DONE]
+- [x] Variable Schriftarten (alle installierten Windows-Fonts, Standard: Arial)
+- [x] Per-Etikett Schriftart in Vorschau und Druck
+- [x] Einzelne Etiketten drucken (IsPrintEnabled, Druckauswahl-Menue, Kontextmenue)
+- [x] CSV-Import (Semikolon/Komma, auto-detect, Header/Zeile1/Zeile2)
+- [x] Excel-Import (.xlsx via ClosedXML, auto-detect Spalten)
+
+---
+
+## Geklaerte Fragen
+- [x] Exakte Zellengroessen: 12,5mm x 32mm pro Etikett (5x32=160mm Breite, 20x12,5=250mm Hoehe)
+- [x] Schriftart: Variable, alle Windows-Fonts (Standard: Arial)
+- [x] Einzeldruck: Ja, Etiketten sollen einzeln druckbar sein
+- [x] CSV/Excel-Import: Ja, gewuenscht

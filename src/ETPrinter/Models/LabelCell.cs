@@ -11,6 +11,10 @@ public class LabelCell
     public int FontSize { get; set; } = 7;
     public bool IsBold { get; set; }
     public bool IsItalic { get; set; }
+    public string FontFamily { get; set; } = "Arial";
+
+    // Selektiver Druck
+    public bool IsPrintEnabled { get; set; } = true;
 
     public bool HasText => !string.IsNullOrWhiteSpace(Header)
                         || !string.IsNullOrWhiteSpace(Line1)

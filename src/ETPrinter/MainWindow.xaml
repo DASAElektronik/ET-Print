@@ -16,6 +16,8 @@
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}"/>
         <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenCommand}"/>
         <KeyBinding Gesture="Ctrl+P" Command="{Binding PrintCommand}"/>
+        <KeyBinding Gesture="Ctrl+PageDown" Command="{Binding NextPageCommand}"/>
+        <KeyBinding Gesture="Ctrl+PageUp" Command="{Binding PrevPageCommand}"/>
     </Window.InputBindings>
 
     <Grid>
@@ -47,12 +49,26 @@
                     </MenuItem.ItemContainerStyle>
                 </MenuItem>
                 <Separator/>
+                <MenuItem Header="Importieren">
+                    <MenuItem Header="CSV-Datei..." Command="{Binding ImportCsvCommand}"/>
+                    <MenuItem Header="Excel-Datei (.xlsx)..." Command="{Binding ImportExcelCommand}"/>
+                    <MenuItem Header="PDF-Schaltplan..." Command="{Binding ImportSchematicCommand}"/>
+                </MenuItem>
+                <Separator/>
                 <MenuItem Header="_Drucken..." Command="{Binding PrintCommand}" InputGestureText="Ctrl+P"/>
                 <Separator/>
                 <MenuItem Header="_Beenden" Click="MenuExit_Click"/>
             </MenuItem>
             <MenuItem Header="_Bearbeiten">
                 <MenuItem Header="Alle _loeschen" Command="{Binding ClearAllCommand}"/>
+                <Separator/>
+                <MenuItem Header="Druckauswahl">
+                    <MenuItem Header="Alle drucken" Command="{Binding SelectAllForPrintCommand}"/>
+                    <MenuItem Header="Keine drucken" Command="{Binding DeselectAllForPrintCommand}"/>
+                    <MenuItem Header="Nur befuellte drucken" Command="{Binding SelectFilledForPrintCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="Ausgewaehltes Etikett umschalten" Command="{Binding TogglePrintCommand}"/>
+                </MenuItem>
             </MenuItem>
             <MenuItem Header="_Hilfe">
                 <MenuItem Header="_Info" Click="MenuAbout_Click"/>
@@ -237,6 +253,19 @@
                     <!-- Einstellungen -->
                     <GroupBox Header="Einstellungen" Margin="0,0,0,10">
                         <StackPanel Margin="5">
+                            <!-- Schriftart -->
+                            <TextBlock Text="Schriftart:" Margin="0,0,0,2"/>
+                            <ComboBox ItemsSource="{Binding AvailableFonts}"
+                                      SelectedItem="{Binding InputFontFamily}"
+                                      MaxDropDownHeight="300"
+                                      Margin="0,0,0,5">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" FontFamily="{Binding}" FontSize="12"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+
                             <!-- Schriftgroesse -->
                             <Grid Margin="0,0,0,5">
                                 <Grid.ColumnDefinitions>
@@ -332,11 +361,12 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
                     <!-- Header mit Zoom -->
-                    <StackPanel Grid.Row="0" Background="#D0D0D0" Margin="0,0,0,5">
+                    <StackPanel Grid.Row="0" Background="#D0D0D0" Margin="0,0,0,0">
                         <TextBlock Text="A4-Druckvorschau" FontWeight="Bold" Margin="10,5,10,2"/>
                         <Grid Margin="10,0,10,5">
                             <Grid.ColumnDefinitions>
@@ -352,8 +382,24 @@
                         </Grid>
                     </StackPanel>
 
+                    <!-- Page Navigation Bar -->
+                    <Border Grid.Row="1" Background="#E8E8E8" BorderBrush="#C0C0C0" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4">
+                            <Button Content="&#9664;" Command="{Binding PrevPageCommand}" Padding="8,2"
+                                    ToolTip="Vorherige Seite (Ctrl+Bild auf)" FontSize="12"/>
+                            <TextBlock Text="{Binding PageIndicator}" VerticalAlignment="Center"
+                                       Margin="10,0" FontWeight="SemiBold" FontSize="12"/>
+                            <Button Content="&#9654;" Command="{Binding NextPageCommand}" Padding="8,2"
+                                    ToolTip="Naechste Seite (Ctrl+Bild ab)" FontSize="12"/>
+                            <Button Content="+ Seite" Command="{Binding AddPageCommand}" Padding="8,2"
+                                    Margin="15,0,0,0" ToolTip="Seite hinzufuegen"/>
+                            <Button Content="- Seite" Command="{Binding RemovePageCommand}" Padding="8,2"
+                                    Margin="5,0,0,0" ToolTip="Seite entfernen"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- A4-Blatt -->
-                    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
                         <Border Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Border.LayoutTransform>
                                 <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}"/>
@@ -395,11 +441,17 @@
                                                     BorderThickness="0.5"
                                                     Margin="0"
                                                     Cursor="Hand"
+                                                    Opacity="{Binding PrintOpacity}"
                                                     MouseLeftButtonDown="Label_Click">
                                                 <!-- Zurueck-spiegeln damit Inhalt lesbar bleibt -->
                                                 <Border.LayoutTransform>
                                                     <ScaleTransform ScaleX="-1" ScaleY="-1"/>
                                                 </Border.LayoutTransform>
+                                                <Border.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="Druck umschalten" Click="TogglePrint_Click"/>
+                                                    </ContextMenu>
+                                                </Border.ContextMenu>
                                                 <Border.Style>
                                                     <Style TargetType="Border">
                                                         <Setter Property="Background" Value="#F0F0F0"/>
@@ -446,6 +498,7 @@
                                                                          Converter={StaticResource BoolToVisibilityConverter}}">
                                                         <TextBlock Text="{Binding Header}"
                                                                    FontSize="{Binding PreviewFontSize}"
+                                                                   FontFamily="{Binding PreviewFontFamily}"
                                                                    FontWeight="Bold"
                                                                    Foreground="#4A148C"
                                                                    HorizontalAlignment="Center"
@@ -478,6 +531,7 @@
                                                                        FontSize="{Binding PreviewFontSize}"
                                                                        FontWeight="{Binding PreviewFontWeight}"
                                                                        FontStyle="{Binding PreviewFontStyle}"
+                                                                       FontFamily="{Binding PreviewFontFamily}"
                                                                        TextTrimming="CharacterEllipsis"
                                                                        HorizontalAlignment="Center"
                                                                        Foreground="#1A237E"/>
@@ -485,6 +539,7 @@
                                                                        FontSize="{Binding PreviewFontSize}"
                                                                        FontWeight="{Binding PreviewFontWeight}"
                                                                        FontStyle="{Binding PreviewFontStyle}"
+                                                                       FontFamily="{Binding PreviewFontFamily}"
                                                                        TextTrimming="CharacterEllipsis"
                                                                        HorizontalAlignment="Center"
                                                                        Foreground="#37474F"/>
@@ -523,6 +578,7 @@
                                                                                        FontSize="{Binding DataContext.PreviewFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                                                        FontWeight="{Binding DataContext.PreviewFontWeight, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                                                        FontStyle="{Binding DataContext.PreviewFontStyle, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                       FontFamily="{Binding DataContext.PreviewFontFamily, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                                                        Foreground="#1A237E"
                                                                                        HorizontalAlignment="Center"
                                                                                        VerticalAlignment="Center">
@@ -549,6 +605,7 @@
                                                                                        FontSize="{Binding DataContext.PreviewFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                                                        FontWeight="{Binding DataContext.PreviewFontWeight, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                                                        FontStyle="{Binding DataContext.PreviewFontStyle, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                       FontFamily="{Binding DataContext.PreviewFontFamily, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                                                        Foreground="#37474F"
                                                                                        HorizontalAlignment="Center"
                                                                                        VerticalAlignment="Center">
@@ -611,6 +668,10 @@
                     <Run Text=" / "/>
                     <Run Text="{Binding SelectedFormat.LabelsPerPage, Mode=OneWay}"/>
                 </TextBlock>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock Text="{Binding PageIndicator, Mode=OneWay}"/>
             </StatusBarItem>
             <Separator/>
             <StatusBarItem>

@@ -15,10 +15,13 @@ public static class PrintService
     private const double PageWidthWpf = 210.0 * MmToWpf;
     private const double PageHeightWpf = 297.0 * MmToWpf;
 
-    private static readonly FontFamily Arial = new("Arial");
+    private static readonly FontFamily DefaultFont = new("Arial");
 
+    /// <summary>
+    /// Multi-page print: each inner list represents one physical page of labels.
+    /// </summary>
     public static void Print(
-        IReadOnlyList<LabelViewModel> labels,
+        IReadOnlyList<IReadOnlyList<LabelViewModel>> pages,
         FormatInfo format,
         LabelSettings settings,
         bool printGridLines = false,
@@ -32,11 +35,15 @@ public static class PrintService
         var document = new FixedDocument();
         document.DocumentPaginator.PageSize = new Size(PageWidthWpf, PageHeightWpf);
 
-        var page = CreatePage(labels, format, settings, printGridLines,
-            calibrationOffsetX, calibrationOffsetY);
-        var pageContent = new PageContent();
-        ((IAddChild)pageContent).AddChild(page);
-        document.Pages.Add(pageContent);
+        foreach (var pageLabels in pages)
+        {
+            // Skip completely empty pages (no labels with text)
+            var page = CreatePage(pageLabels, format, settings, printGridLines,
+                calibrationOffsetX, calibrationOffsetY);
+            var pageContent = new PageContent();
+            ((IAddChild)pageContent).AddChild(page);
+            document.Pages.Add(pageContent);
+        }
 
         printDialog.PrintDocument(document.DocumentPaginator, "ET200SP Etiketten");
     }
@@ -87,8 +94,8 @@ public static class PrintService
             if (printGridLines)
                 DrawCellBorder(canvas, x, y, groupW, cellH);
 
-            // Inhalt nur bei befuellten Etiketten
-            if (label.HasText)
+            // Inhalt nur bei befuellten und druckaktiven Etiketten
+            if (label.HasText && label.IsPrintEnabled)
                 RenderLabel(canvas, label, format, x, y, cellW, cellH, headerW, printGridLines);
         }
 
@@ -125,7 +132,7 @@ public static class PrintService
         if (format.HasHeader)
         {
             if (!string.IsNullOrWhiteSpace(label.Header))
-                RenderHeader(canvas, label.Header, x, y, headerW, cellH, label.CellFontSize);
+                RenderHeader(canvas, label.Header, x, y, headerW, cellH, label.CellFontSize, label.CellFontFamily);
 
             if (printGridLines)
             {
@@ -150,7 +157,7 @@ public static class PrintService
 
     private static void RenderHeader(
         Canvas canvas, string text,
-        double x, double y, double headerW, double cellH, int fontSize)
+        double x, double y, double headerW, double cellH, int fontSize, string fontFamily = "Arial")
     {
         var container = new Border
         {
@@ -158,7 +165,7 @@ public static class PrintService
             Height = cellH
         };
 
-        var tb = CreateTextBlock(text, fontSize, isBold: true, isItalic: false);
+        var tb = CreateTextBlock(text, fontSize, isBold: true, isItalic: false, fontFamily: fontFamily);
         tb.LayoutTransform = new RotateTransform(-90);
         tb.HorizontalAlignment = HorizontalAlignment.Center;
         tb.VerticalAlignment = VerticalAlignment.Center;
@@ -177,7 +184,7 @@ public static class PrintService
 
         if (!string.IsNullOrWhiteSpace(label.Line1))
         {
-            var tb = CreateTextBlock(label.Line1, label.CellFontSize, label.CellIsBold, label.CellIsItalic);
+            var tb = CreateTextBlock(label.Line1, label.CellFontSize, label.CellIsBold, label.CellIsItalic, label.CellFontFamily);
             tb.TextAlignment = TextAlignment.Center;
             tb.Width = cellW;
             tb.HorizontalAlignment = HorizontalAlignment.Center;
@@ -192,7 +199,7 @@ public static class PrintService
 
         if (rowsPerLabel >= 2 && !string.IsNullOrWhiteSpace(label.Line2))
         {
-            var tb = CreateTextBlock(label.Line2, label.CellFontSize, label.CellIsBold, label.CellIsItalic);
+            var tb = CreateTextBlock(label.Line2, label.CellFontSize, label.CellIsBold, label.CellIsItalic, label.CellFontFamily);
             tb.TextAlignment = TextAlignment.Center;
             tb.Width = cellW;
             tb.HorizontalAlignment = HorizontalAlignment.Center;
@@ -218,21 +225,21 @@ public static class PrintService
         {
             double rowH = cellH / 2.0;
             RenderAddressRow(canvas, line1Parts, x, y, cellW, rowH,
-                label.CellFontSize, label.CellIsBold, label.CellIsItalic, printGridLines);
+                label.CellFontSize, label.CellIsBold, label.CellIsItalic, printGridLines, label.CellFontFamily);
             RenderAddressRow(canvas, line2Parts, x, y + rowH, cellW, rowH,
-                label.CellFontSize, label.CellIsBold, label.CellIsItalic, printGridLines);
+                label.CellFontSize, label.CellIsBold, label.CellIsItalic, printGridLines, label.CellFontFamily);
         }
         else
         {
             RenderAddressRow(canvas, line1Parts, x, y, cellW, cellH,
-                label.CellFontSize, label.CellIsBold, label.CellIsItalic, printGridLines);
+                label.CellFontSize, label.CellIsBold, label.CellIsItalic, printGridLines, label.CellFontFamily);
         }
     }
 
     private static void RenderAddressRow(
         Canvas canvas, string[] parts,
         double x, double y, double totalWidth, double rowHeight,
-        int fontSize, bool isBold, bool isItalic, bool printGridLines)
+        int fontSize, bool isBold, bool isItalic, bool printGridLines, string fontFamily = "Arial")
     {
         if (parts.Length == 0) return;
 
@@ -257,7 +264,7 @@ public static class PrintService
             }
 
             // Text 90 Grad gedreht
-            var tb = CreateTextBlock(parts[i], fontSize, isBold, isItalic);
+            var tb = CreateTextBlock(parts[i], fontSize, isBold, isItalic, fontFamily);
             tb.LayoutTransform = new RotateTransform(-90);
             tb.HorizontalAlignment = HorizontalAlignment.Center;
             tb.VerticalAlignment = VerticalAlignment.Center;
@@ -324,7 +331,7 @@ public static class PrintService
                    $"uebereinanderlegen und gegen Licht halten.\n" +
                    $"Fadenkreuze muessen auf die perforierten\n" +
                    $"Ecken des Etikettenbogens treffen.",
-            FontFamily = Arial,
+            FontFamily = DefaultFont,
             FontSize = 10,
             TextAlignment = TextAlignment.Center,
             Foreground = new SolidColorBrush(Color.FromRgb(100, 100, 100))
@@ -387,7 +394,7 @@ public static class PrintService
         var tb = new TextBlock
         {
             Text = label,
-            FontFamily = Arial,
+            FontFamily = DefaultFont,
             FontSize = 7,
             Foreground = new SolidColorBrush(Color.FromRgb(80, 80, 80))
         };
@@ -396,12 +403,12 @@ public static class PrintService
         canvas.Children.Add(tb);
     }
 
-    private static TextBlock CreateTextBlock(string text, int fontSize, bool isBold, bool isItalic)
+    private static TextBlock CreateTextBlock(string text, int fontSize, bool isBold, bool isItalic, string fontFamily = "Arial")
     {
         return new TextBlock
         {
             Text = text,
-            FontFamily = Arial,
+            FontFamily = new FontFamily(fontFamily),
             FontSize = fontSize,
             FontWeight = isBold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = isItalic ? FontStyles.Italic : FontStyles.Normal,

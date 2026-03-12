@@ -12,7 +12,8 @@ public record CalibrationData
 public static class CalibrationService
 {
     private static readonly string FilePath = Path.Combine(
-        AppDomain.CurrentDomain.BaseDirectory, "calibration.json");
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ETPrinter", "calibration.json");
 
     public static CalibrationData Load()
     {
@@ -32,6 +33,7 @@ public static class CalibrationService
     {
         try
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
             var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(FilePath, json);
         }
