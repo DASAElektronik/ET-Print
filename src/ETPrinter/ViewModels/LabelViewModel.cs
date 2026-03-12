@@ -1,3 +1,4 @@
+using System.Windows;
 using ETPrinter.Models;
 
 namespace ETPrinter.ViewModels;
@@ -24,14 +25,59 @@ public class LabelViewModel : ViewModelBase
     public string Line1
     {
         get => _cell.Line1;
-        set { _cell.Line1 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); }
+        set { _cell.Line1 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line1Parts)); }
     }
 
     public string Line2
     {
         get => _cell.Line2;
-        set { _cell.Line2 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); }
+        set { _cell.Line2 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line2Parts)); }
     }
+
+    // Per-Etikett Schrift-Einstellungen
+    public int CellFontSize
+    {
+        get => _cell.FontSize;
+        set
+        {
+            _cell.FontSize = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(PreviewFontSize));
+        }
+    }
+
+    public bool CellIsBold
+    {
+        get => _cell.IsBold;
+        set
+        {
+            _cell.IsBold = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(PreviewFontWeight));
+        }
+    }
+
+    public bool CellIsItalic
+    {
+        get => _cell.IsItalic;
+        set
+        {
+            _cell.IsItalic = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(PreviewFontStyle));
+        }
+    }
+
+    // Vorschau-Eigenschaften (skaliert fuer A4-Preview)
+    public double PreviewFontSize => _cell.FontSize * 1.06;
+    public FontWeight PreviewFontWeight => _cell.IsBold ? FontWeights.Bold : FontWeights.Normal;
+    public FontStyle PreviewFontStyle => _cell.IsItalic ? FontStyles.Italic : FontStyles.Normal;
+
+    /// <summary>Einzelne Adressen aus Line1 (getrennt durch doppeltes Leerzeichen)</summary>
+    public string[] Line1Parts => string.IsNullOrWhiteSpace(Line1) ? [] : Line1.Split("  ", StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>Einzelne Adressen aus Line2 (getrennt durch doppeltes Leerzeichen)</summary>
+    public string[] Line2Parts => string.IsNullOrWhiteSpace(Line2) ? [] : Line2.Split("  ", StringSplitOptions.RemoveEmptyEntries);
 
     public bool HasText => _cell.HasText;
 
@@ -49,6 +95,8 @@ public class LabelViewModel : ViewModelBase
         OnPropertyChanged(nameof(Header));
         OnPropertyChanged(nameof(Line1));
         OnPropertyChanged(nameof(Line2));
+        OnPropertyChanged(nameof(Line1Parts));
+        OnPropertyChanged(nameof(Line2Parts));
         OnPropertyChanged(nameof(HasText));
     }
 }

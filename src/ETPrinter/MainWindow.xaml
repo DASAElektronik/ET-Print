@@ -108,7 +108,17 @@
                             <StackPanel Margin="5">
                                 <!-- Modulname -->
                                 <Label Content="Modulname (Kopfzeile):" Padding="0" Margin="0,4,0,2"/>
-                                <TextBox Text="{Binding GenModuleName, UpdateSourceTrigger=PropertyChanged}"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Text="{Binding GenModuleName, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <Button Grid.Column="1" Content="Aendern"
+                                            Command="{Binding UpdateHeaderCommand}"
+                                            ToolTip="Nur Kopfzeile des ausgewaehlten Etiketts aendern"
+                                            Padding="6,1" Margin="4,0,0,0" FontSize="11"/>
+                                </Grid>
 
                                 <!-- Modultyp -->
                                 <Label Content="Modultyp:" Padding="0" Margin="0,8,0,2"/>
@@ -309,7 +319,7 @@
                                 <!-- Etikettenraster (Margin = Seitenraender * 3px/mm) -->
                                 <!-- Standard: Links:30*3=90, Oben:20*3=60, Rechts:25*3=75, Unten:21*3=63 -->
                                 <ItemsControl ItemsSource="{Binding Labels}"
-                                              Margin="90,60,75,63">
+                                              Margin="{Binding PreviewMargin}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <UniformGrid Columns="{Binding LabelsPerRow}"
@@ -342,28 +352,158 @@
                                                     </Style>
                                                 </Border.Style>
                                                 <Grid ClipToBounds="True">
-                                                    <!-- Positionsnummer -->
-                                                    <TextBlock Text="{Binding DisplayPosition}"
-                                                               FontSize="5"
-                                                               Foreground="#B0B0B0"
-                                                               Margin="1,0,0,0"
-                                                               VerticalAlignment="Top"
-                                                               HorizontalAlignment="Left"/>
+                                                    <Grid.ColumnDefinitions>
+                                                        <!-- Header-Spalte: sichtbar bei +Header Formaten -->
+                                                        <ColumnDefinition>
+                                                            <ColumnDefinition.Style>
+                                                                <Style TargetType="ColumnDefinition">
+                                                                    <Setter Property="Width" Value="0"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding DataContext.HasHeader,
+                                                                                     RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                     Value="True">
+                                                                            <Setter Property="Width" Value="18"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ColumnDefinition.Style>
+                                                        </ColumnDefinition>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- Header-Spalte (90 Grad gedreht) -->
+                                                    <Border Grid.Column="0" Background="#D8D8E8"
+                                                            BorderBrush="#A0A0A0" BorderThickness="0,0,0.5,0"
+                                                            Visibility="{Binding DataContext.HasHeader,
+                                                                         RelativeSource={RelativeSource AncestorType=Window},
+                                                                         Converter={StaticResource BoolToVisibilityConverter}}">
+                                                        <TextBlock Text="{Binding Header}"
+                                                                   FontSize="{Binding PreviewFontSize}"
+                                                                   FontWeight="Bold"
+                                                                   Foreground="#4A148C"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis">
+                                                            <TextBlock.LayoutTransform>
+                                                                <RotateTransform Angle="-90"/>
+                                                            </TextBlock.LayoutTransform>
+                                                        </TextBlock>
+                                                    </Border>
+
                                                     <!-- Textinhalt -->
-                                                    <StackPanel VerticalAlignment="Center"
-                                                                HorizontalAlignment="Center"
-                                                                Margin="1">
-                                                        <TextBlock Text="{Binding Line1}"
-                                                                   FontSize="5"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   HorizontalAlignment="Center"
-                                                                   Foreground="#1A237E"/>
-                                                        <TextBlock Text="{Binding Line2}"
-                                                                   FontSize="4.5"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   HorizontalAlignment="Center"
-                                                                   Foreground="#37474F"/>
-                                                    </StackPanel>
+                                                    <Grid Grid.Column="1">
+                                                        <!-- Positionsnummer -->
+                                                        <TextBlock Text="{Binding DisplayPosition}"
+                                                                   FontSize="4"
+                                                                   Foreground="#C0C0C0"
+                                                                   Margin="1,0,0,0"
+                                                                   VerticalAlignment="Top"
+                                                                   HorizontalAlignment="Left"
+                                                                   Panel.ZIndex="1"/>
+
+                                                        <!-- HORIZONTAL: Einfache Textzeilen -->
+                                                        <StackPanel VerticalAlignment="Center"
+                                                                    HorizontalAlignment="Center"
+                                                                    Margin="1">
+                                                            <StackPanel.Style>
+                                                                <Style TargetType="StackPanel">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding DataContext.IsVertical,
+                                                                                     RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                     Value="True">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </StackPanel.Style>
+                                                            <TextBlock Text="{Binding Line1}"
+                                                                       FontSize="{Binding PreviewFontSize}"
+                                                                       FontWeight="{Binding PreviewFontWeight}"
+                                                                       FontStyle="{Binding PreviewFontStyle}"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       HorizontalAlignment="Center"
+                                                                       Foreground="#1A237E"/>
+                                                            <TextBlock Text="{Binding Line2}"
+                                                                       FontSize="{Binding PreviewFontSize}"
+                                                                       FontWeight="{Binding PreviewFontWeight}"
+                                                                       FontStyle="{Binding PreviewFontStyle}"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       HorizontalAlignment="Center"
+                                                                       Foreground="#37474F"/>
+                                                        </StackPanel>
+
+                                                        <!-- VERTIKAL: Einzelne Adress-Rechtecke pro Zeile -->
+                                                        <Grid Margin="0">
+                                                            <Grid.Style>
+                                                                <Style TargetType="Grid">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding DataContext.IsVertical,
+                                                                                     RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                     Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Grid.Style>
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="*"/>
+                                                                <RowDefinition Height="*"/>
+                                                            </Grid.RowDefinitions>
+                                                            <!-- Zeile 1: Ungerade Bits -->
+                                                            <ItemsControl Grid.Row="0" ItemsSource="{Binding Line1Parts}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate>
+                                                                        <UniformGrid Rows="1"/>
+                                                                    </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border BorderBrush="#A0A0A0" BorderThickness="0.3"
+                                                                                Margin="0">
+                                                                            <TextBlock Text="{Binding}"
+                                                                                       FontSize="{Binding DataContext.PreviewFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                       FontWeight="{Binding DataContext.PreviewFontWeight, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                       FontStyle="{Binding DataContext.PreviewFontStyle, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                       Foreground="#1A237E"
+                                                                                       HorizontalAlignment="Center"
+                                                                                       VerticalAlignment="Center">
+                                                                                <TextBlock.LayoutTransform>
+                                                                                    <RotateTransform Angle="-90"/>
+                                                                                </TextBlock.LayoutTransform>
+                                                                            </TextBlock>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                            <!-- Zeile 2: Gerade Bits -->
+                                                            <ItemsControl Grid.Row="1" ItemsSource="{Binding Line2Parts}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate>
+                                                                        <UniformGrid Rows="1"/>
+                                                                    </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border BorderBrush="#A0A0A0" BorderThickness="0.3"
+                                                                                Margin="0">
+                                                                            <TextBlock Text="{Binding}"
+                                                                                       FontSize="{Binding DataContext.PreviewFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                       FontWeight="{Binding DataContext.PreviewFontWeight, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                       FontStyle="{Binding DataContext.PreviewFontStyle, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                       Foreground="#37474F"
+                                                                                       HorizontalAlignment="Center"
+                                                                                       VerticalAlignment="Center">
+                                                                                <TextBlock.LayoutTransform>
+                                                                                    <RotateTransform Angle="-90"/>
+                                                                                </TextBlock.LayoutTransform>
+                                                                            </TextBlock>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </Grid>
+                                                    </Grid>
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>

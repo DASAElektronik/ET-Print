@@ -7,6 +7,11 @@ public class LabelCell
     public string Line1 { get; set; } = string.Empty;
     public string Line2 { get; set; } = string.Empty;
 
+    // Per-Etikett Schrift-Einstellungen
+    public int FontSize { get; set; } = 7;
+    public bool IsBold { get; set; }
+    public bool IsItalic { get; set; }
+
     public bool HasText => !string.IsNullOrWhiteSpace(Header)
                         || !string.IsNullOrWhiteSpace(Line1)
                         || !string.IsNullOrWhiteSpace(Line2);

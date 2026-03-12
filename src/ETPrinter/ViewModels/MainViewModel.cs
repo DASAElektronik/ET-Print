@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
 using ETPrinter.Models;
 using ETPrinter.Services;
@@ -45,7 +46,7 @@ public class MainViewModel : ViewModelBase
 
         AvailableFormats = new ObservableCollection<FormatInfo>(FormatDefinitions.All);
         Labels = new ObservableCollection<LabelViewModel>();
-        FontSizes = [6, 7, 8, 9, 10];
+        FontSizes = [4, 5, 6, 7, 8, 9, 10];
 
         ApplyCommand = new RelayCommand(ApplyToLabel, () => SelectedLabel is not null);
         GenerateAndApplyCommand = new RelayCommand(GenerateAndApply, () => SelectedLabel is not null);
@@ -55,6 +56,7 @@ public class MainViewModel : ViewModelBase
         ApplySettingsCommand = new RelayCommand(ApplySettings);
         PrintCommand = new RelayCommand(PrintLabels);
         NewProjectCommand = new RelayCommand(NewProject);
+        UpdateHeaderCommand = new RelayCommand(UpdateHeader, () => SelectedLabel is not null);
 
         InitializeLabels();
     }
@@ -76,6 +78,7 @@ public class MainViewModel : ViewModelBase
                 InitializeLabels();
                 OnPropertyChanged(nameof(HasHeader));
                 OnPropertyChanged(nameof(IsDoubleLine));
+                OnPropertyChanged(nameof(IsVertical));
                 OnPropertyChanged(nameof(LabelsPerRow));
                 OnPropertyChanged(nameof(LabelRows));
                 OnPropertyChanged(nameof(WindowTitle));
@@ -100,6 +103,11 @@ public class MainViewModel : ViewModelBase
                     InputHeader = value.Header;
                     InputLine1 = value.Line1;
                     InputLine2 = value.Line2;
+                    GenModuleName = value.Header; // Kopfzeile auch im Generator laden
+                    // Schrift-Einstellungen des Etiketts laden
+                    InputFontSize = value.CellFontSize;
+                    InputIsBold = value.CellIsBold;
+                    InputIsItalic = value.CellIsItalic;
                     StatusMessage = $"Etikett {value.DisplayPosition}/{Labels.Count}";
                 }
                 OnPropertyChanged(nameof(SelectedLabelInfo));
@@ -113,6 +121,7 @@ public class MainViewModel : ViewModelBase
 
     public bool HasHeader => _selectedFormat.HasHeader;
     public bool IsDoubleLine => _selectedFormat.RowsPerLabel == 2;
+    public bool IsVertical => _selectedFormat.IsVertical;
     public int LabelsPerRow => _selectedFormat.LabelsPerRow;
     public int LabelRows => _selectedFormat.LabelRows;
 
@@ -248,6 +257,11 @@ public class MainViewModel : ViewModelBase
 
     public LabelSettings Settings => _settings;
 
+    // Seitenraender fuer A4-Preview (3px/mm Skalierung)
+    public Thickness PreviewMargin => new(
+        _settings.MarginLeft * 3, _settings.MarginTop * 3,
+        _settings.MarginRight * 3, _settings.MarginBottom * 3);
+
     // === Commands ===
     public ICommand ApplyCommand { get; }
     public ICommand GenerateAndApplyCommand { get; }
@@ -257,6 +271,7 @@ public class MainViewModel : ViewModelBase
     public ICommand ApplySettingsCommand { get; }
     public ICommand PrintCommand { get; }
     public ICommand NewProjectCommand { get; }
+    public ICommand UpdateHeaderCommand { get; }
 
     private void InitializeLabels()
     {
@@ -280,6 +295,7 @@ public class MainViewModel : ViewModelBase
         SelectedLabel.Header = InputHeader;
         SelectedLabel.Line1 = InputLine1;
         SelectedLabel.Line2 = InputLine2;
+        ApplyFontToLabel(SelectedLabel);
 
         AdvanceToNextLabel();
     }
@@ -298,6 +314,7 @@ public class MainViewModel : ViewModelBase
         SelectedLabel.Header = result.Header;
         SelectedLabel.Line1 = result.Line1;
         SelectedLabel.Line2 = result.Line2;
+        ApplyFontToLabel(SelectedLabel);
 
         StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte}";
 
@@ -365,15 +382,39 @@ public class MainViewModel : ViewModelBase
 
     private void ApplySettings()
     {
-        _settings.FontSize = InputFontSize;
-        _settings.IsBold = InputIsBold;
-        _settings.IsItalic = InputIsItalic;
+        // Seitenraender global
         _settings.MarginTop = InputMarginTop;
         _settings.MarginLeft = InputMarginLeft;
         _settings.MarginBottom = InputMarginBottom;
         _settings.MarginRight = InputMarginRight;
         OnPropertyChanged(nameof(Settings));
-        StatusMessage = "Einstellungen uebernommen";
+        OnPropertyChanged(nameof(PreviewMargin));
+
+        // Schrift aufs ausgewaehlte Etikett
+        if (SelectedLabel is not null)
+        {
+            ApplyFontToLabel(SelectedLabel);
+            StatusMessage = $"Schrift fuer Etikett {SelectedLabel.DisplayPosition} uebernommen";
+        }
+        else
+        {
+            StatusMessage = "Seitenraender uebernommen";
+        }
+    }
+
+    private void UpdateHeader()
+    {
+        if (SelectedLabel is null) return;
+        SelectedLabel.Header = GenModuleName;
+        InputHeader = GenModuleName;
+        StatusMessage = $"Kopfzeile von Etikett {SelectedLabel.DisplayPosition} geaendert";
+    }
+
+    private void ApplyFontToLabel(LabelViewModel label)
+    {
+        label.CellFontSize = InputFontSize;
+        label.CellIsBold = InputIsBold;
+        label.CellIsItalic = InputIsItalic;
     }
 
     private void NewProject()
