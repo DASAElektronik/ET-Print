@@ -1,10 +1,13 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using ETPrinter.Models;
 using ETPrinter.Services;
 
 namespace ETPrinter.ViewModels;
+
+public record RecentFileItem(string FilePath, string DisplayName);
 
 public class MainViewModel : ViewModelBase
 {
@@ -36,6 +39,10 @@ public class MainViewModel : ViewModelBase
     private double _inputMarginBottom = 21.0;
     private double _inputMarginRight = 25.0;
 
+    private bool _printGridLines;
+    private double _calibrationOffsetX;
+    private double _calibrationOffsetY;
+    private string? _currentFilePath;
     private string _statusMessage = "Bereit";
 
     public MainViewModel()
@@ -55,14 +62,22 @@ public class MainViewModel : ViewModelBase
         ResetSettingsCommand = new RelayCommand(ResetSettings);
         ApplySettingsCommand = new RelayCommand(ApplySettings);
         PrintCommand = new RelayCommand(PrintLabels);
+        PrintCalibrationCommand = new RelayCommand(PrintCalibration);
         NewProjectCommand = new RelayCommand(NewProject);
+        SaveCommand = new RelayCommand(SaveProject);
+        SaveAsCommand = new RelayCommand(SaveProjectAs);
+        OpenCommand = new RelayCommand(OpenProject);
+        OpenRecentCommand = new RelayCommand<string>(OpenRecentFile);
         UpdateHeaderCommand = new RelayCommand(UpdateHeader, () => SelectedLabel is not null);
 
+        LoadCalibration();
+        RefreshRecentFiles();
         InitializeLabels();
     }
 
     public ObservableCollection<FormatInfo> AvailableFormats { get; }
     public ObservableCollection<LabelViewModel> Labels { get; }
+    public ObservableCollection<RecentFileItem> RecentFiles { get; } = new();
     public int[] FontSizes { get; }
 
     // Modultypen fuer ComboBox
@@ -81,6 +96,7 @@ public class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsVertical));
                 OnPropertyChanged(nameof(LabelsPerRow));
                 OnPropertyChanged(nameof(LabelRows));
+                OnPropertyChanged(nameof(RowNumbers));
                 OnPropertyChanged(nameof(WindowTitle));
                 StatusMessage = $"Format: {value.DisplayName} ({value.LabelsPerPage} Etiketten)";
             }
@@ -125,7 +141,12 @@ public class MainViewModel : ViewModelBase
     public int LabelsPerRow => _selectedFormat.LabelsPerRow;
     public int LabelRows => _selectedFormat.LabelRows;
 
-    public string WindowTitle => $"ET-Printer - {_selectedFormat.DisplayName}";
+    // Zeilennummern fuer rechten Rand (wie physisches A4-Blatt: 20 oben, 1 unten)
+    public int[] RowNumbers => Enumerable.Range(1, _selectedFormat.LabelRows).Reverse().ToArray();
+
+    public string WindowTitle => _currentFilePath is not null
+        ? $"ET-Printer - {Path.GetFileName(_currentFilePath)}"
+        : $"ET-Printer - {_selectedFormat.DisplayName}";
 
     // === Manuelle Eingabefelder ===
     public string InputHeader
@@ -243,6 +264,24 @@ public class MainViewModel : ViewModelBase
         set => SetProperty(ref _inputMarginRight, value);
     }
 
+    public bool PrintGridLines
+    {
+        get => _printGridLines;
+        set => SetProperty(ref _printGridLines, value);
+    }
+
+    public double CalibrationOffsetX
+    {
+        get => _calibrationOffsetX;
+        set => SetProperty(ref _calibrationOffsetX, value);
+    }
+
+    public double CalibrationOffsetY
+    {
+        get => _calibrationOffsetY;
+        set => SetProperty(ref _calibrationOffsetY, value);
+    }
+
     public double Zoom
     {
         get => _zoom;
@@ -270,7 +309,12 @@ public class MainViewModel : ViewModelBase
     public ICommand ResetSettingsCommand { get; }
     public ICommand ApplySettingsCommand { get; }
     public ICommand PrintCommand { get; }
+    public ICommand PrintCalibrationCommand { get; }
     public ICommand NewProjectCommand { get; }
+    public ICommand SaveCommand { get; }
+    public ICommand SaveAsCommand { get; }
+    public ICommand OpenCommand { get; }
+    public ICommand OpenRecentCommand { get; }
     public ICommand UpdateHeaderCommand { get; }
 
     private void InitializeLabels()
@@ -419,18 +463,186 @@ public class MainViewModel : ViewModelBase
 
     private void NewProject()
     {
+        _currentFilePath = null;
         _settings.Reset();
         ResetSettings();
         GenModuleName = string.Empty;
         GenStartByte = 0;
         GenCount = 2;
         SelectedFormat = FormatDefinitions.All[0];
+        OnPropertyChanged(nameof(WindowTitle));
         StatusMessage = "Neues Projekt erstellt";
+    }
+
+    private void SaveProject()
+    {
+        if (_currentFilePath is null) { SaveProjectAs(); return; }
+        DoSave(_currentFilePath);
+    }
+
+    private void SaveProjectAs()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "ET-Printer Projekt (*.etprint)|*.etprint",
+            DefaultExt = ".etprint",
+            FileName = Path.GetFileNameWithoutExtension(_currentFilePath ?? "Projekt")
+        };
+        if (dialog.ShowDialog() == true)
+            DoSave(dialog.FileName);
+    }
+
+    private void DoSave(string filePath)
+    {
+        try
+        {
+            var project = new LabelProject
+            {
+                Format = _selectedFormat.Format,
+                Settings = _settings.Clone(),
+                Labels = Labels.Select(vm => vm.GetCell()).ToList(),
+                CalibrationOffsetX = CalibrationOffsetX,
+                CalibrationOffsetY = CalibrationOffsetY,
+                PrintGridLines = PrintGridLines
+            };
+            ProjectService.Save(project, filePath);
+            _currentFilePath = filePath;
+            OnPropertyChanged(nameof(WindowTitle));
+            RefreshRecentFiles();
+            StatusMessage = $"Gespeichert: {Path.GetFileName(filePath)}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Speicherfehler: {ex.Message}";
+        }
+    }
+
+    private void OpenProject()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "ET-Printer Projekt (*.etprint)|*.etprint",
+            DefaultExt = ".etprint"
+        };
+        if (dialog.ShowDialog() == true)
+            DoOpen(dialog.FileName);
+    }
+
+    private void OpenRecentFile(string? filePath)
+    {
+        if (filePath is not null && File.Exists(filePath))
+            DoOpen(filePath);
+        else
+            StatusMessage = "Datei nicht gefunden";
+    }
+
+    private void DoOpen(string filePath)
+    {
+        try
+        {
+            var project = ProjectService.Load(filePath);
+
+            // Format setzen (loest InitializeLabels aus)
+            var formatInfo = FormatDefinitions.Get(project.Format);
+            SelectedFormat = formatInfo;
+
+            // Labels befuellen
+            for (int i = 0; i < project.Labels.Count && i < Labels.Count; i++)
+            {
+                var src = project.Labels[i];
+                Labels[i].Header = src.Header;
+                Labels[i].Line1 = src.Line1;
+                Labels[i].Line2 = src.Line2;
+                Labels[i].CellFontSize = src.FontSize;
+                Labels[i].CellIsBold = src.IsBold;
+                Labels[i].CellIsItalic = src.IsItalic;
+            }
+
+            // Einstellungen
+            _settings.MarginTop = project.Settings.MarginTop;
+            _settings.MarginLeft = project.Settings.MarginLeft;
+            _settings.MarginBottom = project.Settings.MarginBottom;
+            _settings.MarginRight = project.Settings.MarginRight;
+            InputMarginTop = project.Settings.MarginTop;
+            InputMarginLeft = project.Settings.MarginLeft;
+            InputMarginBottom = project.Settings.MarginBottom;
+            InputMarginRight = project.Settings.MarginRight;
+            OnPropertyChanged(nameof(Settings));
+            OnPropertyChanged(nameof(PreviewMargin));
+
+            // Kalibrierung + Druckoptionen
+            CalibrationOffsetX = project.CalibrationOffsetX;
+            CalibrationOffsetY = project.CalibrationOffsetY;
+            PrintGridLines = project.PrintGridLines;
+
+            _currentFilePath = filePath;
+            OnPropertyChanged(nameof(WindowTitle));
+            RefreshRecentFiles();
+            if (Labels.Count > 0) SelectedLabel = Labels[0];
+            StatusMessage = $"Geladen: {Path.GetFileName(filePath)}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Ladefehler: {ex.Message}";
+        }
+    }
+
+    private void RefreshRecentFiles()
+    {
+        RecentFiles.Clear();
+        foreach (var path in ProjectService.LoadRecentFiles())
+            RecentFiles.Add(new RecentFileItem(path, Path.GetFileName(path)));
     }
 
     private void PrintLabels()
     {
-        StatusMessage = "Druckfunktion wird in Phase 5 implementiert...";
+        try
+        {
+            SaveCalibration();
+        PrintService.Print(Labels, _selectedFormat, _settings, PrintGridLines,
+            CalibrationOffsetX, CalibrationOffsetY);
+            StatusMessage = "Druckauftrag gesendet";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Druckfehler: {ex.Message}";
+            System.Windows.MessageBox.Show(
+                $"Fehler beim Drucken:\n{ex.Message}",
+                "Druckfehler",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    private void PrintCalibration()
+    {
+        try
+        {
+            SaveCalibration();
+            PrintService.PrintCalibrationPage(_selectedFormat, _settings,
+                CalibrationOffsetX, CalibrationOffsetY);
+            StatusMessage = "Kalibrierungsseite gedruckt";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Druckfehler: {ex.Message}";
+        }
+    }
+
+    private void LoadCalibration()
+    {
+        var cal = CalibrationService.Load();
+        _calibrationOffsetX = cal.OffsetX;
+        _calibrationOffsetY = cal.OffsetY;
+    }
+
+    private void SaveCalibration()
+    {
+        CalibrationService.Save(new CalibrationData
+        {
+            OffsetX = CalibrationOffsetX,
+            OffsetY = CalibrationOffsetY
+        });
     }
 
     public void SelectLabel(LabelViewModel label)

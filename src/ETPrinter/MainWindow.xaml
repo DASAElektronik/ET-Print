@@ -13,6 +13,8 @@
 
     <Window.InputBindings>
         <KeyBinding Gesture="Ctrl+N" Command="{Binding NewProjectCommand}"/>
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}"/>
+        <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenCommand}"/>
         <KeyBinding Gesture="Ctrl+P" Command="{Binding PrintCommand}"/>
     </Window.InputBindings>
 
@@ -28,6 +30,22 @@
         <Menu Grid.Row="0">
             <MenuItem Header="_Datei">
                 <MenuItem Header="_Neu" Command="{Binding NewProjectCommand}" InputGestureText="Ctrl+N"/>
+                <MenuItem Header="_Oeffnen..." Command="{Binding OpenCommand}" InputGestureText="Ctrl+O"/>
+                <Separator/>
+                <MenuItem Header="_Speichern" Command="{Binding SaveCommand}" InputGestureText="Ctrl+S"/>
+                <MenuItem Header="Speichern _unter..." Command="{Binding SaveAsCommand}"/>
+                <Separator/>
+                <MenuItem Header="Zuletzt geoeffnet" ItemsSource="{Binding RecentFiles}">
+                    <MenuItem.ItemContainerStyle>
+                        <Style TargetType="MenuItem">
+                            <Setter Property="Header" Value="{Binding DisplayName}"/>
+                            <Setter Property="ToolTip" Value="{Binding FilePath}"/>
+                            <Setter Property="Command" Value="{Binding DataContext.OpenRecentCommand,
+                                RelativeSource={RelativeSource AncestorType=Window}}"/>
+                            <Setter Property="CommandParameter" Value="{Binding FilePath}"/>
+                        </Style>
+                    </MenuItem.ItemContainerStyle>
+                </MenuItem>
                 <Separator/>
                 <MenuItem Header="_Drucken..." Command="{Binding PrintCommand}" InputGestureText="Ctrl+P"/>
                 <Separator/>
@@ -45,6 +63,12 @@
         <ToolBar Grid.Row="1">
             <Button Command="{Binding NewProjectCommand}" ToolTip="Neues Projekt (Ctrl+N)">
                 <TextBlock Text="Neu" Margin="5,0"/>
+            </Button>
+            <Button Command="{Binding OpenCommand}" ToolTip="Oeffnen (Ctrl+O)">
+                <TextBlock Text="Oeffnen" Margin="5,0"/>
+            </Button>
+            <Button Command="{Binding SaveCommand}" ToolTip="Speichern (Ctrl+S)">
+                <TextBlock Text="Speichern" Margin="5,0"/>
             </Button>
             <Separator/>
             <Button Command="{Binding PrintCommand}" ToolTip="Drucken (Ctrl+P)">
@@ -227,7 +251,11 @@
 
                             <!-- Fett / Kursiv -->
                             <CheckBox Content="Fett" IsChecked="{Binding InputIsBold}" Margin="0,0,0,3"/>
-                            <CheckBox Content="Kursiv" IsChecked="{Binding InputIsItalic}" Margin="0,0,0,8"/>
+                            <CheckBox Content="Kursiv" IsChecked="{Binding InputIsItalic}" Margin="0,0,0,3"/>
+                            <CheckBox Content="Gitterlinien drucken (Normalpapier)"
+                                      IsChecked="{Binding PrintGridLines}"
+                                      Margin="0,0,0,8" FontSize="11" Foreground="Gray"
+                                      ToolTip="Aktivieren fuer Druck auf Normalpapier zum Ausschneiden. Deaktiviert fuer perforierte Siemens-Etikettenboegen."/>
 
                             <!-- Seitenraender -->
                             <TextBlock Text="Seitenraender (mm):" FontWeight="SemiBold" Margin="0,0,0,5"/>
@@ -252,6 +280,30 @@
                                 <TextBlock Grid.Row="1" Grid.Column="3" Text="Unten:" VerticalAlignment="Center" Margin="0,2"/>
                                 <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding InputMarginBottom, StringFormat={}{0:0.0}}" Margin="5,2"/>
                             </Grid>
+
+                            <!-- Druckkalibrierung -->
+                            <TextBlock Text="Druckkalibrierung (mm):" FontWeight="SemiBold" Margin="0,5,0,5"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="X:" VerticalAlignment="Center" Margin="0,2"
+                                           ToolTip="Horizontaler Versatz: positiv=rechts, negativ=links"/>
+                                <TextBox Grid.Column="1" Text="{Binding CalibrationOffsetX, StringFormat={}{0:0.0}}" Margin="5,2"
+                                         ToolTip="Horizontaler Versatz in mm"/>
+                                <TextBlock Grid.Column="3" Text="Y:" VerticalAlignment="Center" Margin="0,2"
+                                           ToolTip="Vertikaler Versatz: positiv=unten, negativ=oben"/>
+                                <TextBox Grid.Column="4" Text="{Binding CalibrationOffsetY, StringFormat={}{0:0.0}}" Margin="5,2"
+                                         ToolTip="Vertikaler Versatz in mm"/>
+                            </Grid>
+                            <Button Content="Testseite drucken (Fadenkreuze)"
+                                    Command="{Binding PrintCalibrationCommand}"
+                                    Padding="8,4" Margin="0,4,0,0" FontSize="11"
+                                    ToolTip="Druckt Fadenkreuze an den Ecken des Etikettenrasters. Auf Normalpapier drucken und mit Siemens-Blatt vergleichen."/>
 
                             <!-- Buttons -->
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
@@ -316,10 +368,21 @@
                                     <DropShadowEffect ShadowDepth="3" Opacity="0.3"/>
                                 </Border.Effect>
 
-                                <!-- Etikettenraster (Margin = Seitenraender * 3px/mm) -->
-                                <!-- Standard: Links:30*3=90, Oben:20*3=60, Rechts:25*3=75, Unten:21*3=63 -->
-                                <ItemsControl ItemsSource="{Binding Labels}"
-                                              Margin="{Binding PreviewMargin}">
+                                <!-- Etikettenraster: Margin fuer Seitenraender, Grid gespiegelt -->
+                                <!-- Layout wie physisches A4-Blatt 6ES7193-6LA10-0AA0 -->
+                                <Border Margin="{Binding PreviewMargin}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Etikettenraster -->
+                                    <ItemsControl Grid.Column="0" ItemsSource="{Binding Labels}">
+                                    <!-- Grid spiegeln: unten-rechts = erste Position -->
+                                    <ItemsControl.LayoutTransform>
+                                        <ScaleTransform ScaleX="-1" ScaleY="-1"/>
+                                    </ItemsControl.LayoutTransform>
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <UniformGrid Columns="{Binding LabelsPerRow}"
@@ -333,6 +396,10 @@
                                                     Margin="0"
                                                     Cursor="Hand"
                                                     MouseLeftButtonDown="Label_Click">
+                                                <!-- Zurueck-spiegeln damit Inhalt lesbar bleibt -->
+                                                <Border.LayoutTransform>
+                                                    <ScaleTransform ScaleX="-1" ScaleY="-1"/>
+                                                </Border.LayoutTransform>
                                                 <Border.Style>
                                                     <Style TargetType="Border">
                                                         <Setter Property="Background" Value="#F0F0F0"/>
@@ -392,15 +459,6 @@
 
                                                     <!-- Textinhalt -->
                                                     <Grid Grid.Column="1">
-                                                        <!-- Positionsnummer -->
-                                                        <TextBlock Text="{Binding DisplayPosition}"
-                                                                   FontSize="4"
-                                                                   Foreground="#C0C0C0"
-                                                                   Margin="1,0,0,0"
-                                                                   VerticalAlignment="Top"
-                                                                   HorizontalAlignment="Left"
-                                                                   Panel.ZIndex="1"/>
-
                                                         <!-- HORIZONTAL: Einfache Textzeilen -->
                                                         <StackPanel VerticalAlignment="Center"
                                                                     HorizontalAlignment="Center"
@@ -509,6 +567,29 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+
+                                    <!-- Zeilennummern am rechten Rand (wie physisches A4-Blatt) -->
+                                    <ItemsControl Grid.Column="1" ItemsSource="{Binding RowNumbers}"
+                                                  Margin="2,0,0,0">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Rows="{Binding LabelRows}" Columns="1"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}"
+                                                           FontSize="7"
+                                                           Foreground="#808080"
+                                                           VerticalAlignment="Center"
+                                                           HorizontalAlignment="Left"
+                                                           Margin="1,0,0,0"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                </Grid>
+                                </Border>
                             </Border>
                         </Border>
                     </ScrollViewer>

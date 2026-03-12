@@ -55,27 +55,39 @@
 - [x] A4-Blatt als weisser Border mit DropShadow auf grauem Hintergrund
 - [x] Etikettenraster (ItemsControl > UniformGrid)
 - [x] Klickbare Etiketten mit Farbkodierung (leer/befuellt/ausgewaehlt/hover)
-- [x] Positionsnummern in den Etiketten
 - [x] Zoom-Slider (0.5x - 4.0x)
 - [x] Horizontale Formate: Textzeilen mit TextTrimming
 - [x] Vertikale Formate: Einzelne Adress-Rechtecke (je Adresse ein Rechteck, 90 Grad)
 - [x] Kopfzeilen-Spalte (schmal, 90 Grad gedreht, bedingt sichtbar)
 - [x] Dynamische Seitenraender (gebunden an Einstellungen)
 - [x] Schrift-Einstellungen wirken pro Etikett in der Vorschau
+- [x] Layout wie physisches A4-Blatt (6ES7193-6LA10-0AA0): Nummerierung 1=unten rechts
+- [x] Zeilennummern 1-20 am rechten Rand (wie physisches Blatt)
+- [x] Alle Formate: einheitlich 5x20 = 100 Etiketten
 
-## Phase 5: MVP - Druckfunktion [TODO]
-- [ ] LayoutEngine: Berechnung der exakten Zellenpositionen auf A4
-- [ ] PrintService: FixedDocument-Erzeugung
-- [ ] Textrotation fuer vertikale Formate (90 Grad)
-- [ ] Header-Spalten-Rendering im Druck
-- [ ] Vertikale Adress-Rechtecke im Druck
-- [ ] Windows-Druckdialog-Integration
-- [ ] Testdruck und Kalibrierung
+## Phase 5: MVP - Druckfunktion [DONE]
+- [x] PrintService: Canvas-basiertes FixedDocument mit exakten mm-Positionen
+- [x] Umrechnung mm zu WPF-Einheiten (96/25.4 DPI)
+- [x] Positionsberechnung: Grid-Spiegelung (Position 1 = unten rechts)
+- [x] Horizontale Formate: Zentrierter Text (ein-/zweizeilig)
+- [x] Vertikale Formate: Adress-Rechtecke mit 90-Grad-Rotation
+- [x] Header-Spalten-Rendering im Druck
+- [x] Per-Etikett Schrift-Einstellungen im Druck (Groesse, Fett, Kursiv)
+- [x] Windows-Druckdialog-Integration
+- [x] Option "Gitterlinien drucken" (aus=Siemens-Etikettenbogen, an=Normalpapier)
+- [x] Schrift: Arial
+- [x] Testdruck als PDF verifiziert
+- [x] Druckkalibrierung (X/Y-Offset in mm, gespeichert als calibration.json)
+- [x] Kalibrierungs-Testseite mit Fadenkreuzen (Ecken Reihe 1 + Reihe 20)
 
-## Phase 6: v1.1 - Speichern/Laden
-- [ ] Projekt speichern (.etprint JSON)
-- [ ] Projekt laden
-- [ ] Zuletzt geoeffnete Dateien
+## Phase 6: v1.1 - Speichern/Laden [DONE]
+- [x] Projekt speichern (.etprint JSON) - Ctrl+S
+- [x] Projekt speichern unter... (neuer Dateiname)
+- [x] Projekt laden - Ctrl+O
+- [x] Zuletzt geoeffnete Dateien (bis zu 10, im Datei-Menue)
+- [x] Gespeicherte Daten: Format, 100 Etiketten, Raender, Kalibrierung, Druckoptionen
+- [x] Titelleiste zeigt Dateinamen
+- [x] Toolbar: Neu, Oeffnen, Speichern, Drucken
 
 ## Phase 7: v1.2 - Mehrseiten
 - [ ] Seiten hinzufuegen/entfernen

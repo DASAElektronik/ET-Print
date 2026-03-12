@@ -25,8 +25,8 @@ public static class FormatDefinitions
         [LabelFormat.HorizontalSingle] = new FormatInfo(
             LabelFormat.HorizontalSingle,
             "Horizontal einzeilig",
-            Columns: 7, RowsPerLabel: 1, HasHeader: false, IsVertical: false,
-            LabelsPerRow: 7, LabelRows: 20),
+            Columns: 5, RowsPerLabel: 1, HasHeader: false, IsVertical: false,
+            LabelsPerRow: 5, LabelRows: 20),
 
         [LabelFormat.VerticalDoubleHeader] = new FormatInfo(
             LabelFormat.VerticalDoubleHeader,
@@ -43,8 +43,8 @@ public static class FormatDefinitions
         [LabelFormat.VerticalSingle] = new FormatInfo(
             LabelFormat.VerticalSingle,
             "Vertikal einzeilig",
-            Columns: 7, RowsPerLabel: 1, HasHeader: false, IsVertical: true,
-            LabelsPerRow: 7, LabelRows: 20),
+            Columns: 5, RowsPerLabel: 1, HasHeader: false, IsVertical: true,
+            LabelsPerRow: 5, LabelRows: 20),
     };
 
     public static FormatInfo Get(LabelFormat format) => _formats[format];
