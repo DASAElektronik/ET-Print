@@ -136,7 +136,16 @@ public class MpModuleViewModel : ViewModelBase
     {
         AddressCells.Clear();
         var layout = MpModuleLayoutFactory.GetLayout(_module.Variant);
-        _module.AddressCells = MpModuleLayoutFactory.CreateCells(_module.Variant);
+
+        // Nur neue Zellen erstellen wenn keine vorhanden oder Anzahl nicht passt
+        if (_module.AddressCells.Count != layout.AddressCells.Length)
+        {
+            // Alte Texte soweit moeglich migrieren
+            var oldTexts = _module.AddressCells.Select(c => c.Text).ToList();
+            _module.AddressCells = MpModuleLayoutFactory.CreateCells(_module.Variant);
+            for (int i = 0; i < Math.Min(oldTexts.Count, _module.AddressCells.Count); i++)
+                _module.AddressCells[i].Text = oldTexts[i];
+        }
 
         for (int i = 0; i < _module.AddressCells.Count; i++)
         {

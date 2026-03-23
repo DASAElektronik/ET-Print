@@ -79,8 +79,8 @@ public class MainViewModel : ViewModelBase
                 .Select(f => f.Source)
                 .OrderBy(f => f, StringComparer.CurrentCultureIgnoreCase));
 
-        ApplyCommand = new RelayCommand(ApplyToLabel, () => SelectedLabel is not null);
-        GenerateAndApplyCommand = new RelayCommand(GenerateAndApply, () => SelectedLabel is not null);
+        ApplyCommand = new RelayCommand(ApplyToLabel, () => SelectedLabel is not null || SelectedMpModule is not null);
+        GenerateAndApplyCommand = new RelayCommand(GenerateAndApply, () => SelectedLabel is not null || SelectedMpModule is not null);
         GeneratePreviewCommand = new RelayCommand(UpdateGeneratorPreview);
         ClearAllCommand = new RelayCommand(ClearAllLabels);
         ResetSettingsCommand = new RelayCommand(ResetSettings);
@@ -92,7 +92,7 @@ public class MainViewModel : ViewModelBase
         SaveAsCommand = new RelayCommand(SaveProjectAs);
         OpenCommand = new RelayCommand(OpenProject);
         OpenRecentCommand = new RelayCommand<string>(OpenRecentFile);
-        UpdateHeaderCommand = new RelayCommand(UpdateHeader, () => SelectedLabel is not null);
+        UpdateHeaderCommand = new RelayCommand(UpdateHeader, () => SelectedLabel is not null || SelectedMpModule is not null);
 
         // Page navigation commands
         NextPageCommand = new RelayCommand(NextPage, () => _currentPageIndex < PageCount - 1);
@@ -661,6 +661,16 @@ public class MainViewModel : ViewModelBase
 
     private void ApplyToLabel()
     {
+        if (_selectedFormat.IsModuleBased && SelectedMpModule is not null)
+        {
+            // ET200MP: Manuelle Eingabe auf Header anwenden
+            SelectedMpModule.HeaderText = InputHeader;
+            if (SelectedMpCell is not null && SelectedMpCell.IsEditable)
+                SelectedMpCell.Text = InputLine1;
+            IsDirty = true;
+            return;
+        }
+
         if (SelectedLabel is null) return;
 
         SelectedLabel.Header = InputHeader;
@@ -674,30 +684,56 @@ public class MainViewModel : ViewModelBase
 
     private void GenerateAndApply()
     {
-        if (SelectedLabel is null) return;
-
         var result = AddressGenerator.Generate(GenModuleName, GenModuleType.Type, GenStartByte, GenCount);
 
-        // In Eingabefelder und direkt aufs Etikett
-        InputHeader = result.Header;
-        InputLine1 = result.Line1;
-        InputLine2 = result.Line2;
-
-        SelectedLabel.Header = result.Header;
-        SelectedLabel.Line1 = result.Line1;
-        SelectedLabel.Line2 = result.Line2;
-        ApplyFontToLabel(SelectedLabel);
-
-        IsDirty = true;
-        StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte}";
-
-        // Startadresse fuer naechstes Modul automatisch weiterschalten
-        if (GenAutoAdvanceAddress)
+        if (_selectedFormat.IsModuleBased && SelectedMpModule is not null)
         {
-            GenStartByte = AddressGenerator.GetNextStartByte(GenModuleType.Type, GenStartByte, GenCount);
-        }
+            // ET200MP: Adressen auf Modul-Zellen verteilen
+            SelectedMpModule.HeaderText = result.Header;
 
-        AdvanceToNextLabel();
+            // Line1 + Line2 Adressen aufteilen auf editierbare Zellen
+            var addresses = new List<string>();
+            if (!string.IsNullOrWhiteSpace(result.Line1))
+                addresses.AddRange(result.Line1.Split("  ", StringSplitOptions.RemoveEmptyEntries));
+            if (!string.IsNullOrWhiteSpace(result.Line2))
+                addresses.AddRange(result.Line2.Split("  ", StringSplitOptions.RemoveEmptyEntries));
+
+            var editableCells = SelectedMpModule.AddressCells.Where(c => c.IsEditable).ToList();
+            for (int i = 0; i < editableCells.Count && i < addresses.Count; i++)
+                editableCells[i].Text = addresses[i];
+
+            IsDirty = true;
+            StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte} → {addresses.Count} Adressen auf Modul {SelectedMpModule.ModuleIndex + 1}";
+
+            // Startadresse weiterschalten
+            if (GenAutoAdvanceAddress)
+                GenStartByte = AddressGenerator.GetNextStartByte(GenModuleType.Type, GenStartByte, GenCount);
+
+            // Zum naechsten Modul weiterschalten
+            int nextIdx = SelectedMpModule.ModuleIndex + 1;
+            if (nextIdx < MpModules.Count)
+                SelectedMpModule = MpModules[nextIdx];
+        }
+        else if (SelectedLabel is not null)
+        {
+            // ET200SP: bisherige Logik
+            InputHeader = result.Header;
+            InputLine1 = result.Line1;
+            InputLine2 = result.Line2;
+
+            SelectedLabel.Header = result.Header;
+            SelectedLabel.Line1 = result.Line1;
+            SelectedLabel.Line2 = result.Line2;
+            ApplyFontToLabel(SelectedLabel);
+
+            IsDirty = true;
+            StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte}";
+
+            if (GenAutoAdvanceAddress)
+                GenStartByte = AddressGenerator.GetNextStartByte(GenModuleType.Type, GenStartByte, GenCount);
+
+            AdvanceToNextLabel();
+        }
     }
 
     private void UpdateGeneratorPreview()
@@ -814,6 +850,13 @@ public class MainViewModel : ViewModelBase
 
     private void UpdateHeader()
     {
+        if (_selectedFormat.IsModuleBased && SelectedMpModule is not null)
+        {
+            SelectedMpModule.HeaderText = GenModuleName;
+            IsDirty = true;
+            StatusMessage = $"Kopfzeile von Modul {SelectedMpModule.ModuleIndex + 1} geaendert";
+            return;
+        }
         if (SelectedLabel is null) return;
         SelectedLabel.Header = GenModuleName;
         InputHeader = GenModuleName;

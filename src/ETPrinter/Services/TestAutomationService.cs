@@ -108,6 +108,10 @@ public class TestAutomationService : IDisposable
                 "set-module-variant" => await RunOnUI(() => SetModuleVariant(arg)),
                 "list-variants" => await RunOnUI(() => ListVariants()),
                 "mp-state" => await RunOnUI(() => GetMpState()),
+                "set-generator" => await RunOnUI(() => SetGenerator(arg)),
+                "trigger-generate" => await RunOnUI(() => TriggerGenerate()),
+                "save-project" => await RunOnUI(() => SaveProject(arg)),
+                "load-project" => await RunOnUI(() => LoadProject(arg)),
                 "list-families" => await RunOnUI(() => ListFamilies()),
                 "list-formats" => await RunOnUI(() => ListFormats()),
                 "help" => Ok(GetHelp()),
@@ -461,6 +465,128 @@ public class TestAutomationService : IDisposable
             hasText = mod.HasText
         };
         return Ok(JsonSerializer.Serialize(state));
+    }
+
+    // === Generator + Save/Load ===
+
+    private string SetGenerator(string arg)
+    {
+        // Format: "moduleName typ startByte count"
+        var parts = arg.Split(' ');
+        if (parts.Length < 4)
+            return Error("Format: set-generator <moduleName> <DI|DO|AI|AO> <startByte> <count>");
+
+        _viewModel.GenModuleName = parts[0];
+        var moduleType = _viewModel.AvailableModuleTypes
+            .FirstOrDefault(m => m.Type.ToString().Equals(parts[1], StringComparison.OrdinalIgnoreCase));
+        if (moduleType == null)
+            return Error($"Modultyp nicht gefunden: {parts[1]}");
+        _viewModel.GenModuleType = moduleType;
+
+        if (int.TryParse(parts[2], out int startByte))
+            _viewModel.GenStartByte = startByte;
+        if (int.TryParse(parts[3], out int count))
+            _viewModel.GenCount = count;
+
+        return Ok($"Generator: {parts[0]} {parts[1]} Byte={startByte} Count={count}");
+    }
+
+    private string TriggerGenerate()
+    {
+        if (!_viewModel.GenerateAndApplyCommand.CanExecute(null))
+            return Error("GenerateAndApply nicht verfuegbar (kein Label/Modul ausgewaehlt?)");
+        _viewModel.GenerateAndApplyCommand.Execute(null);
+        return Ok(_viewModel.StatusMessage);
+    }
+
+    private string SaveProject(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return Error("Pfad angeben: save-project <pfad.etprint>");
+        try
+        {
+            var pages = new List<LabelPage>();
+            if (!_viewModel.IsModuleBased)
+            {
+                // SP: ueber reflection oder direkt via Save-Logik
+            }
+
+            // Direkt das SaveCommand mit Pfad triggern geht nicht einfach,
+            // daher nutzen wir ProjectService direkt
+            var project = new LabelProject
+            {
+                ProductFamily = _viewModel.SelectedProductFamily,
+                Format = _viewModel.SelectedFormat.Format,
+                Settings = _viewModel.Settings.Clone(),
+                CalibrationOffsetX = _viewModel.CalibrationOffsetX,
+                CalibrationOffsetY = _viewModel.CalibrationOffsetY,
+                PrintGridLines = _viewModel.PrintGridLines
+            };
+
+            // Labels/Module sammeln
+            if (_viewModel.IsModuleBased)
+            {
+                project.MpPages = [new MpModulePage
+                {
+                    Modules = _viewModel.MpModules.Select(m => m.GetModule()).ToList()
+                }];
+            }
+            else
+            {
+                project.Pages = [new LabelPage
+                {
+                    Labels = _viewModel.Labels.Select(l => l.GetCell()).ToList()
+                }];
+            }
+
+            ProjectService.Save(project, path);
+            return Ok($"Gespeichert: {path}");
+        }
+        catch (Exception ex)
+        {
+            return Error($"Speicherfehler: {ex.Message}");
+        }
+    }
+
+    private string LoadProject(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return Error($"Datei nicht gefunden: {path}");
+        try
+        {
+            // Lade ueber die ViewModel-Methode (reflektiert DoOpen)
+            var project = ProjectService.Load(path);
+
+            // ProductFamily setzen
+            _viewModel.SelectedProductFamilyInfo = ProductFamilyDefinitions.Get(project.ProductFamily);
+
+            // Format setzen
+            var formatInfo = FormatDefinitions.Get(project.Format);
+            if (formatInfo.Family != project.ProductFamily)
+                formatInfo = FormatDefinitions.GetDefaultFormat(project.ProductFamily);
+            _viewModel.SelectedFormat = formatInfo;
+
+            // Daten laden — bei MP die Module
+            if (formatInfo.IsModuleBased && project.MpPages?.Count > 0)
+            {
+                // Module manuell in die MpModules laden
+                _viewModel.MpModules.Clear();
+                foreach (var mod in project.MpPages[0].Modules)
+                {
+                    if (mod.AddressCells.Count == 0)
+                        mod.AddressCells = MpModuleLayoutFactory.CreateCells(mod.Variant);
+                    _viewModel.MpModules.Add(new MpModuleViewModel(mod));
+                }
+                if (_viewModel.MpModules.Count > 0)
+                    _viewModel.SelectedMpModule = _viewModel.MpModules[0];
+            }
+
+            return Ok($"Geladen: {path}");
+        }
+        catch (Exception ex)
+        {
+            return Error($"Ladefehler: {ex.Message}");
+        }
     }
 
     // === Hilfs-Methoden ===
