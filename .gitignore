@@ -22,3 +22,10 @@ packages/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+## Projekt-spezifisch
+_archiv/
+publish/
+test_results/
+*.png
+*.tif
