@@ -7,6 +7,7 @@ using System.Windows.Media;
 using ETPrinter.Models;
 using ETPrinter.Services;
 using ETPrinter.Views;
+using MpModuleLayout = ETPrinter.Models.MpModuleLayout;
 
 namespace ETPrinter.ViewModels;
 
@@ -55,6 +56,11 @@ public class MainViewModel : ViewModelBase
     private List<List<LabelViewModel>> _allPages = [];
     private int _currentPageIndex;
 
+    // ET200MP Module-based support
+    private List<List<MpModuleViewModel>> _allMpPages = [];
+    private MpModuleViewModel? _selectedMpModule;
+    private MpAddressCellViewModel? _selectedMpCell;
+
     public MainViewModel()
     {
         _settings = new LabelSettings();
@@ -64,6 +70,9 @@ public class MainViewModel : ViewModelBase
         AvailableProductFamilies = new ObservableCollection<ProductFamilyInfo>(ProductFamilyDefinitions.All);
         AvailableFormats = new ObservableCollection<FormatInfo>(FormatDefinitions.GetFormatsForFamily(ProductFamily.ET200SP));
         Labels = new ObservableCollection<LabelViewModel>();
+        MpModules = new ObservableCollection<MpModuleViewModel>();
+        AvailableMpVariants = new ObservableCollection<MpModuleLayout>(
+            Services.MpModuleLayoutFactory.All);
         FontSizes = [4, 5, 6, 7, 8, 9, 10];
         AvailableFonts = new ObservableCollection<string>(
             Fonts.SystemFontFamilies
@@ -86,10 +95,10 @@ public class MainViewModel : ViewModelBase
         UpdateHeaderCommand = new RelayCommand(UpdateHeader, () => SelectedLabel is not null);
 
         // Page navigation commands
-        NextPageCommand = new RelayCommand(NextPage, () => _currentPageIndex < _allPages.Count - 1);
+        NextPageCommand = new RelayCommand(NextPage, () => _currentPageIndex < PageCount - 1);
         PrevPageCommand = new RelayCommand(PrevPage, () => _currentPageIndex > 0);
         AddPageCommand = new RelayCommand(AddPage);
-        RemovePageCommand = new RelayCommand(RemovePage, () => _allPages.Count > 1);
+        RemovePageCommand = new RelayCommand(RemovePage, () => PageCount > 1);
 
         // Import commands
         ImportCsvCommand = new RelayCommand(ImportCsv);
@@ -109,6 +118,8 @@ public class MainViewModel : ViewModelBase
 
     public ObservableCollection<ProductFamilyInfo> AvailableProductFamilies { get; }
     public ObservableCollection<FormatInfo> AvailableFormats { get; }
+    public ObservableCollection<MpModuleViewModel> MpModules { get; }
+    public ObservableCollection<MpModuleLayout> AvailableMpVariants { get; }
     public ObservableCollection<LabelViewModel> Labels { get; }
     public ObservableCollection<RecentFileItem> RecentFiles { get; } = new();
     public ObservableCollection<string> AvailableFonts { get; }
@@ -151,6 +162,42 @@ public class MainViewModel : ViewModelBase
     public ProductFamily SelectedProductFamily => _selectedProductFamily;
     public int BandsPerPage => _selectedFormat.BandsPerPage;
     public bool IsMultiBand => _selectedFormat.BandsPerPage > 1;
+    public bool IsModuleBased => _selectedFormat.IsModuleBased;
+
+    public MpModuleViewModel? SelectedMpModule
+    {
+        get => _selectedMpModule;
+        set
+        {
+            if (_selectedMpModule is not null)
+                _selectedMpModule.IsSelected = false;
+            if (SetProperty(ref _selectedMpModule, value))
+            {
+                if (value is not null)
+                    value.IsSelected = true;
+                OnPropertyChanged(nameof(SelectedMpModuleInfo));
+            }
+        }
+    }
+
+    public MpAddressCellViewModel? SelectedMpCell
+    {
+        get => _selectedMpCell;
+        set
+        {
+            if (_selectedMpCell is not null)
+                _selectedMpCell.IsSelected = false;
+            if (SetProperty(ref _selectedMpCell, value))
+            {
+                if (value is not null)
+                    value.IsSelected = true;
+            }
+        }
+    }
+
+    public string SelectedMpModuleInfo => _selectedMpModule is not null
+        ? $"Modul {_selectedMpModule.ModuleIndex + 1} (Band {_selectedMpModule.Band + 1}, Spalte {_selectedMpModule.ColumnInBand + 1})"
+        : "Kein Modul ausgewaehlt";
 
     public FormatInfo SelectedFormat
     {
@@ -268,7 +315,7 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    public int PageCount => _allPages.Count;
+    public int PageCount => _selectedFormat.IsModuleBased ? _allMpPages.Count : _allPages.Count;
 
     public string PageIndicator => $"Seite {_currentPageIndex + 1} / {PageCount}";
 
@@ -467,21 +514,53 @@ public class MainViewModel : ViewModelBase
     private void InitializeLabels()
     {
         Labels.Clear();
+        MpModules.Clear();
         SelectedLabel = null;
+        SelectedMpModule = null;
+        SelectedMpCell = null;
         _allPages.Clear();
+        _allMpPages.Clear();
 
-        int count = _selectedFormat.LabelsPerPage;
-        var firstPage = CreateEmptyPage(count);
-        _allPages.Add(firstPage);
+        if (_selectedFormat.IsModuleBased)
+        {
+            // ET200MP: Module erstellen
+            var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
+            int modulesPerPage = familyInfo.ModulesPerPage;
+            var firstPage = CreateEmptyMpPage(modulesPerPage);
+            _allMpPages.Add(firstPage);
+            foreach (var mod in firstPage)
+                MpModules.Add(mod);
+        }
+        else
+        {
+            // ET200SP: bisherige Logik
+            int count = _selectedFormat.LabelsPerPage;
+            var firstPage = CreateEmptyPage(count);
+            _allPages.Add(firstPage);
+            foreach (var lvm in firstPage)
+                Labels.Add(lvm);
+        }
+
         _currentPageIndex = 0;
-
-        foreach (var lvm in firstPage)
-            Labels.Add(lvm);
-
         NotifyPageProperties();
+        OnPropertyChanged(nameof(IsModuleBased));
 
-        if (Labels.Count > 0)
+        if (!_selectedFormat.IsModuleBased && Labels.Count > 0)
             SelectedLabel = Labels[0];
+        else if (_selectedFormat.IsModuleBased && MpModules.Count > 0)
+            SelectedMpModule = MpModules[0];
+    }
+
+    private List<MpModuleViewModel> CreateEmptyMpPage(int moduleCount)
+    {
+        var page = new List<MpModuleViewModel>(moduleCount);
+        for (int i = 0; i < moduleCount; i++)
+        {
+            var module = new MpModule { ModuleIndex = i };
+            module.AddressCells = MpModuleLayoutFactory.CreateCells(module.Variant);
+            page.Add(new MpModuleViewModel(module));
+        }
+        return page;
     }
 
     private List<LabelViewModel> CreateEmptyPage(int count)
@@ -494,22 +573,31 @@ public class MainViewModel : ViewModelBase
 
     private void NavigateToPage(int index)
     {
-        if (index < 0 || index >= _allPages.Count) return;
-
-        // Save current ObservableCollection state back to _allPages
-        // (LabelViewModels are shared by reference, so data is already in sync)
-
-        _currentPageIndex = index;
-        Labels.Clear();
-        SelectedLabel = null;
-
-        foreach (var lvm in _allPages[index])
-            Labels.Add(lvm);
-
-        NotifyPageProperties();
-
-        if (Labels.Count > 0)
-            SelectedLabel = Labels[0];
+        if (_selectedFormat.IsModuleBased)
+        {
+            if (index < 0 || index >= _allMpPages.Count) return;
+            _currentPageIndex = index;
+            MpModules.Clear();
+            SelectedMpModule = null;
+            SelectedMpCell = null;
+            foreach (var mod in _allMpPages[index])
+                MpModules.Add(mod);
+            NotifyPageProperties();
+            if (MpModules.Count > 0)
+                SelectedMpModule = MpModules[0];
+        }
+        else
+        {
+            if (index < 0 || index >= _allPages.Count) return;
+            _currentPageIndex = index;
+            Labels.Clear();
+            SelectedLabel = null;
+            foreach (var lvm in _allPages[index])
+                Labels.Add(lvm);
+            NotifyPageProperties();
+            if (Labels.Count > 0)
+                SelectedLabel = Labels[0];
+        }
     }
 
     private void NotifyPageProperties()
@@ -521,7 +609,7 @@ public class MainViewModel : ViewModelBase
 
     private void NextPage()
     {
-        if (_currentPageIndex < _allPages.Count - 1)
+        if (_currentPageIndex < PageCount - 1)
             NavigateToPage(_currentPageIndex + 1);
     }
 
@@ -533,24 +621,42 @@ public class MainViewModel : ViewModelBase
 
     private void AddPage()
     {
-        int count = _selectedFormat.LabelsPerPage;
-        var newPage = CreateEmptyPage(count);
-        _allPages.Add(newPage);
-        NavigateToPage(_allPages.Count - 1);
+        if (_selectedFormat.IsModuleBased)
+        {
+            var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
+            var newPage = CreateEmptyMpPage(familyInfo.ModulesPerPage);
+            _allMpPages.Add(newPage);
+            NavigateToPage(_allMpPages.Count - 1);
+        }
+        else
+        {
+            int count = _selectedFormat.LabelsPerPage;
+            var newPage = CreateEmptyPage(count);
+            _allPages.Add(newPage);
+            NavigateToPage(_allPages.Count - 1);
+        }
         IsDirty = true;
         StatusMessage = $"Seite {PageCount} hinzugefuegt";
     }
 
     private void RemovePage()
     {
-        if (_allPages.Count <= 1) return;
-
-        int removedIndex = _currentPageIndex;
-        _allPages.RemoveAt(removedIndex);
-        int newIndex = Math.Min(removedIndex, _allPages.Count - 1);
-        NavigateToPage(newIndex);
+        if (_selectedFormat.IsModuleBased)
+        {
+            if (_allMpPages.Count <= 1) return;
+            int removedIndex = _currentPageIndex;
+            _allMpPages.RemoveAt(removedIndex);
+            NavigateToPage(Math.Min(removedIndex, _allMpPages.Count - 1));
+        }
+        else
+        {
+            if (_allPages.Count <= 1) return;
+            int removedIndex = _currentPageIndex;
+            _allPages.RemoveAt(removedIndex);
+            NavigateToPage(Math.Min(removedIndex, _allPages.Count - 1));
+        }
         IsDirty = true;
-        StatusMessage = $"Seite {removedIndex + 1} entfernt ({PageCount} Seiten verbleibend)";
+        StatusMessage = $"Seite entfernt ({PageCount} Seiten verbleibend)";
     }
 
     private void ApplyToLabel()
@@ -623,7 +729,7 @@ public class MainViewModel : ViewModelBase
         {
             SelectedLabel = Labels[nextIndex];
         }
-        else if (_currentPageIndex < _allPages.Count - 1)
+        else if (_currentPageIndex < PageCount - 1)
         {
             // At last label of current page, advance to first label of next page
             NavigateToPage(_currentPageIndex + 1);
@@ -772,12 +878,23 @@ public class MainViewModel : ViewModelBase
                 Labels = pageVms.Select(vm => vm.GetCell()).ToList()
             }).ToList();
 
+            // MP-Module serialisieren
+            List<MpModulePage>? mpPages = null;
+            if (_selectedFormat.IsModuleBased)
+            {
+                mpPages = _allMpPages.Select(pageMods => new MpModulePage
+                {
+                    Modules = pageMods.Select(vm => vm.GetModule()).ToList()
+                }).ToList();
+            }
+
             var project = new LabelProject
             {
                 ProductFamily = _selectedProductFamily,
                 Format = _selectedFormat.Format,
                 Settings = _settings.Clone(),
                 Pages = pages,
+                MpPages = mpPages,
                 CalibrationOffsetX = CalibrationOffsetX,
                 CalibrationOffsetY = CalibrationOffsetY,
                 PrintGridLines = PrintGridLines
@@ -840,45 +957,85 @@ public class MainViewModel : ViewModelBase
                 formatInfo = FormatDefinitions.GetDefaultFormat(_selectedProductFamily);
             SelectedFormat = formatInfo;
 
-            // Build _allPages from project.Pages
-            _allPages.Clear();
-            int labelsPerPage = _selectedFormat.LabelsPerPage;
-
-            foreach (var projectPage in project.Pages)
+            if (_selectedFormat.IsModuleBased)
             {
-                var pageVms = new List<LabelViewModel>(labelsPerPage);
-                for (int i = 0; i < labelsPerPage; i++)
+                // Build _allMpPages from project.MpPages
+                _allMpPages.Clear();
+                MpModules.Clear();
+                SelectedMpModule = null;
+                SelectedMpCell = null;
+
+                if (project.MpPages != null && project.MpPages.Count > 0)
                 {
-                    var cell = new LabelCell { Index = i };
-                    if (i < projectPage.Labels.Count)
+                    foreach (var mpPage in project.MpPages)
                     {
-                        var src = projectPage.Labels[i];
-                        cell.Header = src.Header;
-                        cell.Line1 = src.Line1;
-                        cell.Line2 = src.Line2;
-                        cell.FontSize = src.FontSize;
-                        cell.IsBold = src.IsBold;
-                        cell.IsItalic = src.IsItalic;
-                        cell.FontFamily = src.FontFamily;
-                        cell.IsPrintEnabled = src.IsPrintEnabled;
+                        var pageVms = mpPage.Modules
+                            .Select(mod =>
+                            {
+                                // Zellen neu generieren falls noetig
+                                if (mod.AddressCells.Count == 0)
+                                    mod.AddressCells = MpModuleLayoutFactory.CreateCells(mod.Variant);
+                                return new MpModuleViewModel(mod);
+                            })
+                            .ToList();
+                        _allMpPages.Add(pageVms);
                     }
-                    pageVms.Add(new LabelViewModel(cell));
                 }
-                _allPages.Add(pageVms);
+
+                if (_allMpPages.Count == 0)
+                {
+                    var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
+                    _allMpPages.Add(CreateEmptyMpPage(familyInfo.ModulesPerPage));
+                }
+
+                _currentPageIndex = 0;
+                foreach (var mod in _allMpPages[0])
+                    MpModules.Add(mod);
+                NotifyPageProperties();
+                OnPropertyChanged(nameof(IsModuleBased));
+                if (MpModules.Count > 0)
+                    SelectedMpModule = MpModules[0];
             }
+            else
+            {
+                // Build _allPages from project.Pages (ET200SP)
+                _allPages.Clear();
+                int labelsPerPage = _selectedFormat.LabelsPerPage;
 
-            // Ensure at least one page
-            if (_allPages.Count == 0)
-                _allPages.Add(CreateEmptyPage(labelsPerPage));
+                foreach (var projectPage in project.Pages)
+                {
+                    var pageVms = new List<LabelViewModel>(labelsPerPage);
+                    for (int i = 0; i < labelsPerPage; i++)
+                    {
+                        var cell = new LabelCell { Index = i };
+                        if (i < projectPage.Labels.Count)
+                        {
+                            var src = projectPage.Labels[i];
+                            cell.Header = src.Header;
+                            cell.Line1 = src.Line1;
+                            cell.Line2 = src.Line2;
+                            cell.FontSize = src.FontSize;
+                            cell.IsBold = src.IsBold;
+                            cell.IsItalic = src.IsItalic;
+                            cell.FontFamily = src.FontFamily;
+                            cell.IsPrintEnabled = src.IsPrintEnabled;
+                        }
+                        pageVms.Add(new LabelViewModel(cell));
+                    }
+                    _allPages.Add(pageVms);
+                }
 
-            // Navigate to first page (populates Labels ObservableCollection)
-            _currentPageIndex = 0;
-            Labels.Clear();
-            SelectedLabel = null;
-            foreach (var lvm in _allPages[0])
-                Labels.Add(lvm);
+                if (_allPages.Count == 0)
+                    _allPages.Add(CreateEmptyPage(labelsPerPage));
 
-            NotifyPageProperties();
+                _currentPageIndex = 0;
+                Labels.Clear();
+                SelectedLabel = null;
+                foreach (var lvm in _allPages[0])
+                    Labels.Add(lvm);
+                NotifyPageProperties();
+                OnPropertyChanged(nameof(IsModuleBased));
+            }
 
             // Einstellungen
             _settings.MarginTop = project.Settings.MarginTop;
@@ -931,13 +1088,22 @@ public class MainViewModel : ViewModelBase
         {
             SaveCalibration();
 
-            // Build page list for PrintService: all pages as IReadOnlyList
-            var printPages = _allPages
-                .Select(page => (IReadOnlyList<LabelViewModel>)page.AsReadOnly())
-                .ToList();
-
-            PrintService.Print(printPages, _selectedFormat, _settings, PrintGridLines,
-                CalibrationOffsetX, CalibrationOffsetY);
+            if (_selectedFormat.IsModuleBased)
+            {
+                var mpPrintPages = _allMpPages
+                    .Select(page => (IReadOnlyList<MpModuleViewModel>)page.AsReadOnly())
+                    .ToList();
+                PrintService.PrintMp(mpPrintPages, _selectedFormat, _settings, PrintGridLines,
+                    CalibrationOffsetX, CalibrationOffsetY);
+            }
+            else
+            {
+                var printPages = _allPages
+                    .Select(page => (IReadOnlyList<LabelViewModel>)page.AsReadOnly())
+                    .ToList();
+                PrintService.Print(printPages, _selectedFormat, _settings, PrintGridLines,
+                    CalibrationOffsetX, CalibrationOffsetY);
+            }
             StatusMessage = $"Druckauftrag gesendet ({PageCount} Seiten)";
         }
         catch (Exception ex)

@@ -6,5 +6,6 @@
     <Application.Resources>
         <converters:NullToBoolConverter x:Key="NullToBoolConverter"/>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter"/>
     </Application.Resources>
 </Application>

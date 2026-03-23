@@ -49,6 +49,13 @@ public static class ProjectService
             project.Version = 3;
         }
 
+        // v3 -> v4 migration: add MpPages support
+        if (project.Version < 4)
+        {
+            project.Version = 4;
+            // MpPages bleibt null fuer ET200SP-Projekte
+        }
+
         // Ensure at least one page exists
         if (project.Pages.Count == 0)
         {

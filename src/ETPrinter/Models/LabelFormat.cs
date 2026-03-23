@@ -30,7 +30,8 @@ public record FormatInfo(
     int LabelRows,
     ProductFamily Family = ProductFamily.ET200SP,
     int BandsPerPage = 1,
-    int ChannelRowsPerBand = 20
+    int ChannelRowsPerBand = 20,
+    bool IsModuleBased = false
 )
 {
     public int LabelsPerBand => LabelsPerRow * ChannelRowsPerBand;

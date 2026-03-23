@@ -450,4 +450,175 @@ public static class PrintService
             TextTrimming = TextTrimming.CharacterEllipsis
         };
     }
+
+    // === ET200MP Modulbasierter Druck ===
+
+    public static void PrintMp(
+        IReadOnlyList<IReadOnlyList<MpModuleViewModel>> pages,
+        FormatInfo format,
+        LabelSettings settings,
+        bool printGridLines,
+        double calibrationOffsetX,
+        double calibrationOffsetY)
+    {
+        var printDialog = new PrintDialog();
+        if (printDialog.ShowDialog() != true) return;
+
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new Size(PageWidthWpf, PageHeightWpf);
+
+        foreach (var pageModules in pages)
+        {
+            var page = CreateMpPage(pageModules, format, settings, printGridLines,
+                calibrationOffsetX, calibrationOffsetY);
+            var pageContent = new PageContent();
+            ((IAddChild)pageContent).AddChild(page);
+            document.Pages.Add(pageContent);
+        }
+
+        printDialog.PrintDocument(document.DocumentPaginator, "ET200MP Etiketten");
+    }
+
+    private static FixedPage CreateMpPage(
+        IReadOnlyList<MpModuleViewModel> modules,
+        FormatInfo format,
+        LabelSettings settings,
+        bool printGridLines,
+        double calOffsetX, double calOffsetY)
+    {
+        var page = new FixedPage { Width = PageWidthWpf, Height = PageHeightWpf };
+        var canvas = new Canvas { Width = PageWidthWpf, Height = PageHeightWpf };
+
+        var familyInfo = ProductFamilyDefinitions.Get(format.Family);
+        double marginLeft = (settings.MarginLeft + calOffsetX) * MmToWpf;
+        double marginTop = (settings.MarginTop + calOffsetY) * MmToWpf;
+
+        int modulesPerBand = familyInfo.ModulesPerBand;
+        double printWidthMm = FormatDefinitions.PageWidth - settings.MarginLeft - settings.MarginRight;
+        double moduleWidthMm = printWidthMm / modulesPerBand;
+        double moduleW = moduleWidthMm * MmToWpf;
+
+        // Spaltenbreiten pro Modul
+        double col0W = moduleW * MpModuleLayoutFactory.Col0Ratio;
+        double col1W = moduleW * MpModuleLayoutFactory.Col1Ratio;
+        double col2W = moduleW * MpModuleLayoutFactory.Col2Ratio;
+        double col3W = moduleW * MpModuleLayoutFactory.Col3Ratio;
+        double addrW = col0W + col1W;
+
+        // Zeilenhoehen
+        double headerH = familyInfo.EstimatedHeaderHeight * MmToWpf;
+        double separatorH = familyInfo.EstimatedSeparatorHeight * MmToWpf;
+        double dataRowH = familyInfo.EstimatedChannelRowHeight * MmToWpf;
+        double bandDataH = MpModuleLayoutFactory.RowsPerBand * dataRowH;
+
+        foreach (var mod in modules)
+        {
+            if (!mod.IsPrintEnabled) continue;
+
+            int band = mod.Band;
+            int col = mod.ColumnInBand;
+            double bandStartY = marginTop + band * (headerH + bandDataH + separatorH);
+            double modX = marginLeft + col * moduleW;
+            double dataStartY = bandStartY + headerH;
+
+            // Header
+            if (!string.IsNullOrWhiteSpace(mod.HeaderText))
+            {
+                var tb = CreateTextBlock(mod.HeaderText.Replace("\n", " / "),
+                    mod.FontSize, true, false, mod.FontFamily);
+                tb.Width = moduleW - 2;
+                tb.TextAlignment = TextAlignment.Center;
+                var container = new Border { Width = moduleW, Height = headerH };
+                container.Child = tb;
+                Canvas.SetLeft(container, modX);
+                Canvas.SetTop(container, bandStartY);
+                canvas.Children.Add(container);
+            }
+
+            if (printGridLines)
+                DrawCellBorder(canvas, modX, bandStartY, moduleW, headerH);
+
+            // Adresszellen
+            var layout = MpModuleLayoutFactory.GetLayout(mod.Variant);
+            for (int i = 0; i < mod.AddressCells.Count && i < layout.AddressCells.Length; i++)
+            {
+                var def = layout.AddressCells[i];
+                var cellVm = mod.AddressCells[i];
+
+                double cellX = modX + (def.StartCol == 0 ? 0 : col0W);
+                double cellW = def.ColSpan == 2 ? addrW : (def.StartCol == 0 ? col0W : col1W);
+                double cellY = dataStartY + def.StartRow * dataRowH;
+                double cellH = def.RowSpan * dataRowH;
+
+                if (printGridLines)
+                    DrawCellBorder(canvas, cellX, cellY, cellW, cellH);
+
+                if (!string.IsNullOrWhiteSpace(cellVm.Text))
+                {
+                    var tb = CreateTextBlock(cellVm.Text, mod.FontSize, mod.IsBold, false, mod.FontFamily);
+                    if (format.IsVertical)
+                    {
+                        tb.LayoutTransform = new RotateTransform(-90);
+                        tb.HorizontalAlignment = HorizontalAlignment.Center;
+                        tb.VerticalAlignment = VerticalAlignment.Center;
+                    }
+                    else
+                    {
+                        tb.TextAlignment = TextAlignment.Center;
+                        tb.Width = cellW - 1;
+                    }
+                    var container = new Border { Width = cellW, Height = cellH };
+                    container.Child = tb;
+                    Canvas.SetLeft(container, cellX);
+                    Canvas.SetTop(container, cellY);
+                    canvas.Children.Add(container);
+                }
+            }
+
+            // Col 2: Netzadresse (2 Bloecke, 90° rotiert)
+            double col2X = modX + addrW;
+            double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
+            RenderRotatedText(canvas, mod.NetAddress1, col2X, dataStartY, col2W, blockH,
+                mod.FontSize, mod.FontFamily);
+            RenderRotatedText(canvas, mod.NetAddress2, col2X, dataStartY + blockH, col2W, blockH,
+                mod.FontSize, mod.FontFamily);
+
+            if (printGridLines)
+            {
+                DrawCellBorder(canvas, col2X, dataStartY, col2W, blockH);
+                DrawCellBorder(canvas, col2X, dataStartY + blockH, col2W, blockH);
+            }
+
+            // Col 3: CPU-Name (20 Zeilen, 90° rotiert)
+            double col3X = col2X + col2W;
+            RenderRotatedText(canvas, mod.CpuName, col3X, dataStartY, col3W, bandDataH,
+                mod.FontSize, mod.FontFamily);
+
+            if (printGridLines)
+                DrawCellBorder(canvas, col3X, dataStartY, col3W, bandDataH);
+        }
+
+        page.Children.Add(canvas);
+        page.Measure(new Size(PageWidthWpf, PageHeightWpf));
+        page.Arrange(new Rect(0, 0, PageWidthWpf, PageHeightWpf));
+        page.UpdateLayout();
+        return page;
+    }
+
+    private static void RenderRotatedText(Canvas canvas, string text,
+        double x, double y, double w, double h, int fontSize, string fontFamily)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        var tb = CreateTextBlock(text, fontSize, false, false, fontFamily);
+        tb.LayoutTransform = new RotateTransform(-90);
+        tb.HorizontalAlignment = HorizontalAlignment.Center;
+        tb.VerticalAlignment = VerticalAlignment.Center;
+
+        var container = new Border { Width = w, Height = h };
+        container.Child = tb;
+        Canvas.SetLeft(container, x);
+        Canvas.SetTop(container, y);
+        canvas.Children.Add(container);
+    }
 }

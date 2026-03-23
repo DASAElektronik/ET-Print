@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ETPrinter.ViewModels"
+        xmlns:controls="clr-namespace:ETPrinter.Controls"
         Title="{Binding WindowTitle}"
         Height="900" Width="1400"
         MinHeight="700" MinWidth="1000"
@@ -254,6 +255,45 @@
                             </StackPanel>
                         </TabItem>
 
+                        <!-- Tab 3: ET200MP Modul-Editor (nur bei modulbasierten Formaten) -->
+                        <TabItem Header="MP Modul"
+                                 Visibility="{Binding IsModuleBased, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel Margin="5">
+                                <Label Content="Modul:" Padding="0" Margin="0,0,0,2" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding SelectedMpModuleInfo, Mode=OneWay}"
+                                           Foreground="#0078D4" Margin="0,0,0,8"/>
+
+                                <Label Content="Modulvariante:" Padding="0" Margin="0,0,0,2"/>
+                                <ComboBox ItemsSource="{Binding AvailableMpVariants}"
+                                          DisplayMemberPath="DisplayName"
+                                          Margin="0,0,0,8"/>
+
+                                <Label Content="Header (Device / Module / Slot):" Padding="0" Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding SelectedMpModule.HeaderText, UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True" Height="50" TextWrapping="Wrap"
+                                         Margin="0,0,0,8"/>
+
+                                <Label Content="Netzadresse (Block 1):" Padding="0" Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding SelectedMpModule.NetAddress1, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,4"/>
+
+                                <Label Content="Netzadresse (Block 2 / Net Name):" Padding="0" Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding SelectedMpModule.NetAddress2, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,4"/>
+
+                                <Label Content="CPU-Name:" Padding="0" Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding SelectedMpModule.CpuName, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,8"/>
+
+                                <Separator Margin="0,4"/>
+
+                                <Label Content="Ausgewaehlte Adresszelle:" Padding="0" Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding SelectedMpCell.Text, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,4"
+                                         IsEnabled="{Binding SelectedMpCell, Converter={StaticResource NullToBoolConverter}}"/>
+                            </StackPanel>
+                        </TabItem>
+
                     </TabControl>
 
                     <!-- Einstellungen -->
@@ -404,8 +444,9 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- A4-Blatt -->
-                    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                    <!-- A4-Blatt: ET200SP Preview (UniformGrid) -->
+                    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                  Visibility="{Binding IsModuleBased, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                         <Border Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Border.LayoutTransform>
                                 <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}"/>
@@ -656,6 +697,27 @@
                             </Border>
                         </Border>
                     </ScrollViewer>
+
+                    <!-- A4-Blatt: ET200MP Preview (Canvas-basiert) -->
+                    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                  Visibility="{Binding IsModuleBased, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Border Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Border.LayoutTransform>
+                                <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}"/>
+                            </Border.LayoutTransform>
+                            <Border Background="White"
+                                    BorderBrush="#808080"
+                                    BorderThickness="1"
+                                    Width="630" Height="891"
+                                    Padding="0">
+                                <Border.Effect>
+                                    <DropShadowEffect ShadowDepth="3" Opacity="0.3"/>
+                                </Border.Effect>
+                                <controls:MpPreviewControl DataContext="{Binding}"/>
+                            </Border>
+                        </Border>
+                    </ScrollViewer>
+
                 </Grid>
             </Border>
 

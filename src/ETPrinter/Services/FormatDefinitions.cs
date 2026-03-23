@@ -59,7 +59,8 @@ public static class FormatDefinitions
             Columns: 4, RowsPerLabel: 1, HasHeader: true, IsVertical: false,
             LabelsPerRow: 5, LabelRows: 20,
             Family: ProductFamily.S71500_ET200MP,
-            BandsPerPage: 2, ChannelRowsPerBand: 20),
+            BandsPerPage: 2, ChannelRowsPerBand: 20,
+            IsModuleBased: true),
 
         [LabelFormat.MP_Vertical] = new FormatInfo(
             LabelFormat.MP_Vertical,
@@ -67,7 +68,8 @@ public static class FormatDefinitions
             Columns: 4, RowsPerLabel: 1, HasHeader: true, IsVertical: true,
             LabelsPerRow: 5, LabelRows: 20,
             Family: ProductFamily.S71500_ET200MP,
-            BandsPerPage: 2, ChannelRowsPerBand: 20),
+            BandsPerPage: 2, ChannelRowsPerBand: 20,
+            IsModuleBased: true),
 
         // === ET 200MP 25mm Module ===
         // Schmalere Module, 10 Module pro Band
@@ -78,7 +80,8 @@ public static class FormatDefinitions
             Columns: 3, RowsPerLabel: 1, HasHeader: true, IsVertical: false,
             LabelsPerRow: 10, LabelRows: 20,
             Family: ProductFamily.S71500_ET200MP_25mm,
-            BandsPerPage: 2, ChannelRowsPerBand: 20),
+            BandsPerPage: 2, ChannelRowsPerBand: 20,
+            IsModuleBased: true),
 
         [LabelFormat.MP25_Vertical] = new FormatInfo(
             LabelFormat.MP25_Vertical,
@@ -86,7 +89,8 @@ public static class FormatDefinitions
             Columns: 3, RowsPerLabel: 1, HasHeader: true, IsVertical: true,
             LabelsPerRow: 10, LabelRows: 20,
             Family: ProductFamily.S71500_ET200MP_25mm,
-            BandsPerPage: 2, ChannelRowsPerBand: 20),
+            BandsPerPage: 2, ChannelRowsPerBand: 20,
+            IsModuleBased: true),
     };
 
     public static FormatInfo Get(LabelFormat format) => _formats[format];

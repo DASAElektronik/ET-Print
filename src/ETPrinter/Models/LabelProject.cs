@@ -4,7 +4,7 @@ namespace ETPrinter.Models;
 
 public class LabelProject
 {
-    public int Version { get; set; } = 3;
+    public int Version { get; set; } = 4;
     public ProductFamily ProductFamily { get; set; } = ProductFamily.ET200SP;
     public LabelFormat Format { get; set; } = LabelFormat.HorizontalDouble;
     public LabelSettings Settings { get; set; } = new();
@@ -12,6 +12,12 @@ public class LabelProject
     public double CalibrationOffsetX { get; set; }
     public double CalibrationOffsetY { get; set; }
     public bool PrintGridLines { get; set; }
+
+    /// <summary>
+    /// ET200MP Modul-Seiten (nur fuer modulbasierte Formate).
+    /// Null bei ET200SP-Projekten.
+    /// </summary>
+    public List<MpModulePage>? MpPages { get; set; }
 
     /// <summary>
     /// Legacy property for deserializing v1 projects that had a flat Labels list.
