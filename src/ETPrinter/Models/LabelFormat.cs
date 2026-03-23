@@ -2,12 +2,21 @@ namespace ETPrinter.Models;
 
 public enum LabelFormat
 {
+    // === ET 200SP Formate (bestehend) ===
     HorizontalDoubleHeader,
     HorizontalDouble,
     HorizontalSingle,
     VerticalDoubleHeader,
     VerticalDouble,
-    VerticalSingle
+    VerticalSingle,
+
+    // === S7-1500 / ET 200MP Standard (35mm Module) ===
+    MP_Horizontal,
+    MP_Vertical,
+
+    // === ET 200MP 25mm Module ===
+    MP25_Horizontal,
+    MP25_Vertical
 }
 
 public record FormatInfo(
@@ -18,8 +27,12 @@ public record FormatInfo(
     bool HasHeader,
     bool IsVertical,
     int LabelsPerRow,
-    int LabelRows
+    int LabelRows,
+    ProductFamily Family = ProductFamily.ET200SP,
+    int BandsPerPage = 1,
+    int ChannelRowsPerBand = 20
 )
 {
-    public int LabelsPerPage => LabelsPerRow * LabelRows;
+    public int LabelsPerBand => LabelsPerRow * ChannelRowsPerBand;
+    public int LabelsPerPage => LabelsPerBand * BandsPerPage;
 }

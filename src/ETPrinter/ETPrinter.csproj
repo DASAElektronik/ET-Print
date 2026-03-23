@@ -6,6 +6,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <AssemblyName>ET-Printer</AssemblyName>
+    <Version>2.2.0</Version>
+    <Company>DASA</Company>
+    <Description>Beschriftungsstreifen fuer Siemens ET 200SP auf A4 drucken</Description>
   </PropertyGroup>
 
   <ItemGroup>

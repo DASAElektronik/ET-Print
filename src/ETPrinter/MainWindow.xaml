@@ -129,9 +129,15 @@
                         </StackPanel>
                     </GroupBox>
 
-                    <!-- Druckformat -->
-                    <GroupBox Header="Druckformat" Margin="0,0,0,10">
+                    <!-- Produktfamilie + Druckformat -->
+                    <GroupBox Header="Produktfamilie / Druckformat" Margin="0,0,0,10">
                         <StackPanel Margin="5">
+                            <Label Content="Produktfamilie:" Padding="0" Margin="0,0,0,2"/>
+                            <ComboBox ItemsSource="{Binding AvailableProductFamilies}"
+                                      SelectedItem="{Binding SelectedProductFamilyInfo}"
+                                      DisplayMemberPath="DisplayName"
+                                      Margin="0,0,0,8"/>
+                            <Label Content="Druckformat:" Padding="0" Margin="0,0,0,2"/>
                             <ComboBox ItemsSource="{Binding AvailableFormats}"
                                       SelectedItem="{Binding SelectedFormat}"
                                       DisplayMemberPath="DisplayName"/>
@@ -432,7 +438,7 @@
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <UniformGrid Columns="{Binding LabelsPerRow}"
-                                                         Rows="{Binding LabelRows}"/>
+                                                         Rows="{Binding TotalVisualRows}"/>
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
@@ -630,7 +636,7 @@
                                                   Margin="2,0,0,0">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
-                                                <UniformGrid Rows="{Binding LabelRows}" Columns="1"/>
+                                                <UniformGrid Rows="{Binding TotalVisualRows}" Columns="1"/>
                                             </ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
@@ -676,6 +682,11 @@
             <Separator/>
             <StatusBarItem>
                 <TextBlock Text="{Binding SelectedFormat.DisplayName, Mode=OneWay}"/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock Text="{Binding SelectedProductFamilyInfo.LabelSheetPartNumber, Mode=OneWay}"
+                           Foreground="Gray" ToolTip="Beschriftungsbogen-Artikelnummer"/>
             </StatusBarItem>
         </StatusBar>
 

@@ -42,6 +42,13 @@ public static class ProjectService
             project.Version = 2;
         }
 
+        // v2 -> v3 migration: add ProductFamily (default ET200SP)
+        if (project.Version < 3)
+        {
+            project.ProductFamily = ProductFamily.ET200SP;
+            project.Version = 3;
+        }
+
         // Ensure at least one page exists
         if (project.Pages.Count == 0)
         {

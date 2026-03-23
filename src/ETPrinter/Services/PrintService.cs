@@ -45,7 +45,8 @@ public static class PrintService
             document.Pages.Add(pageContent);
         }
 
-        printDialog.PrintDocument(document.DocumentPaginator, "ET200SP Etiketten");
+        string jobTitle = format.Family == ProductFamily.ET200SP ? "ET200SP Etiketten" : "ET200MP Etiketten";
+        printDialog.PrintDocument(document.DocumentPaginator, jobTitle);
     }
 
     private static FixedPage CreatePage(
@@ -77,18 +78,41 @@ public static class PrintService
         double marginLeft = (settings.MarginLeft + calOffsetX) * MmToWpf;
         double marginTop = (settings.MarginTop + calOffsetY) * MmToWpf;
 
+        // ET200MP: Band-Layout berechnen
+        var familyInfo = ProductFamilyDefinitions.Get(format.Family);
+        int labelsPerBand = format.LabelsPerBand;
+        double bandHeaderH = familyInfo.EstimatedHeaderHeight * MmToWpf;
+        double bandSeparatorH = familyInfo.EstimatedSeparatorHeight * MmToWpf;
+
         foreach (var label in labels)
         {
             int i = label.Index;
-            int col = i % format.LabelsPerRow;
-            int row = i / format.LabelsPerRow;
+
+            // Band-Zuordnung (0 = oben, 1 = unten)
+            int band = format.BandsPerPage > 1 ? i / labelsPerBand : 0;
+            int indexInBand = format.BandsPerPage > 1 ? i % labelsPerBand : i;
+
+            int col = indexInBand % format.LabelsPerRow;
+            int row = indexInBand / format.LabelsPerRow;
 
             // Spiegeln: Index 0 = unten rechts auf dem physischen Blatt
             int physCol = (format.LabelsPerRow - 1) - col;
-            int physRow = (format.LabelRows - 1) - row;
+            int physRow = (format.ChannelRowsPerBand - 1) - row;
 
             double x = marginLeft + physCol * groupW;
-            double y = marginTop + physRow * cellH;
+            double y;
+
+            if (format.BandsPerPage > 1)
+            {
+                // ET200MP: Y-Position mit Header und Separator
+                double bandStartY = marginTop + band * (bandHeaderH + format.ChannelRowsPerBand * cellH + bandSeparatorH);
+                y = bandStartY + bandHeaderH + physRow * cellH;
+            }
+            else
+            {
+                // ET200SP: Einfache Y-Berechnung
+                y = marginTop + physRow * cellH;
+            }
 
             // Zellenrahmen nur bei Option "Gitterlinien drucken"
             if (printGridLines)
@@ -307,17 +331,27 @@ public static class PrintService
         double marginTop = (settings.MarginTop + calOffsetY) * MmToWpf;
 
         double gridWidth = format.LabelsPerRow * groupW;
-        double gridHeight = format.LabelRows * cellH;
+        var familyInfo = ProductFamilyDefinitions.Get(format.Family);
+        double totalGridHeight;
+        if (format.BandsPerPage > 1)
+        {
+            double bandH = familyInfo.EstimatedHeaderHeight * MmToWpf + format.ChannelRowsPerBand * cellH;
+            totalGridHeight = format.BandsPerPage * bandH + (format.BandsPerPage - 1) * familyInfo.EstimatedSeparatorHeight * MmToWpf;
+        }
+        else
+        {
+            totalGridHeight = format.LabelRows * cellH;
+        }
 
-        // Fadenkreuz 1: Ecke unten rechts (Reihe 1, Spalte 1)
+        // Fadenkreuz 1: Ecke unten rechts
         double x1 = marginLeft + gridWidth;
-        double y1 = marginTop + gridHeight;
-        DrawCrosshair(canvas, x1, y1, "Reihe 1 / unten rechts");
+        double y1 = marginTop + totalGridHeight;
+        DrawCrosshair(canvas, x1, y1, "unten rechts");
 
-        // Fadenkreuz 2: Ecke oben links (Reihe 20, Spalte 5)
+        // Fadenkreuz 2: Ecke oben links
         double x2 = marginLeft;
         double y2 = marginTop;
-        DrawCrosshair(canvas, x2, y2, "Reihe 20 / oben links");
+        DrawCrosshair(canvas, x2, y2, "oben links");
 
         // Info-Text in der Mitte
         var info = new TextBlock
@@ -350,7 +384,8 @@ public static class PrintService
         ((IAddChild)pageContent).AddChild(page);
         document.Pages.Add(pageContent);
 
-        printDialog.PrintDocument(document.DocumentPaginator, "ET200SP Kalibrierung");
+        string calJobTitle = format.Family == ProductFamily.ET200SP ? "ET200SP Kalibrierung" : "ET200MP Kalibrierung";
+        printDialog.PrintDocument(document.DocumentPaginator, calJobTitle);
     }
 
     private static void DrawCrosshair(Canvas canvas, double cx, double cy, string label)

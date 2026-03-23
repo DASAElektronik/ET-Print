@@ -2,7 +2,34 @@
 
 ## [Unreleased]
 ### Geplant
-- Keine offenen Features
+- ET200MP modulbasiertes Datenmodell (Canvas-Preview, Zellen-Merges pro Modultyp)
+- 6 Modulvarianten mit exaktem Excel-Layout (32 DI/DQ, 16 DI/DQ, 16 DI 230V, 8 DQ 230V, 8 AI/AQ, 4 AQ)
+
+---
+
+## 2026-03-23 - Projekttag 2
+
+### Phase 10: S7-1500 / ET200MP Grundgeruest (v2.2)
+- ProductFamily-Konzept eingefuehrt (ET200SP, S71500_ET200MP, S71500_ET200MP_25mm)
+- ProductFamilyInfo Record mit Massen, Raendern, Beschriftungsbogen-Artikelnr
+- 4 neue LabelFormat-Enum-Werte (MP_Horizontal, MP_Vertical, MP25_Horizontal, MP25_Vertical)
+- FormatInfo erweitert: BandsPerPage, ChannelRowsPerBand, Family
+- ProductFamily-ComboBox in der UI mit automatischer Format-Filterung
+- Default-Raender wechseln pro Produktfamilie (ET200MP: O:14 L:25 U:19 R:12)
+- A4-Vorschau: 2-Band-Layout fuer ET200MP (40 Zeilen = 2x20)
+- PrintService: 2-Band-Rendering mit Header/Separator-Berechnung
+- Speichern/Laden: v3 Format mit ProductFamily, v2-Migration
+- ResetSettings beruecksichtigt aktuelle ProductFamily
+- Format-Family-Validierung beim Laden
+- Beschriftungsbogen-Nr in Statusleiste
+- Test-Automation: Named-Pipe-Server (TestAutomationService)
+  - Befehle: ping, state, screenshot, select-family/format/label, set-text, generate, navigate
+  - PowerShell-Client (test-send.ps1)
+- Geschaetzte Masse aus Excel-Template (werden spaeter mit Stahllineal korrigiert)
+- Excel-Templates analysiert: Siemens Beitrags-ID 83681795
+  - Excel_Template_S71500_ET200MP.xls (12 Sheets, 6 Modultypen x H/V)
+  - Excel_Template_S71500_ET200MP_25mm.xls (5 Sheets)
+  - Beschriftungsboegen: 6ES7592-1AX00-0AA0, 6ES7592-2AX00-0AA0
 
 ---
 
@@ -11,7 +38,7 @@
 ### Phase 0: Planung & Setup
 - Siemens PDF-Dokumentation (Beitrags-ID 81524595) analysiert
 - Excel Template (Excel_Template_ET200SP.xls) analysiert: 6 Sheets, Zellengroessen, Spaltenbreiten, Zeilenhoehen, Textrotation
-- Physisches Etikettenblatt identifiziert: 6ES7193-6LA10-0AA0 (12,5mm x 32mm, 100 Stueck pro A4)
+- Physisches Etikettenblatt identifiziert: 6ES7193-6LA10-0AA0 (12,8mm x 31mm, 100 Stueck pro A4)
 - GravurApp-Layout als Referenz analysiert (C:\claude\Gravur)
 - Dokumentation erstellt: PRODUCT.md, FEATURES.md, ARCHITECTURE.md, PRINT-FORMATS.md
 - UI-Konzept: Zwei-Spalten-Layout (Eingabe links, A4-Vorschau rechts) adaptiert von GravurApp
@@ -156,7 +183,7 @@
 
 ### Critic-Review Fixes
 - FontFamily-Binding fuer vertikale Vorschau und Header ergaenzt
-- Standard-Seitenraender vereinheitlicht (23.5/25/23.5/25mm = exakt 12.5x32mm Etiketten)
+- Standard-Seitenraender vereinheitlicht (20.5/27.5/20.5/27.5mm = exakt 12.8x31mm Etiketten, gemessen)
 - CalibrationService: Speicherpfad auf %LocalAppData%\ETPrinter verschoben
 - RelayCommand<T>: Sichere Type-Checks statt direkter Casts
 - DoOpen: Font-Settings werden korrekt restauriert

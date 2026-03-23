@@ -14,6 +14,7 @@ public record RecentFileItem(string FilePath, string DisplayName);
 
 public class MainViewModel : ViewModelBase
 {
+    private ProductFamily _selectedProductFamily = ProductFamily.ET200SP;
     private FormatInfo _selectedFormat;
     private LabelViewModel? _selectedLabel;
     private LabelSettings _settings;
@@ -48,6 +49,7 @@ public class MainViewModel : ViewModelBase
     private double _calibrationOffsetY;
     private string? _currentFilePath;
     private string _statusMessage = "Bereit";
+    private bool _isDirty;
 
     // Multi-page support
     private List<List<LabelViewModel>> _allPages = [];
@@ -56,10 +58,11 @@ public class MainViewModel : ViewModelBase
     public MainViewModel()
     {
         _settings = new LabelSettings();
-        _selectedFormat = FormatDefinitions.All[0];
+        _selectedFormat = FormatDefinitions.GetDefaultFormat(ProductFamily.ET200SP);
         _genModuleType = AddressGenerator.ModuleTypes[0]; // DI
 
-        AvailableFormats = new ObservableCollection<FormatInfo>(FormatDefinitions.All);
+        AvailableProductFamilies = new ObservableCollection<ProductFamilyInfo>(ProductFamilyDefinitions.All);
+        AvailableFormats = new ObservableCollection<FormatInfo>(FormatDefinitions.GetFormatsForFamily(ProductFamily.ET200SP));
         Labels = new ObservableCollection<LabelViewModel>();
         FontSizes = [4, 5, 6, 7, 8, 9, 10];
         AvailableFonts = new ObservableCollection<string>(
@@ -104,6 +107,7 @@ public class MainViewModel : ViewModelBase
         InitializeLabels();
     }
 
+    public ObservableCollection<ProductFamilyInfo> AvailableProductFamilies { get; }
     public ObservableCollection<FormatInfo> AvailableFormats { get; }
     public ObservableCollection<LabelViewModel> Labels { get; }
     public ObservableCollection<RecentFileItem> RecentFiles { get; } = new();
@@ -112,6 +116,41 @@ public class MainViewModel : ViewModelBase
 
     // Modultypen fuer ComboBox
     public ModuleTypeInfo[] AvailableModuleTypes => AddressGenerator.ModuleTypes;
+
+    public ProductFamilyInfo SelectedProductFamilyInfo
+    {
+        get => ProductFamilyDefinitions.Get(_selectedProductFamily);
+        set
+        {
+            if (value is not null && SetProperty(ref _selectedProductFamily, value.Family))
+            {
+                // Ränder auf Family-Defaults setzen
+                _settings.ResetForFamily(_selectedProductFamily);
+                InputMarginTop = _settings.MarginTop;
+                InputMarginLeft = _settings.MarginLeft;
+                InputMarginBottom = _settings.MarginBottom;
+                InputMarginRight = _settings.MarginRight;
+                OnPropertyChanged(nameof(Settings));
+                OnPropertyChanged(nameof(PreviewMargin));
+
+                // Formate filtern
+                AvailableFormats.Clear();
+                foreach (var fmt in FormatDefinitions.GetFormatsForFamily(_selectedProductFamily))
+                    AvailableFormats.Add(fmt);
+
+                // Erstes Format der neuen Familie waehlen
+                SelectedFormat = FormatDefinitions.GetDefaultFormat(_selectedProductFamily);
+                OnPropertyChanged(nameof(SelectedProductFamily));
+                OnPropertyChanged(nameof(BandsPerPage));
+                OnPropertyChanged(nameof(IsMultiBand));
+                OnPropertyChanged(nameof(WindowTitle));
+            }
+        }
+    }
+
+    public ProductFamily SelectedProductFamily => _selectedProductFamily;
+    public int BandsPerPage => _selectedFormat.BandsPerPage;
+    public bool IsMultiBand => _selectedFormat.BandsPerPage > 1;
 
     public FormatInfo SelectedFormat
     {
@@ -127,6 +166,9 @@ public class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(LabelsPerRow));
                 OnPropertyChanged(nameof(LabelRows));
                 OnPropertyChanged(nameof(RowNumbers));
+                OnPropertyChanged(nameof(BandsPerPage));
+                OnPropertyChanged(nameof(IsMultiBand));
+                OnPropertyChanged(nameof(TotalVisualRows));
                 OnPropertyChanged(nameof(WindowTitle));
                 StatusMessage = $"Format: {value.DisplayName} ({value.LabelsPerPage} Etiketten)";
             }
@@ -172,12 +214,45 @@ public class MainViewModel : ViewModelBase
     public int LabelsPerRow => _selectedFormat.LabelsPerRow;
     public int LabelRows => _selectedFormat.LabelRows;
 
-    // Zeilennummern fuer rechten Rand (wie physisches A4-Blatt: 20 oben, 1 unten)
-    public int[] RowNumbers => Enumerable.Range(1, _selectedFormat.LabelRows).Reverse().ToArray();
+    // Gesamt-Zeilen fuer die Preview-Darstellung (ET200SP: 20, ET200MP: 40)
+    public int TotalVisualRows => _selectedFormat.ChannelRowsPerBand * _selectedFormat.BandsPerPage;
 
-    public string WindowTitle => _currentFilePath is not null
-        ? $"ET-Printer - {Path.GetFileName(_currentFilePath)}"
-        : $"ET-Printer - {_selectedFormat.DisplayName}";
+    // Zeilennummern fuer rechten Rand (wie physisches A4-Blatt: 20 oben, 1 unten)
+    // Bei 2 Baendern: 20..1 (Band oben) dann nochmal 20..1 (Band unten)
+    public int[] RowNumbers
+    {
+        get
+        {
+            var bandNums = Enumerable.Range(1, _selectedFormat.ChannelRowsPerBand).Reverse().ToArray();
+            if (_selectedFormat.BandsPerPage <= 1) return bandNums;
+            // Fuer Multi-Band: Nummern wiederholen
+            var result = new int[bandNums.Length * _selectedFormat.BandsPerPage];
+            for (int b = 0; b < _selectedFormat.BandsPerPage; b++)
+                Array.Copy(bandNums, 0, result, b * bandNums.Length, bandNums.Length);
+            return result;
+        }
+    }
+
+    public bool IsDirty
+    {
+        get => _isDirty;
+        private set
+        {
+            if (SetProperty(ref _isDirty, value))
+                OnPropertyChanged(nameof(WindowTitle));
+        }
+    }
+
+    public string WindowTitle
+    {
+        get
+        {
+            var dirty = _isDirty ? " *" : "";
+            return _currentFilePath is not null
+                ? $"ET-Printer - {Path.GetFileName(_currentFilePath)}{dirty}"
+                : $"ET-Printer - {_selectedFormat.DisplayName}{dirty}";
+        }
+    }
 
     // === Multi-page properties ===
     public int CurrentPageIndex
@@ -462,6 +537,7 @@ public class MainViewModel : ViewModelBase
         var newPage = CreateEmptyPage(count);
         _allPages.Add(newPage);
         NavigateToPage(_allPages.Count - 1);
+        IsDirty = true;
         StatusMessage = $"Seite {PageCount} hinzugefuegt";
     }
 
@@ -473,6 +549,7 @@ public class MainViewModel : ViewModelBase
         _allPages.RemoveAt(removedIndex);
         int newIndex = Math.Min(removedIndex, _allPages.Count - 1);
         NavigateToPage(newIndex);
+        IsDirty = true;
         StatusMessage = $"Seite {removedIndex + 1} entfernt ({PageCount} Seiten verbleibend)";
     }
 
@@ -484,6 +561,7 @@ public class MainViewModel : ViewModelBase
         SelectedLabel.Line1 = InputLine1;
         SelectedLabel.Line2 = InputLine2;
         ApplyFontToLabel(SelectedLabel);
+        IsDirty = true;
 
         AdvanceToNextLabel();
     }
@@ -504,6 +582,7 @@ public class MainViewModel : ViewModelBase
         SelectedLabel.Line2 = result.Line2;
         ApplyFontToLabel(SelectedLabel);
 
+        IsDirty = true;
         StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte}";
 
         // Startadresse fuer naechstes Modul automatisch weiterschalten
@@ -580,12 +659,13 @@ public class MainViewModel : ViewModelBase
         if (Labels.Count > 0)
             SelectedLabel = Labels[0];
 
+        IsDirty = true;
         StatusMessage = "Alle Etiketten geloescht";
     }
 
     private void ResetSettings()
     {
-        _settings.Reset();
+        _settings.ResetForFamily(_selectedProductFamily);
         InputFontSize = _settings.FontSize;
         InputIsBold = _settings.IsBold;
         InputIsItalic = _settings.IsItalic;
@@ -623,6 +703,7 @@ public class MainViewModel : ViewModelBase
         {
             StatusMessage = "Seitenraender uebernommen";
         }
+        IsDirty = true;
     }
 
     private void UpdateHeader()
@@ -630,6 +711,7 @@ public class MainViewModel : ViewModelBase
         if (SelectedLabel is null) return;
         SelectedLabel.Header = GenModuleName;
         InputHeader = GenModuleName;
+        IsDirty = true;
         StatusMessage = $"Kopfzeile von Etikett {SelectedLabel.DisplayPosition} geaendert";
     }
 
@@ -643,13 +725,21 @@ public class MainViewModel : ViewModelBase
 
     private void NewProject()
     {
+        if (!ConfirmDiscardChanges()) return;
         _currentFilePath = null;
+        _selectedProductFamily = ProductFamily.ET200SP;
+        AvailableFormats.Clear();
+        foreach (var fmt in FormatDefinitions.GetFormatsForFamily(ProductFamily.ET200SP))
+            AvailableFormats.Add(fmt);
+        OnPropertyChanged(nameof(SelectedProductFamilyInfo));
+        OnPropertyChanged(nameof(SelectedProductFamily));
         _settings.Reset();
         ResetSettings();
         GenModuleName = string.Empty;
         GenStartByte = 0;
         GenCount = 2;
-        SelectedFormat = FormatDefinitions.All[0];
+        SelectedFormat = FormatDefinitions.GetDefaultFormat(ProductFamily.ET200SP);
+        IsDirty = false;
         OnPropertyChanged(nameof(WindowTitle));
         StatusMessage = "Neues Projekt erstellt";
     }
@@ -684,6 +774,7 @@ public class MainViewModel : ViewModelBase
 
             var project = new LabelProject
             {
+                ProductFamily = _selectedProductFamily,
                 Format = _selectedFormat.Format,
                 Settings = _settings.Clone(),
                 Pages = pages,
@@ -693,6 +784,7 @@ public class MainViewModel : ViewModelBase
             };
             ProjectService.Save(project, filePath);
             _currentFilePath = filePath;
+            IsDirty = false;
             OnPropertyChanged(nameof(WindowTitle));
             RefreshRecentFiles();
             StatusMessage = $"Gespeichert: {Path.GetFileName(filePath)} ({PageCount} Seiten)";
@@ -705,6 +797,7 @@ public class MainViewModel : ViewModelBase
 
     private void OpenProject()
     {
+        if (!ConfirmDiscardChanges()) return;
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Filter = "ET-Printer Projekt (*.etprint)|*.etprint",
@@ -717,7 +810,10 @@ public class MainViewModel : ViewModelBase
     private void OpenRecentFile(string? filePath)
     {
         if (filePath is not null && File.Exists(filePath))
+        {
+            if (!ConfirmDiscardChanges()) return;
             DoOpen(filePath);
+        }
         else
             StatusMessage = "Datei nicht gefunden";
     }
@@ -728,8 +824,20 @@ public class MainViewModel : ViewModelBase
         {
             var project = ProjectService.Load(filePath);
 
-            // Format setzen (loest InitializeLabels aus -> resets to 1 empty page)
+            // ProductFamily setzen (filtert Formate, setzt Raender)
+            _selectedProductFamily = project.ProductFamily;
+            AvailableFormats.Clear();
+            foreach (var fmt in FormatDefinitions.GetFormatsForFamily(_selectedProductFamily))
+                AvailableFormats.Add(fmt);
+            OnPropertyChanged(nameof(SelectedProductFamilyInfo));
+            OnPropertyChanged(nameof(SelectedProductFamily));
+            OnPropertyChanged(nameof(BandsPerPage));
+            OnPropertyChanged(nameof(IsMultiBand));
+
+            // Format setzen — sicherstellen dass Format zur Family passt
             var formatInfo = FormatDefinitions.Get(project.Format);
+            if (formatInfo.Family != _selectedProductFamily)
+                formatInfo = FormatDefinitions.GetDefaultFormat(_selectedProductFamily);
             SelectedFormat = formatInfo;
 
             // Build _allPages from project.Pages
@@ -798,6 +906,7 @@ public class MainViewModel : ViewModelBase
             PrintGridLines = project.PrintGridLines;
 
             _currentFilePath = filePath;
+            IsDirty = false;
             OnPropertyChanged(nameof(WindowTitle));
             RefreshRecentFiles();
             if (Labels.Count > 0) SelectedLabel = Labels[0];
@@ -1022,6 +1131,7 @@ public class MainViewModel : ViewModelBase
         // Navigate to the start page to show results
         NavigateToPage(startPage);
         NotifyPageProperties();
+        IsDirty = true;
 
         MessageBox.Show(
             $"{cells.Count} Etiketten importiert.\n" +
@@ -1100,6 +1210,7 @@ public class MainViewModel : ViewModelBase
         foreach (var page in _allPages)
             foreach (var label in page)
                 label.IsPrintEnabled = true;
+        IsDirty = true;
         StatusMessage = "Alle Etiketten zum Drucken aktiviert";
     }
 
@@ -1108,6 +1219,7 @@ public class MainViewModel : ViewModelBase
         foreach (var page in _allPages)
             foreach (var label in page)
                 label.IsPrintEnabled = false;
+        IsDirty = true;
         StatusMessage = "Alle Etiketten vom Drucken ausgeschlossen";
     }
 
@@ -1116,6 +1228,7 @@ public class MainViewModel : ViewModelBase
         foreach (var page in _allPages)
             foreach (var label in page)
                 label.IsPrintEnabled = label.HasText;
+        IsDirty = true;
         StatusMessage = "Nur befuellte Etiketten zum Drucken aktiviert";
     }
 
@@ -1123,6 +1236,7 @@ public class MainViewModel : ViewModelBase
     {
         if (SelectedLabel is null) return;
         SelectedLabel.IsPrintEnabled = !SelectedLabel.IsPrintEnabled;
+        IsDirty = true;
         StatusMessage = SelectedLabel.IsPrintEnabled
             ? $"Etikett {SelectedLabel.DisplayPosition}: Druck aktiviert"
             : $"Etikett {SelectedLabel.DisplayPosition}: Druck deaktiviert";
@@ -1131,5 +1245,48 @@ public class MainViewModel : ViewModelBase
     public void SelectLabel(LabelViewModel label)
     {
         SelectedLabel = label;
+    }
+
+    /// <summary>
+    /// Fragt den Benutzer ob ungespeicherte Aenderungen verworfen werden sollen.
+    /// Gibt true zurueck wenn fortgefahren werden darf.
+    /// </summary>
+    public bool ConfirmDiscardChanges()
+    {
+        if (!_isDirty) return true;
+
+        var result = MessageBox.Show(
+            "Es gibt ungespeicherte Aenderungen.\nMoechten Sie diese speichern?",
+            "Ungespeicherte Aenderungen",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Warning);
+
+        return result switch
+        {
+            MessageBoxResult.Yes => DoSaveAndConfirm(),
+            MessageBoxResult.No => true,
+            _ => false // Cancel
+        };
+    }
+
+    private bool DoSaveAndConfirm()
+    {
+        if (_currentFilePath is null)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "ET-Printer Projekt (*.etprint)|*.etprint",
+                DefaultExt = ".etprint",
+                FileName = "Projekt"
+            };
+            if (dialog.ShowDialog() != true)
+                return false;
+            DoSave(dialog.FileName);
+        }
+        else
+        {
+            DoSave(_currentFilePath);
+        }
+        return true;
     }
 }

@@ -114,8 +114,32 @@
 
 ---
 
+## Phase 10: v2.2 - S7-1500 / ET200MP Grundgeruest [DONE]
+- [x] ProductFamily-Abstraktion (ET200SP, S71500_ET200MP, S71500_ET200MP_25mm)
+- [x] ProductFamily-ComboBox in der UI mit Format-Filterung
+- [x] 4 neue Formate (MP_Horizontal, MP_Vertical, MP25_Horizontal, MP25_Vertical)
+- [x] 2-Band-Layout in Vorschau und Druck
+- [x] Default-Raender pro Produktfamilie
+- [x] Speichern/Laden v3 mit ProductFamily + Rueckwaertskompatibilitaet
+- [x] Test-Automation (Named Pipe Server + PowerShell Client)
+- [x] Excel-Templates analysiert (12+5 Sheets, Zellen-Merges dokumentiert)
+
+## Phase 11: v2.3 - ET200MP modulbasiertes Layout [TODO]
+- [ ] MpModule Datenmodell (Header, AdressCells, NetAddr, CpuName)
+- [ ] MpModuleVariant: 6 Varianten mit deklarativen Merge-Regeln
+- [ ] MpModuleLayoutFactory: Zellen-Generierung pro Variante
+- [ ] MpModuleViewModel fuer UI-Bindung
+- [ ] Canvas-basiertes MpPreviewControl (statt UniformGrid)
+- [ ] Modul-Editor Tab (Variante, Header, Adressen, NetAddr, CpuName)
+- [ ] PrintService: modulbasiertes Rendering mit Zellen-Merges
+- [ ] Speichern/Laden v4 mit MpPages
+- [ ] Exakte Masse per Stahllineal (wenn Boegen geliefert)
+- [ ] 25mm-Template Variante
+
+---
+
 ## Geklaerte Fragen
-- [x] Exakte Zellengroessen: 12,5mm x 32mm pro Etikett (5x32=160mm Breite, 20x12,5=250mm Hoehe)
+- [x] Exakte Zellengroessen: 12,8mm x 31mm pro Etikett (5x31=155mm Breite, 20x12,8=256mm Hoehe) - gemessen mit Stahllineal
 - [x] Schriftart: Variable, alle Windows-Fonts (Standard: Arial)
 - [x] Einzeldruck: Ja, Etiketten sollen einzeln druckbar sein
 - [x] CSV/Excel-Import: Ja, gewuenscht
