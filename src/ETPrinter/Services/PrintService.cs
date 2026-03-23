@@ -535,7 +535,8 @@ public static class PrintService
             if (printGridLines)
                 DrawCellBorder(canvas, modX, headerY, moduleW, headerH);
 
-            for (int half = 0; half < 2; half++)
+            int maxHalf = layout.AddressCells.Any(c => c.Half == 1) ? 2 : 1;
+            for (int half = 0; half < maxHalf; half++)
             {
                 double halfDataStartY = half == 0
                     ? headerY + headerH

@@ -102,23 +102,34 @@ public partial class MpPreviewControl : UserControl
             RenderNetAddrAndCpu(mod, 0, modX + addrW, half0DataY,
                 col2W, col3W, dataRowH, halfDataH);
 
-            // Trennlinie (duenne Linie statt zweiter Header)
+            // Untere Etiketten-Position (immer rendern — leere Gitterstruktur wenn kein Inhalt)
             double dividerY = half0DataY + halfDataH;
             double dividerH = separatorH;
-            var divRect = new Rectangle
-            {
-                Width = moduleW, Height = dividerH,
-                Fill = new SolidColorBrush(Color.FromRgb(200, 200, 216)),
-                Stroke = CellBorderBrush, StrokeThickness = 0.3
-            };
-            Canvas.SetLeft(divRect, modX);
-            Canvas.SetTop(divRect, dividerY);
-            PreviewCanvas.Children.Add(divRect);
 
-            // Untere Haelfte (Half 1) — direkt unter Trennlinie
+            // Separator/Header der unteren Position
+            DrawCell(modX, dividerY, moduleW, dividerH,
+                "", HeaderBgBrush, false, fontSize: 5);
+
             double half1DataY = dividerY + dividerH;
-            RenderHalfCells(vm, mod, layout, 1, modX, half1DataY,
-                col0W, col1W, addrW, dataRowH, format.IsVertical, isModSelected);
+
+            bool hasHalf1 = layout.AddressCells.Any(c => c.Half == 1);
+            if (hasHalf1)
+            {
+                // Zellen der unteren Position rendern
+                RenderHalfCells(vm, mod, layout, 1, modX, half1DataY,
+                    col0W, col1W, addrW, dataRowH, format.IsVertical, isModSelected);
+            }
+            else
+            {
+                // Leere Gitterstruktur fuer die untere Position
+                for (int row = 0; row < MpModuleLayoutFactory.RowsPerHalf; row++)
+                {
+                    double cellY = half1DataY + row * dataRowH;
+                    DrawCell(modX, cellY, addrW, dataRowH, "", EmptyBrush, false);
+                }
+            }
+
+            // NetAddr + CpuName der unteren Position (immer rendern)
             RenderNetAddrAndCpu(mod, 1, modX + addrW, half1DataY,
                 col2W, col3W, dataRowH, halfDataH);
         }
