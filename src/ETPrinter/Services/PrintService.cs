@@ -516,30 +516,30 @@ public static class PrintService
             double modX = marginLeft + col * moduleW;
             var layout = MpModuleLayoutFactory.GetLayout(mod.Variant);
 
-            // Fuer jede Haelfte (0=oben, 1=unten) rendern
+            // Ein zusammenhaengender Streifen: Header + Half0 + Divider + Half1
+            double headerY = marginTop;
+
+            // Header einmal oben
+            if (!string.IsNullOrWhiteSpace(mod.HeaderText))
+            {
+                var tb = CreateTextBlock(mod.HeaderText.Replace("\n", " / "),
+                    mod.FontSize, true, false, mod.FontFamily);
+                tb.Width = moduleW - 2;
+                tb.TextAlignment = TextAlignment.Center;
+                var container = new Border { Width = moduleW, Height = headerH };
+                container.Child = tb;
+                Canvas.SetLeft(container, modX);
+                Canvas.SetTop(container, headerY);
+                canvas.Children.Add(container);
+            }
+            if (printGridLines)
+                DrawCellBorder(canvas, modX, headerY, moduleW, headerH);
+
             for (int half = 0; half < 2; half++)
             {
-                double halfY = half == 0
-                    ? marginTop
-                    : marginTop + headerH + halfDataH;  // nach Header + Daten der oberen Haelfte
-                double halfHeaderH = half == 0 ? headerH : separatorH;
-                double halfDataStartY = halfY + halfHeaderH;
-
-                // Header (erscheint in beiden Haelften)
-                if (!string.IsNullOrWhiteSpace(mod.HeaderText))
-                {
-                    var tb = CreateTextBlock(mod.HeaderText.Replace("\n", " / "),
-                        mod.FontSize, true, false, mod.FontFamily);
-                    tb.Width = moduleW - 2;
-                    tb.TextAlignment = TextAlignment.Center;
-                    var container = new Border { Width = moduleW, Height = halfHeaderH };
-                    container.Child = tb;
-                    Canvas.SetLeft(container, modX);
-                    Canvas.SetTop(container, halfY);
-                    canvas.Children.Add(container);
-                }
-                if (printGridLines)
-                    DrawCellBorder(canvas, modX, halfY, moduleW, halfHeaderH);
+                double halfDataStartY = half == 0
+                    ? headerY + headerH
+                    : headerY + headerH + halfDataH + separatorH;
 
                 // Adresszellen dieser Haelfte
                 for (int i = 0; i < mod.AddressCells.Count && i < layout.AddressCells.Length; i++)

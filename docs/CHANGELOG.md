@@ -2,12 +2,45 @@
 
 ## [Unreleased]
 ### Geplant
-- ET200MP modulbasiertes Datenmodell (Canvas-Preview, Zellen-Merges pro Modultyp)
-- 6 Modulvarianten mit exaktem Excel-Layout (32 DI/DQ, 16 DI/DQ, 16 DI 230V, 8 DQ 230V, 8 AI/AQ, 4 AQ)
+- Mappe-fuer-Mappe Feinabstimmung der Modultypen gegen Excel-Template
+- Weitere Modultypen: DQ, AI, AQ Klemmenbelegungen aus Datenblaettern
+- SIWAREX Waegemodule
+- Exakte Masse per Stahllineal (wenn Beschriftungsboegen geliefert)
 
 ---
 
 ## 2026-03-23 - Projekttag 2
+
+### Phase 12: Architektur-Korrektur + Generator-Fix (v2.5)
+- ARCHITEKTUR-FIX: 5 Module pro Seite (nicht 10)
+  - Band 1 + Band 2 derselben Spalte = EIN physischer Beschriftungsstreifen
+  - MpCellDefinition mit Half-Feld (0=obere Haelfte, 1=untere Haelfte)
+- EIN zusammenhaengender Streifen in Preview und Druck
+  - Header nur einmal oben (nicht mehr doppelt)
+  - Trennlinie statt zweiter Header zwischen den Haelften
+- Adress-Generator fuer ET200MP komplett neu:
+  - Sequenzielle Bit-Adressen (E x.0 bis E x.7) statt ET200SP odd/even Split
+  - Korrekte Byte-Zuordnung nach physischer Klemmenbelegung (0, 2, 1, 3)
+  - Gruppe a (Byte 0) oben-links, Gruppe c (Byte 2) oben-rechts
+  - Gruppe b (Byte 1) unten-links, Gruppe d (Byte 3) unten-rechts
+- DI 32x24VDC HF Klemmenbelegung aus Siemens Equipment Manual
+  - 40 Klemmen, CH0-CH31, M/L+/GND Positionen als Strukturzellen
+  - Strukturzellen zeigen Labels (M, L+, 1M, 2L+, MANA)
+- AI 8xU/I/RTD/TC ST Klemmenbelegung dokumentiert (4 Zeilen pro Kanal)
+- AQ 4xU/I ST Klemmenbelegung dokumentiert (nur linke Seite benutzt)
+- TestAutomation: zoom, maximize, resize Befehle
+- Alle S7-1500 Modultypen in PRINT-FORMATS.md katalogisiert (DI/DQ/AI/AQ/SIWAREX)
+
+### Phase 11: ET200MP modulbasiertes Layout (v2.3)
+- MpModule Datenmodell (HeaderText, AddressCells, NetAddress1-4, CpuName)
+- 6 MpModuleVariant mit deklarativen Zellen-Merge-Definitionen
+- MpModuleLayoutFactory: exakte Zellenstruktur pro Variante aus Excel
+- Canvas-basiertes MpPreviewControl (statt UniformGrid)
+- IsModuleBased-Flag als Weiche zwischen ET200SP- und ET200MP-Codepfad
+- Modul-Editor Tab (Variante, Header, Adressen, NetAddr, CpuName)
+- PrintService: PrintMp() mit modulbasiertem Rendering
+- Speichern/Laden v4 mit MpPages, Zellen-Persistenz
+- Paralleles Datenmodell — ET200SP komplett unveraendert
 
 ### Phase 10: S7-1500 / ET200MP Grundgeruest (v2.2)
 - ProductFamily-Konzept eingefuehrt (ET200SP, S71500_ET200MP, S71500_ET200MP_25mm)

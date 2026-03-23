@@ -258,11 +258,60 @@ Korrekte Adressen starten bei .0 (z.B. E 0.0, E 0.1, ..., E 0.7).
 
 Jede Variante existiert horizontal (0 Grad) und vertikal (90 Grad) = 12 Formate.
 
+### Unterstuetzte S7-1500 / ET200MP Modultypen
+
+#### Digital Input (DI) — 6ES7521
+| Modul | Artikel-Nr | Kanäle | Breite | Excel-Mappe |
+|---|---|---|---|---|
+| DI 16x24VDC HF | 6ES7521-1BH00-0AB0 | 16 | 35mm | horizontal/vertical_16_DI_DQ |
+| DI 16x24VDC BA | 6ES7521-1BH10-0AA0 | 16 | 35mm | horizontal/vertical_16_DI_DQ |
+| DI 32x24VDC HF | 6ES7521-1BL00-0AB0 | 32 | 35mm | horizontal/vertical_32_DI_DQ |
+| DI 16x230VAC BA | 6ES7521-1FH00-0AA0 | 16 | 35mm | horizontal/vertical_16_DI_230V |
+
+#### Digital Output (DQ) — 6ES7522
+| Modul | Artikel-Nr | Kanäle | Breite | Excel-Mappe |
+|---|---|---|---|---|
+| DQ 8x24VDC/2A HF | 6ES7522-1BF00-0AB0 | 8 | 35mm | horizontal/vertical_32_DI_DQ (*) |
+| DQ 16x24VDC/0.5A ST | 6ES7522-1BH00-0AB0 | 16 | 35mm | horizontal/vertical_16_DI_DQ |
+| DQ 16x24VDC/0.5A BA | 6ES7522-1BH10-0AA0 | 16 | 35mm | horizontal/vertical_16_DI_DQ |
+| DQ 32x24VDC/0.5A HF | 6ES7522-1BL01-0AB0 | 32 | 35mm | horizontal/vertical_32_DI_DQ |
+| DQ 8x230VAC/5A | 6ES7522-5HF00-0AB0 | 8 | 35mm | horizontal/vertical_8_DQ_230V |
+
+#### Analog Input (AI) — 6ES7531
+| Modul | Artikel-Nr | Kanäle | Breite | Excel-Mappe |
+|---|---|---|---|---|
+| AI 8xU/I/RTD/TC ST | 6ES7531-7KF00-0AB0 | 8 | 35mm | horizontal/vertical_8_AI_AQ |
+| AI 8xU/I HF | 6ES7531-7NF00-0AB0 | 8 | 35mm | horizontal/vertical_8_AI_AQ |
+| AI 8xU/I/R/RTD BA | 6ES7531-7QF00-0AB0 | 8 | 35mm | horizontal/vertical_8_AI_AQ |
+
+#### Analog Output (AQ) — 6ES7532
+| Modul | Artikel-Nr | Kanäle | Breite | Excel-Mappe |
+|---|---|---|---|---|
+| AQ 4xU/I ST | 6ES7532-5HD00-0AB0 | 4 | 35mm | horizontal/vertical_4_AQ |
+| AQ 2xU/I ST | 6ES7532-5NB00-0AB0 | 2 | 25mm | ET200MP_25mm Template |
+
+#### SIWAREX Waegemodule — 7MH4980
+| Modul | Artikel-Nr | Kanäle | Breite | Excel-Mappe |
+|---|---|---|---|---|
+| WP521 ST (1-Kanal) | 7MH4980-1AA01 | 1 WZ + 3DI + 4DQ | 35mm | eigene Klemmenbelegung |
+| WP522 ST (2-Kanal) | 7MH4980-2AA01 | 2 WZ + 3DI + 4DQ | 35mm | eigene Klemmenbelegung |
+
+(*) DQ 8x24VDC nutzt das 32_DI_DQ Layout, da gleiche 40-Klemmen-Frontbaugruppe
+
+#### Datenblatt-Quellen fuer Klemmenbelegungen
+- DI 32x24VDC HF: https://cache.industry.siemens.com/dl/files/896/59192896/att_897449/v1/s71500_di_32x24vdc_hf_manual_en-US_en-US.pdf
+- DI 16x24VDC BA: https://support.industry.siemens.com/cs/attachments/83501190/s71500_di_16x24vdc_ba_manual_en-US_en-US.pdf
+- DQ 32x24VDC HF: https://cache.industry.siemens.com/dl/files/716/109480716/att_902641/v1/s71500_dq_32x24vdc_0_5a_hf_manual_en-US_en-US.pdf
+- DQ 8x24VDC/2A HF: https://support.industry.siemens.com/cs/attachments/59193089/s71500_dq_8x24vdc_2a_hf_manual_en-US_en-US.pdf
+- AI 8xU/I/RTD/TC ST: https://cache.industry.siemens.com/dl/files/205/59193205/att_112065/v1/s71500_ai_8xu_i_rtd_tc_st_manual_en-US_en-US.pdf
+- AQ 4xU/I ST: https://cache.industry.siemens.com/dl/files/850/59191850/att_63218/v1/s71500_aq_4xu_i_st_manual_en-US_en-US.pdf
+- SIWAREX WP521/522: https://support.industry.siemens.com/cs/attachments/109736583/Manual_SIWAREX_WP521_WP522_en_en-US.pdf
+
 ### Aktueller Stand der Implementierung (TODO)
 - [ ] Architektur-Fix: 5 Module pro Seite (statt 10), Band 1+2 = ein Modul
 - [ ] Klemmenbelegung pro Modultyp: Zeilen-Mapping mit M/L+/leer Positionen
 - [ ] Adress-Generator: 0-basierte Kanaele, korrekte Byte-Verteilung auf Haelften
-- [ ] Weitere Modultypen: Klemmenbelegung aus Siemens-Datenblatt recherchieren
+- [ ] Datenblatt-PDFs herunterladen und Klemmenbelegungen extrahieren
 - [ ] Exakte Masse: Beschriftungsboegen mit Stahllineal nachmessen
 
 ---

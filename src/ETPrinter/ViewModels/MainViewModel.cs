@@ -688,22 +688,51 @@ public class MainViewModel : ViewModelBase
 
         if (_selectedFormat.IsModuleBased && SelectedMpModule is not null)
         {
-            // ET200MP: Adressen auf Modul-Zellen verteilen
+            // ET200MP: Adressen sequenziell pro Byte erzeugen und klemmengerecht verteilen
             SelectedMpModule.HeaderText = result.Header;
 
-            // Line1 + Line2 Adressen aufteilen auf editierbare Zellen
-            var addresses = new List<string>();
-            if (!string.IsNullOrWhiteSpace(result.Line1))
-                addresses.AddRange(result.Line1.Split("  ", StringSplitOptions.RemoveEmptyEntries));
-            if (!string.IsNullOrWhiteSpace(result.Line2))
-                addresses.AddRange(result.Line2.Split("  ", StringSplitOptions.RemoveEmptyEntries));
-
+            // Fuer MP: Eigene sequenzielle Adressgenerierung (nicht ET200SP odd/even!)
+            var info = AddressGenerator.ModuleTypes.First(m => m.Type == GenModuleType.Type);
             var editableCells = SelectedMpModule.AddressCells.Where(c => c.IsEditable).ToList();
-            for (int i = 0; i < editableCells.Count && i < addresses.Count; i++)
-                editableCells[i].Text = addresses[i];
+
+            if (info.IsBitAddressed)
+            {
+                // Digital: Byte-Zuordnung nach physischer Klemmenbelegung
+                // DI 32 (4 Bytes): Zellenreihenfolge in LayoutFactory:
+                //   Half 0 Col 0 (8 Zellen) = Gruppe a = Byte 0
+                //   Half 0 Col 1 (8 Zellen) = Gruppe c = Byte 2
+                //   Half 1 Col 0 (8 Zellen) = Gruppe b = Byte 1
+                //   Half 1 Col 1 (8 Zellen) = Gruppe d = Byte 3
+                // Byte-Reihenfolge: 0, 2, 1, 3 (physisch: links-oben, rechts-oben, links-unten, rechts-unten)
+                int[] byteOrder = GenCount == 4
+                    ? [0, 2, 1, 3]  // 32 Kanaele: a, c, b, d
+                    : GenCount == 2
+                        ? [0, 1]    // 16 Kanaele: einfach sequenziell
+                        : Enumerable.Range(0, GenCount).ToArray();
+
+                var addresses = new List<string>();
+                for (int group = 0; group < byteOrder.Length; group++)
+                {
+                    int byteNum = GenStartByte + byteOrder[group];
+                    for (int bit = 0; bit < 8; bit++)
+                        addresses.Add($"{info.Prefix} {byteNum}.{bit}");
+                }
+                for (int i = 0; i < editableCells.Count && i < addresses.Count; i++)
+                    editableCells[i].Text = addresses[i];
+            }
+            else
+            {
+                // Analog: Wort-Adressen sequenziell auf editierbare Zellen
+                var addresses = new List<string>();
+                for (int ch = 0; ch < GenCount; ch++)
+                    addresses.Add($"{info.Prefix} {GenStartByte + ch * 2}");
+                for (int i = 0; i < editableCells.Count && i < addresses.Count; i++)
+                    editableCells[i].Text = addresses[i];
+            }
 
             IsDirty = true;
-            StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte} → {addresses.Count} Adressen auf Modul {SelectedMpModule.ModuleIndex + 1}";
+            int filledCount = editableCells.Count(c => c.HasText);
+            StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte} → {filledCount} Adressen auf Modul {SelectedMpModule.ModuleIndex + 1}";
 
             // Startadresse weiterschalten
             if (GenAutoAdvanceAddress)

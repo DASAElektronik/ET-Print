@@ -88,6 +88,9 @@ public class TestAutomationService : IDisposable
                 "ping" => Ok("pong"),
                 "state" => await RunOnUI(() => GetState()),
                 "screenshot" => await RunOnUI(() => TakeScreenshot(arg)),
+                "zoom" => await RunOnUI(() => SetZoom(arg)),
+                "maximize" => await RunOnUI(() => MaximizeWindow()),
+                "resize" => await RunOnUI(() => ResizeWindow(arg)),
                 "select-family" => await RunOnUI(() => SelectFamily(arg)),
                 "select-format" => await RunOnUI(() => SelectFormat(arg)),
                 "select-label" => await RunOnUI(() => SelectLabel(arg)),
@@ -464,6 +467,34 @@ public class TestAutomationService : IDisposable
             hasText = mod.HasText
         };
         return Ok(JsonSerializer.Serialize(state));
+    }
+
+    // === Fenster-Steuerung ===
+
+    private string SetZoom(string arg)
+    {
+        if (!double.TryParse(arg, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out double zoom) || zoom < 0.3 || zoom > 5.0)
+            return Error($"Ungueltiger Zoom: {arg}. Gueltig: 0.3-5.0");
+        _viewModel.Zoom = zoom;
+        return Ok($"Zoom: {zoom}");
+    }
+
+    private string MaximizeWindow()
+    {
+        _mainWindow.WindowState = WindowState.Maximized;
+        return Ok("Fenster maximiert");
+    }
+
+    private string ResizeWindow(string arg)
+    {
+        var parts = arg.Split('x', 'X');
+        if (parts.Length != 2 || !double.TryParse(parts[0], out double w) || !double.TryParse(parts[1], out double h))
+            return Error("Format: resize <breite>x<hoehe> (z.B. 1920x1080)");
+        _mainWindow.WindowState = WindowState.Normal;
+        _mainWindow.Width = w;
+        _mainWindow.Height = h;
+        return Ok($"Fenster: {w}x{h}");
     }
 
     // === Generator + Save/Load ===

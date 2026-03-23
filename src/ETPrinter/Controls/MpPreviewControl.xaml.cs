@@ -88,35 +88,37 @@ public partial class MpPreviewControl : UserControl
 
             var layout = MpModuleLayoutFactory.GetLayout(mod.Variant);
 
-            // === OBERE HAELFTE (Half 0) ===
-            double half0Y = marginT;
-            double half0HeaderY = half0Y;
-            double half0DataY = half0Y + headerH;
+            // === EIN ZUSAMMENHAENGENDER STREIFEN pro Modul ===
 
-            DrawCell(modX, half0HeaderY, moduleW, headerH,
+            // Header (einmal, oben)
+            double headerY = marginT;
+            DrawCell(modX, headerY, moduleW, headerH,
                 mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: 5, isBold: true);
 
+            // Obere Haelfte (Half 0) — direkt unter Header
+            double half0DataY = headerY + headerH;
             RenderHalfCells(vm, mod, layout, 0, modX, half0DataY,
                 col0W, col1W, addrW, dataRowH, format.IsVertical, isModSelected);
-
             RenderNetAddrAndCpu(mod, 0, modX + addrW, half0DataY,
                 col2W, col3W, dataRowH, halfDataH);
 
-            // === SEPARATOR ===
-            double sepY = half0Y + headerH + halfDataH;
-            // (Separator ist der 2. Header)
+            // Trennlinie (duenne Linie statt zweiter Header)
+            double dividerY = half0DataY + halfDataH;
+            double dividerH = separatorH;
+            var divRect = new Rectangle
+            {
+                Width = moduleW, Height = dividerH,
+                Fill = new SolidColorBrush(Color.FromRgb(200, 200, 216)),
+                Stroke = CellBorderBrush, StrokeThickness = 0.3
+            };
+            Canvas.SetLeft(divRect, modX);
+            Canvas.SetTop(divRect, dividerY);
+            PreviewCanvas.Children.Add(divRect);
 
-            // === UNTERE HAELFTE (Half 1) ===
-            double half1Y = sepY;
-            double half1HeaderY = half1Y;
-            double half1DataY = half1Y + separatorH; // separatorH = 2. Header-Hoehe
-
-            DrawCell(modX, half1HeaderY, moduleW, separatorH,
-                mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: 5, isBold: true);
-
+            // Untere Haelfte (Half 1) — direkt unter Trennlinie
+            double half1DataY = dividerY + dividerH;
             RenderHalfCells(vm, mod, layout, 1, modX, half1DataY,
                 col0W, col1W, addrW, dataRowH, format.IsVertical, isModSelected);
-
             RenderNetAddrAndCpu(mod, 1, modX + addrW, half1DataY,
                 col2W, col3W, dataRowH, halfDataH);
         }
