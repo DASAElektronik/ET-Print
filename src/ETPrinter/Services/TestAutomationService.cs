@@ -383,7 +383,7 @@ public class TestAutomationService : IDisposable
         if (!int.TryParse(indexStr, out int index) || index < 0 || index >= _viewModel.MpModules.Count)
             return Error($"Ungueltiger Modul-Index: {indexStr}. Gueltig: 0-{_viewModel.MpModules.Count - 1}");
         _viewModel.SelectedMpModule = _viewModel.MpModules[index];
-        return Ok($"Modul {index} ausgewaehlt (Band {_viewModel.MpModules[index].Band + 1}, Spalte {_viewModel.MpModules[index].ColumnInBand + 1})");
+        return Ok($"Modul {index} ausgewaehlt (Spalte {index + 1})");
     }
 
     private string SetModuleHeader(string text)
@@ -453,8 +453,7 @@ public class TestAutomationService : IDisposable
         var state = new
         {
             moduleIndex = mod.ModuleIndex,
-            band = mod.Band,
-            column = mod.ColumnInBand,
+            column = mod.ModuleIndex,
             variant = mod.Variant.ToString(),
             header = mod.HeaderText,
             netAddr1 = mod.NetAddress1,

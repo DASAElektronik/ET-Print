@@ -493,109 +493,114 @@ public static class PrintService
         double marginLeft = (settings.MarginLeft + calOffsetX) * MmToWpf;
         double marginTop = (settings.MarginTop + calOffsetY) * MmToWpf;
 
-        int modulesPerBand = familyInfo.ModulesPerBand;
         double printWidthMm = FormatDefinitions.PageWidth - settings.MarginLeft - settings.MarginRight;
-        double moduleWidthMm = printWidthMm / modulesPerBand;
+        double moduleWidthMm = printWidthMm / familyInfo.ModulesPerPage;
         double moduleW = moduleWidthMm * MmToWpf;
 
-        // Spaltenbreiten pro Modul
         double col0W = moduleW * MpModuleLayoutFactory.Col0Ratio;
         double col1W = moduleW * MpModuleLayoutFactory.Col1Ratio;
         double col2W = moduleW * MpModuleLayoutFactory.Col2Ratio;
         double col3W = moduleW * MpModuleLayoutFactory.Col3Ratio;
         double addrW = col0W + col1W;
 
-        // Zeilenhoehen
         double headerH = familyInfo.EstimatedHeaderHeight * MmToWpf;
         double separatorH = familyInfo.EstimatedSeparatorHeight * MmToWpf;
         double dataRowH = familyInfo.EstimatedChannelRowHeight * MmToWpf;
-        double bandDataH = MpModuleLayoutFactory.RowsPerBand * dataRowH;
+        double halfDataH = MpModuleLayoutFactory.RowsPerHalf * dataRowH;
 
         foreach (var mod in modules)
         {
             if (!mod.IsPrintEnabled) continue;
 
-            int band = mod.Band;
-            int col = mod.ColumnInBand;
-            double bandStartY = marginTop + band * (headerH + bandDataH + separatorH);
+            int col = mod.ModuleIndex;
             double modX = marginLeft + col * moduleW;
-            double dataStartY = bandStartY + headerH;
-
-            // Header
-            if (!string.IsNullOrWhiteSpace(mod.HeaderText))
-            {
-                var tb = CreateTextBlock(mod.HeaderText.Replace("\n", " / "),
-                    mod.FontSize, true, false, mod.FontFamily);
-                tb.Width = moduleW - 2;
-                tb.TextAlignment = TextAlignment.Center;
-                var container = new Border { Width = moduleW, Height = headerH };
-                container.Child = tb;
-                Canvas.SetLeft(container, modX);
-                Canvas.SetTop(container, bandStartY);
-                canvas.Children.Add(container);
-            }
-
-            if (printGridLines)
-                DrawCellBorder(canvas, modX, bandStartY, moduleW, headerH);
-
-            // Adresszellen
             var layout = MpModuleLayoutFactory.GetLayout(mod.Variant);
-            for (int i = 0; i < mod.AddressCells.Count && i < layout.AddressCells.Length; i++)
+
+            // Fuer jede Haelfte (0=oben, 1=unten) rendern
+            for (int half = 0; half < 2; half++)
             {
-                var def = layout.AddressCells[i];
-                var cellVm = mod.AddressCells[i];
+                double halfY = half == 0
+                    ? marginTop
+                    : marginTop + headerH + halfDataH;  // nach Header + Daten der oberen Haelfte
+                double halfHeaderH = half == 0 ? headerH : separatorH;
+                double halfDataStartY = halfY + halfHeaderH;
 
-                double cellX = modX + (def.StartCol == 0 ? 0 : col0W);
-                double cellW = def.ColSpan == 2 ? addrW : (def.StartCol == 0 ? col0W : col1W);
-                double cellY = dataStartY + def.StartRow * dataRowH;
-                double cellH = def.RowSpan * dataRowH;
-
-                if (printGridLines)
-                    DrawCellBorder(canvas, cellX, cellY, cellW, cellH);
-
-                if (!string.IsNullOrWhiteSpace(cellVm.Text))
+                // Header (erscheint in beiden Haelften)
+                if (!string.IsNullOrWhiteSpace(mod.HeaderText))
                 {
-                    var tb = CreateTextBlock(cellVm.Text, mod.FontSize, mod.IsBold, false, mod.FontFamily);
-                    if (format.IsVertical)
-                    {
-                        tb.LayoutTransform = new RotateTransform(-90);
-                        tb.HorizontalAlignment = HorizontalAlignment.Center;
-                        tb.VerticalAlignment = VerticalAlignment.Center;
-                    }
-                    else
-                    {
-                        tb.TextAlignment = TextAlignment.Center;
-                        tb.Width = cellW - 1;
-                    }
-                    var container = new Border { Width = cellW, Height = cellH };
+                    var tb = CreateTextBlock(mod.HeaderText.Replace("\n", " / "),
+                        mod.FontSize, true, false, mod.FontFamily);
+                    tb.Width = moduleW - 2;
+                    tb.TextAlignment = TextAlignment.Center;
+                    var container = new Border { Width = moduleW, Height = halfHeaderH };
                     container.Child = tb;
-                    Canvas.SetLeft(container, cellX);
-                    Canvas.SetTop(container, cellY);
+                    Canvas.SetLeft(container, modX);
+                    Canvas.SetTop(container, halfY);
                     canvas.Children.Add(container);
                 }
+                if (printGridLines)
+                    DrawCellBorder(canvas, modX, halfY, moduleW, halfHeaderH);
+
+                // Adresszellen dieser Haelfte
+                for (int i = 0; i < mod.AddressCells.Count && i < layout.AddressCells.Length; i++)
+                {
+                    var def = layout.AddressCells[i];
+                    if (def.Half != half) continue;
+
+                    var cellVm = mod.AddressCells[i];
+                    double cellX = modX + (def.StartCol == 0 ? 0 : col0W);
+                    double cellW = def.ColSpan == 2 ? addrW : (def.StartCol == 0 ? col0W : col1W);
+                    double cellY = halfDataStartY + def.StartRow * dataRowH;
+                    double cellH = def.RowSpan * dataRowH;
+
+                    if (printGridLines)
+                        DrawCellBorder(canvas, cellX, cellY, cellW, cellH);
+
+                    string text = def.IsEditable ? cellVm.Text : def.Label;
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        var tb = CreateTextBlock(text, mod.FontSize, mod.IsBold, false, mod.FontFamily);
+                        if (format.IsVertical && def.IsEditable)
+                        {
+                            tb.LayoutTransform = new RotateTransform(-90);
+                            tb.HorizontalAlignment = HorizontalAlignment.Center;
+                            tb.VerticalAlignment = VerticalAlignment.Center;
+                        }
+                        else
+                        {
+                            tb.TextAlignment = TextAlignment.Center;
+                            tb.Width = cellW - 1;
+                        }
+                        var container = new Border { Width = cellW, Height = cellH };
+                        container.Child = tb;
+                        Canvas.SetLeft(container, cellX);
+                        Canvas.SetTop(container, cellY);
+                        canvas.Children.Add(container);
+                    }
+                }
+
+                // Col 2: Netzadresse
+                double col2X = modX + addrW;
+                double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
+                string net1 = half == 0 ? mod.NetAddress1 : mod.NetAddress3;
+                string net2 = half == 0 ? mod.NetAddress2 : mod.NetAddress4;
+                RenderRotatedText(canvas, net1, col2X, halfDataStartY, col2W, blockH,
+                    mod.FontSize, mod.FontFamily);
+                RenderRotatedText(canvas, net2, col2X, halfDataStartY + blockH, col2W, blockH,
+                    mod.FontSize, mod.FontFamily);
+                if (printGridLines)
+                {
+                    DrawCellBorder(canvas, col2X, halfDataStartY, col2W, blockH);
+                    DrawCellBorder(canvas, col2X, halfDataStartY + blockH, col2W, blockH);
+                }
+
+                // Col 3: CPU-Name
+                double col3X = col2X + col2W;
+                RenderRotatedText(canvas, mod.CpuName, col3X, halfDataStartY, col3W, halfDataH,
+                    mod.FontSize, mod.FontFamily);
+                if (printGridLines)
+                    DrawCellBorder(canvas, col3X, halfDataStartY, col3W, halfDataH);
             }
-
-            // Col 2: Netzadresse (2 Bloecke, 90° rotiert)
-            double col2X = modX + addrW;
-            double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
-            RenderRotatedText(canvas, mod.NetAddress1, col2X, dataStartY, col2W, blockH,
-                mod.FontSize, mod.FontFamily);
-            RenderRotatedText(canvas, mod.NetAddress2, col2X, dataStartY + blockH, col2W, blockH,
-                mod.FontSize, mod.FontFamily);
-
-            if (printGridLines)
-            {
-                DrawCellBorder(canvas, col2X, dataStartY, col2W, blockH);
-                DrawCellBorder(canvas, col2X, dataStartY + blockH, col2W, blockH);
-            }
-
-            // Col 3: CPU-Name (20 Zeilen, 90° rotiert)
-            double col3X = col2X + col2W;
-            RenderRotatedText(canvas, mod.CpuName, col3X, dataStartY, col3W, bandDataH,
-                mod.FontSize, mod.FontFamily);
-
-            if (printGridLines)
-                DrawCellBorder(canvas, col3X, dataStartY, col3W, bandDataH);
         }
 
         page.Children.Add(canvas);

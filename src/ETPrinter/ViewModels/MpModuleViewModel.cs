@@ -51,9 +51,7 @@ public class MpModuleViewModel : ViewModelBase
         RebuildCellViewModels();
     }
 
-    public int ModuleIndex => _module.ModuleIndex;
-    public int Band => _module.ModuleIndex / 5;  // 0-4 = Band 0, 5-9 = Band 1
-    public int ColumnInBand => _module.ModuleIndex % 5;
+    public int ModuleIndex => _module.ModuleIndex;  // = Spalte auf der Seite (0-4)
 
     public MpModuleVariant Variant
     {
@@ -86,6 +84,18 @@ public class MpModuleViewModel : ViewModelBase
     {
         get => _module.NetAddress2;
         set { _module.NetAddress2 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); }
+    }
+
+    public string NetAddress3
+    {
+        get => _module.NetAddress3;
+        set { _module.NetAddress3 = value; OnPropertyChanged(); }
+    }
+
+    public string NetAddress4
+    {
+        get => _module.NetAddress4;
+        set { _module.NetAddress4 = value; OnPropertyChanged(); }
     }
 
     public string CpuName

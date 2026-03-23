@@ -1,5 +1,3 @@
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -13,11 +11,11 @@ namespace ETPrinter.Controls;
 
 /// <summary>
 /// Canvas-basierte Vorschau fuer ET200MP Module.
-/// Rendert die exakte Zellenstruktur inkl. Merges wie im Siemens Excel-Template.
+/// Jedes Modul hat 2 Haelften (obere + untere), die zum selben physischen Streifen gehoeren.
+/// 5 Module (Spalten) pro A4-Seite.
 /// </summary>
 public partial class MpPreviewControl : UserControl
 {
-    // Vorschau-Skalierung: 3px/mm (wie bei ET200SP A4-Preview 630x891)
     private const double PxPerMm = 3.0;
 
     private static readonly Brush EmptyBrush = new SolidColorBrush(Color.FromRgb(240, 240, 240));
@@ -27,6 +25,7 @@ public partial class MpPreviewControl : UserControl
     private static readonly Brush NetAddrBgBrush = new SolidColorBrush(Color.FromRgb(232, 232, 248));
     private static readonly Brush CpuNameBgBrush = new SolidColorBrush(Color.FromRgb(248, 240, 232));
     private static readonly Brush StructBrush = new SolidColorBrush(Color.FromRgb(220, 220, 220));
+    private static readonly Brush StructTextBrush = new SolidColorBrush(Color.FromRgb(140, 140, 140));
     private static readonly Brush CellBorderBrush = new SolidColorBrush(Color.FromRgb(160, 160, 160));
     private static readonly Brush SelectedCellBorderBrush = new SolidColorBrush(Color.FromRgb(0, 120, 212));
 
@@ -60,105 +59,133 @@ public partial class MpPreviewControl : UserControl
         var familyInfo = ProductFamilyDefinitions.Get(format.Family);
         var settings = vm.Settings;
 
-        // Druckbereich berechnen
         double printW = (FormatDefinitions.PageWidth - settings.MarginLeft - settings.MarginRight) * PxPerMm;
-        double printH = (FormatDefinitions.PageHeight - settings.MarginTop - settings.MarginBottom) * PxPerMm;
         double marginL = settings.MarginLeft * PxPerMm;
         double marginT = settings.MarginTop * PxPerMm;
 
-        int modulesPerBand = familyInfo.ModulesPerBand;
-        double moduleW = printW / modulesPerBand;
+        int modulesPerPage = familyInfo.ModulesPerPage;
+        double moduleW = printW / modulesPerPage;
 
-        // Spaltenbreiten innerhalb eines Moduls
         double col0W = moduleW * MpModuleLayoutFactory.Col0Ratio;
         double col1W = moduleW * MpModuleLayoutFactory.Col1Ratio;
         double col2W = moduleW * MpModuleLayoutFactory.Col2Ratio;
         double col3W = moduleW * MpModuleLayoutFactory.Col3Ratio;
-        double addrW = col0W + col1W;  // Gesamtbreite Adressbereich
+        double addrW = col0W + col1W;
 
-        // Zeilenhoehen
         double headerH = familyInfo.EstimatedHeaderHeight * PxPerMm;
         double separatorH = familyInfo.EstimatedSeparatorHeight * PxPerMm;
         double dataRowH = familyInfo.EstimatedChannelRowHeight * PxPerMm;
-        double bandDataH = MpModuleLayoutFactory.RowsPerBand * dataRowH;
-        double bandTotalH = headerH + bandDataH;
+        double halfDataH = MpModuleLayoutFactory.RowsPerHalf * dataRowH;
 
         PreviewCanvas.Width = FormatDefinitions.PageWidth * PxPerMm;
         PreviewCanvas.Height = FormatDefinitions.PageHeight * PxPerMm;
 
         foreach (var mod in vm.MpModules)
         {
-            int band = mod.Band;
-            int col = mod.ColumnInBand;
-
-            double bandStartY = marginT + band * (bandTotalH + separatorH);
+            int col = mod.ModuleIndex;
             double modX = marginL + col * moduleW;
-            double headerY = bandStartY;
-            double dataStartY = bandStartY + headerH;
-
             bool isModSelected = mod == vm.SelectedMpModule;
 
-            // === Header-Zeile (gemergt ueber 4 Spalten) ===
-            DrawCell(modX, headerY, moduleW, headerH,
-                mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: 5, rotate: false, isBold: true);
-
-            // === Adress-Zellen (Col 0+1) ===
             var layout = MpModuleLayoutFactory.GetLayout(mod.Variant);
-            for (int i = 0; i < mod.AddressCells.Count && i < layout.AddressCells.Length; i++)
+
+            // === OBERE HAELFTE (Half 0) ===
+            double half0Y = marginT;
+            double half0HeaderY = half0Y;
+            double half0DataY = half0Y + headerH;
+
+            DrawCell(modX, half0HeaderY, moduleW, headerH,
+                mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: 5, isBold: true);
+
+            RenderHalfCells(vm, mod, layout, 0, modX, half0DataY,
+                col0W, col1W, addrW, dataRowH, format.IsVertical, isModSelected);
+
+            RenderNetAddrAndCpu(mod, 0, modX + addrW, half0DataY,
+                col2W, col3W, dataRowH, halfDataH);
+
+            // === SEPARATOR ===
+            double sepY = half0Y + headerH + halfDataH;
+            // (Separator ist der 2. Header)
+
+            // === UNTERE HAELFTE (Half 1) ===
+            double half1Y = sepY;
+            double half1HeaderY = half1Y;
+            double half1DataY = half1Y + separatorH; // separatorH = 2. Header-Hoehe
+
+            DrawCell(modX, half1HeaderY, moduleW, separatorH,
+                mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: 5, isBold: true);
+
+            RenderHalfCells(vm, mod, layout, 1, modX, half1DataY,
+                col0W, col1W, addrW, dataRowH, format.IsVertical, isModSelected);
+
+            RenderNetAddrAndCpu(mod, 1, modX + addrW, half1DataY,
+                col2W, col3W, dataRowH, halfDataH);
+        }
+    }
+
+    private void RenderHalfCells(MainViewModel vm, MpModuleViewModel mod,
+        MpModuleLayout layout, int half,
+        double modX, double dataStartY,
+        double col0W, double col1W, double addrW, double dataRowH,
+        bool isVertical, bool isModSelected)
+    {
+        for (int i = 0; i < mod.AddressCells.Count && i < layout.AddressCells.Length; i++)
+        {
+            var def = layout.AddressCells[i];
+            if (def.Half != half) continue;
+
+            var cellVm = mod.AddressCells[i];
+
+            double cellX = modX + (def.StartCol == 0 ? 0 : col0W);
+            double cellW = def.ColSpan == 2 ? addrW : (def.StartCol == 0 ? col0W : col1W);
+            double cellY = dataStartY + def.StartRow * dataRowH;
+            double cellH = def.RowSpan * dataRowH;
+
+            bool isCellSelected = isModSelected && cellVm == vm.SelectedMpCell;
+
+            string displayText;
+            Brush bg;
+            if (!def.IsEditable)
             {
-                var def = layout.AddressCells[i];
-                var cellVm = mod.AddressCells[i];
-
-                double cellX = modX + (def.StartCol == 0 ? 0 : col0W);
-                double cellW = def.ColSpan == 2 ? addrW : (def.StartCol == 0 ? col0W : col1W);
-                double cellY = dataStartY + def.StartRow * dataRowH;
-                double cellH = def.RowSpan * dataRowH;
-
-                bool isCellSelected = isModSelected && cellVm == vm.SelectedMpCell;
-                Brush bg = !def.IsEditable ? StructBrush
-                    : cellVm.HasText ? FilledBrush
-                    : EmptyBrush;
-
-                DrawCell(cellX, cellY, cellW, cellH,
-                    cellVm.Text, bg, isCellSelected,
-                    fontSize: 5, rotate: format.IsVertical,
-                    clickAction: () => SelectCell(vm, mod, cellVm));
+                bg = StructBrush;
+                displayText = def.Label;
+            }
+            else
+            {
+                bg = cellVm.HasText ? FilledBrush : EmptyBrush;
+                displayText = cellVm.Text;
             }
 
-            // === Col 2: Netzadresse (2 Bloecke a 10 Zeilen, 90° rotiert) ===
-            double col2X = modX + addrW;
-            double block1H = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
-            DrawCell(col2X, dataStartY, col2W, block1H,
-                mod.NetAddress1, NetAddrBgBrush, false, fontSize: 5, rotate: true);
-            DrawCell(col2X, dataStartY + block1H, col2W, block1H,
-                mod.NetAddress2, NetAddrBgBrush, false, fontSize: 5, rotate: true);
-
-            // === Col 3: CPU-Name (20 Zeilen, 90° rotiert) ===
-            double col3X = col2X + col2W;
-            DrawCell(col3X, dataStartY, col3W, bandDataH,
-                mod.CpuName, CpuNameBgBrush, false, fontSize: 5, rotate: true);
+            DrawCell(cellX, cellY, cellW, cellH,
+                displayText, bg, isCellSelected,
+                fontSize: 5, rotate: isVertical && def.IsEditable,
+                foreground: def.IsEditable ? null : StructTextBrush,
+                clickAction: def.IsEditable ? () => SelectCell(vm, mod, cellVm) : null);
         }
+    }
 
-        // === Separator-Zeile zwischen den Baendern ===
-        if (format.BandsPerPage > 1)
-        {
-            double sepY = marginT + bandTotalH;
-            var sepRect = new Rectangle
-            {
-                Width = printW, Height = separatorH,
-                Fill = new SolidColorBrush(Color.FromRgb(245, 245, 245)),
-                Stroke = CellBorderBrush, StrokeThickness = 0.3
-            };
-            Canvas.SetLeft(sepRect, marginL);
-            Canvas.SetTop(sepRect, sepY);
-            PreviewCanvas.Children.Add(sepRect);
-        }
+    private void RenderNetAddrAndCpu(MpModuleViewModel mod, int half,
+        double col2X, double dataStartY,
+        double col2W, double col3W, double dataRowH, double halfDataH)
+    {
+        double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
+
+        string net1 = half == 0 ? mod.NetAddress1 : mod.NetAddress3;
+        string net2 = half == 0 ? mod.NetAddress2 : mod.NetAddress4;
+
+        DrawCell(col2X, dataStartY, col2W, blockH,
+            net1, NetAddrBgBrush, false, fontSize: 5, rotate: true);
+        DrawCell(col2X, dataStartY + blockH, col2W, blockH,
+            net2, NetAddrBgBrush, false, fontSize: 5, rotate: true);
+
+        double col3X = col2X + col2W;
+        DrawCell(col3X, dataStartY, col3W, halfDataH,
+            mod.CpuName, CpuNameBgBrush, false, fontSize: 5, rotate: true);
     }
 
     private void DrawCell(double x, double y, double w, double h,
         string text, Brush background, bool isSelected,
         double fontSize = 5, bool rotate = false, bool isBold = false,
-        Action? clickAction = null)
+        Brush? foreground = null, Action? clickAction = null)
     {
         var rect = new Rectangle
         {
@@ -183,7 +210,7 @@ public partial class MpPreviewControl : UserControl
                 FontWeight = isBold ? FontWeights.Bold : FontWeights.Normal,
                 FontFamily = new FontFamily("Arial"),
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                Foreground = Brushes.Black,
+                Foreground = foreground ?? Brushes.Black,
                 MaxWidth = rotate ? h - 2 : w - 2,
                 MaxHeight = rotate ? w - 2 : h - 2
             };

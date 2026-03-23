@@ -196,7 +196,7 @@ public class MainViewModel : ViewModelBase
     }
 
     public string SelectedMpModuleInfo => _selectedMpModule is not null
-        ? $"Modul {_selectedMpModule.ModuleIndex + 1} (Band {_selectedMpModule.Band + 1}, Spalte {_selectedMpModule.ColumnInBand + 1})"
+        ? $"Modul {_selectedMpModule.ModuleIndex + 1} / {MpModules.Count} (Spalte {_selectedMpModule.ModuleIndex + 1})"
         : "Kein Modul ausgewaehlt";
 
     public FormatInfo SelectedFormat
