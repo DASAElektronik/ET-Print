@@ -124,15 +124,35 @@
 - [x] Test-Automation (Named Pipe Server + PowerShell Client)
 - [x] Excel-Templates analysiert (12+5 Sheets, Zellen-Merges dokumentiert)
 
-## Phase 11: v2.3 - ET200MP modulbasiertes Layout [TODO]
-- [ ] MpModule Datenmodell (Header, AdressCells, NetAddr, CpuName)
-- [ ] MpModuleVariant: 6 Varianten mit deklarativen Merge-Regeln
-- [ ] MpModuleLayoutFactory: Zellen-Generierung pro Variante
-- [ ] MpModuleViewModel fuer UI-Bindung
-- [ ] Canvas-basiertes MpPreviewControl (statt UniformGrid)
-- [ ] Modul-Editor Tab (Variante, Header, Adressen, NetAddr, CpuName)
-- [ ] PrintService: modulbasiertes Rendering mit Zellen-Merges
-- [ ] Speichern/Laden v4 mit MpPages
+## Phase 11: v2.3 - ET200MP modulbasiertes Layout [TEILWEISE]
+- [x] MpModule Datenmodell (Header, AdressCells, NetAddr, CpuName)
+- [x] MpModuleVariant: 6 Varianten mit deklarativen Merge-Regeln
+- [x] MpModuleLayoutFactory: Zellen-Generierung pro Variante
+- [x] MpModuleViewModel fuer UI-Bindung
+- [x] Canvas-basiertes MpPreviewControl (statt UniformGrid)
+- [x] Modul-Editor Tab (Variante, Header, Adressen, NetAddr, CpuName)
+- [x] PrintService: modulbasiertes Rendering mit Zellen-Merges
+- [x] Speichern/Laden v4 mit MpPages
+- [x] Adress-Generator fuer MP-Module (Adressen auf Zellen verteilen)
+
+## Phase 12: v2.4 - ET200MP Architektur-Korrektur [TODO]
+**Erkenntnisse aus Siemens-Datenblatt und Excel-Analyse:**
+- [ ] ARCHITEKTUR-FIX: 5 Module pro Seite (NICHT 10)
+  - Band 1 + Band 2 derselben Spalte = EIN physisches Modul
+  - Obere Haelfte = Klemmengruppen a+c, Untere = b+d
+- [ ] Klemmenbelegung exakt pro Modultyp (aus Siemens Equipment Manual):
+  - DI 32: 40 Klemmen, CH0-CH7/M/leer + CH8-CH15/L+/M/leer pro Seite
+  - Masse (M), Power (L+) und Leerzellen an festen Positionen
+  - Kanalnummerierung 0-basiert (CH0 = E x.0)
+- [ ] Mappe-fuer-Mappe Implementierung (exakt wie Excel):
+  - [ ] horizontal_32_DI_DQ — 2 Spalten, 8 CH + M + 8 CH + L+/M/leer
+  - [ ] horizontal_16_DI_DQ
+  - [ ] horizontal_16_DI_230V
+  - [ ] horizontal_8_DQ_230V
+  - [ ] horizontal_8_AI_AQ
+  - [ ] horizontal_4_AQ
+  - [ ] Vertikale Varianten (gleiche Struktur, Text 90 Grad)
+- [ ] Adress-Generator: 0-basierte Kanaele, Byte-Verteilung auf Haelften
 - [ ] Exakte Masse per Stahllineal (wenn Boegen geliefert)
 - [ ] 25mm-Template Variante
 

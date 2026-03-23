@@ -161,9 +161,9 @@
 ### Seitengeometrie ET200MP
 - **Papier:** A4 Hochformat, 210 x 297 mm
 - **Papiersorte:** Mittleres Gewicht 96-110g
-- **2 Baender pro A4** (obere + untere Haelfte)
-- **5 Module pro Band** = 10 Module pro Seite (Standard)
-- **10 Module pro Band** = 20 Module pro Seite (25mm)
+- **5 Spalten pro A4** (jede Spalte = 1 physischer Beschriftungsstreifen/Modul)
+- Jede Spalte hat **2 Haelften** (obere + untere), beide gehoeren zum SELBEN Modul
+- **5 Module pro Seite** (NICHT 10 — Band 1+2 derselben Spalte = 1 Modul)
 
 ### Standard-Seitenraender (aus Siemens-Doku)
 | Rand   | Wert   |
@@ -176,30 +176,94 @@
 ### Modulstruktur (4 Spalten pro Modul)
 | Spalte | Excel-Breite | Anteil | Inhalt |
 |--------|-------------|--------|--------|
-| Col 0  | 1499        | 32.8%  | Adresse Links |
-| Col 1  | 1499        | 32.8%  | Adresse Rechts |
-| Col 2  | 804         | 17.6%  | Netzadresse (90 Grad, merged) |
-| Col 3  | 768         | 16.8%  | CPU-Name (90 Grad, merged) |
+| Col 0  | 1499        | 32.8%  | Klemmen links (linke Modulseite) |
+| Col 1  | 1499        | 32.8%  | Klemmen rechts (rechte Modulseite) |
+| Col 2  | 804         | 17.6%  | Netzadresse (90 Grad, merged 10 Zeilen) |
+| Col 3  | 768         | 16.8%  | CPU-Name (90 Grad, merged 20 Zeilen) |
 
 ### Zeilenhoehen
-| Zeile | Twips | ~mm | Inhalt |
-|-------|-------|-----|--------|
-| 0     | 1455  | 25.7 | Modul-Header (Device/Module/Slot) |
-| 1-20  | 315   | 5.6  | Kanalzeilen (Daten) |
-| 21    | 1170  | 20.6 | Separator / Band-2-Header |
-| 22-41 | 315   | 5.6  | Kanalzeilen Band 2 |
+| Zeile  | Twips | ~mm  | Inhalt |
+|--------|-------|------|--------|
+| 0      | 1455  | 25.7 | Modul-Header (Device/Module/Slot) |
+| 1-8    | 315   | 5.6  | Kanalgruppe a/c (8 Kanaele) |
+| 9      | 330   | 5.8  | M (Masse) Trennklemme |
+| 10-17  | 315   | 5.6  | Kanalgruppe b/d (8 Kanaele) |
+| 18     | 315   | 5.6  | L+ (Power) |
+| 19     | 315   | 5.6  | M (Ground) |
+| 20     | 330   | 5.8  | (leer) |
+| 21     | 1170  | 20.6 | Modul-Header (gleicher Text wie Zeile 0) |
+| 22-41  |       |      | (gleiche Struktur wie 1-20 fuer untere Haelfte) |
 
-### 6 Modultyp-Varianten (Zellen-Merges)
-| Variante | Col 0+1 | Zeilen/Adresse | Beschreibung |
-|----------|---------|---------------|--------------|
-| 32 DI/DQ | getrennt | 1 | 2 Spalten, 1 Zeile pro Bit |
-| 16 DI/DQ | gemergt | 1 | 1 breite Spalte, 1 Zeile pro Kanal |
-| 16 DI 230V | getrennt | 2 | 2 Spalten, 2 Zeilen pro Kanal-Paar |
-| 8 DQ 230V | getrennt | 2 | 2 Spalten, 2 Zeilen + Leergruppen |
-| 8 AI/AQ | getrennt | 4 | 2 Spalten, 4 Zeilen pro Kanal |
-| 4 AQ | gemergt | 4 | 1 breite Spalte, 4 Zeilen pro Kanal |
+### Physische Klemmenbelegung (Quelle: Siemens Equipment Manual)
+
+Jedes S7-1500/ET200MP Modul hat **40 Klemmen** (20 links, 20 rechts).
+Die Klemmenbelegung bestimmt, welche Zeilen im Beschriftungsstreifen
+Kanaladressen, Masse (M) oder Versorgung (L+) sind.
+
+#### DI 32x24VDC HF (6ES7521-1BL00-0AB0) — 40 Klemmen
+
+**Obere Haelfte des Beschriftungsstreifens:**
+```
+Linke Seite (Col 0)      Rechte Seite (Col 1)
+Klemme | Belegung         Klemme | Belegung
+───────┼──────────        ───────┼──────────
+  1    | CH0  (DI a.0)      21   | CH16 (DI c.0)
+  2    | CH1  (DI a.1)      22   | CH17 (DI c.1)
+  3    | CH2  (DI a.2)      23   | CH18 (DI c.2)
+  4    | CH3  (DI a.3)      24   | CH19 (DI c.3)
+  5    | CH4  (DI a.4)      25   | CH20 (DI c.4)
+  6    | CH5  (DI a.5)      26   | CH21 (DI c.5)
+  7    | CH6  (DI a.6)      27   | CH22 (DI c.6)
+  8    | CH7  (DI a.7)      28   | CH23 (DI c.7)
+  9    | (M - Masse)        29   | (M - Masse)
+ 10    | (leer)              30   | (leer)
+```
+
+**Untere Haelfte des Beschriftungsstreifens:**
+```
+Linke Seite (Col 0)      Rechte Seite (Col 1)
+Klemme | Belegung         Klemme | Belegung
+───────┼──────────        ───────┼──────────
+ 11    | CH8  (DI b.0)      31   | CH24 (DI d.0)
+ 12    | CH9  (DI b.1)      32   | CH25 (DI d.1)
+ 13    | CH10 (DI b.2)      33   | CH26 (DI d.2)
+ 14    | CH11 (DI b.3)      34   | CH27 (DI d.3)
+ 15    | CH12 (DI b.4)      35   | CH28 (DI d.4)
+ 16    | CH13 (DI b.5)      36   | CH29 (DI d.5)
+ 17    | CH14 (DI b.6)      37   | CH30 (DI d.6)
+ 18    | CH15 (DI b.7)      38   | CH31 (DI d.7) / 2L+
+ 19    | 1L+  (Power)        39   | 2M   (Ground)
+ 20    | 1M   (Ground)       40   | (leer)
+```
+
+**Kanalgruppen und Byte-Zuordnung:**
+- Gruppe a: CH0-CH7   = Byte 0 (E x.0 bis E x.7) — Klemmen 1-8 links
+- Gruppe b: CH8-CH15  = Byte 1 (E x+1.0 bis E x+1.7) — Klemmen 11-18 links (= untere Haelfte)
+- Gruppe c: CH16-CH23 = Byte 2 (E x+2.0 bis E x+2.7) — Klemmen 21-28 rechts
+- Gruppe d: CH24-CH31 = Byte 3 (E x+3.0 bis E x+3.7) — Klemmen 31-38 rechts (= untere Haelfte)
+
+**Wichtig:** Die Kanalnummerierung ist 0-basiert (CH0 = E x.0, NICHT E x.1)!
+Das Excel-Template zeigt Q 0.1 bis Q 0.7 — das ist FALSCH/ein Platzhalter.
+Korrekte Adressen starten bei .0 (z.B. E 0.0, E 0.1, ..., E 0.7).
+
+### 6 Modultyp-Varianten (Zellen-Merges im Excel)
+| Variante | Col 0+1 | Zeilen/Adresse | Kanaele | Bytes | Beschreibung |
+|----------|---------|---------------|---------|-------|--------------|
+| 32 DI/DQ | getrennt | 1 | 32 | 4 | 8 CH links + 8 CH rechts pro Haelfte, M/L+ Zeilen |
+| 16 DI/DQ | gemergt | 1 | 16 | 2 | 1 breite Spalte, 1 Zeile pro Kanal |
+| 16 DI 230V | getrennt | 2 | 16 | 2 | 2 Spalten, 2 Zeilen pro Kanal-Paar (Schutzleiter) |
+| 8 DQ 230V | getrennt | 2 | 8 | 1 | 2 Spalten, 2 Zeilen + Versorgungszellen |
+| 8 AI/AQ | getrennt | 4 | 8 | 16 | 2 Spalten, 4 Zeilen pro Analogkanal (2 Worte/Kanal) |
+| 4 AQ | gemergt | 4 | 4 | 8 | 1 breite Spalte, 4 Zeilen pro Analogkanal |
 
 Jede Variante existiert horizontal (0 Grad) und vertikal (90 Grad) = 12 Formate.
+
+### Aktueller Stand der Implementierung (TODO)
+- [ ] Architektur-Fix: 5 Module pro Seite (statt 10), Band 1+2 = ein Modul
+- [ ] Klemmenbelegung pro Modultyp: Zeilen-Mapping mit M/L+/leer Positionen
+- [ ] Adress-Generator: 0-basierte Kanaele, korrekte Byte-Verteilung auf Haelften
+- [ ] Weitere Modultypen: Klemmenbelegung aus Siemens-Datenblatt recherchieren
+- [ ] Exakte Masse: Beschriftungsboegen mit Stahllineal nachmessen
 
 ---
 
