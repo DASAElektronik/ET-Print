@@ -92,10 +92,12 @@ public partial class MpPreviewControl : UserControl
 
             // === EIN ZUSAMMENHAENGENDER STREIFEN pro Modul ===
 
-            // Header (einmal, oben)
+            // Header (einmal, oben) — globaler Header-Style aus Settings.
+            // Preview-Skalierung: Canvas rendert kleiner als A4-Druck, darum Faktor 0.7.
+            double headerFs = settings.HeaderFontSize * 0.7;
             double headerY = marginT;
             DrawCell(modX, headerY, moduleW, headerH,
-                mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: 5, isBold: true);
+                mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: headerFs, isBold: settings.HeaderIsBold);
 
             // Obere Haelfte (Half 0) — direkt unter Header
             double half0DataY = headerY + headerH;

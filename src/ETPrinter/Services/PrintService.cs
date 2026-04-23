@@ -119,7 +119,7 @@ public static class PrintService
             {
                 if (printGridLines)
                     DrawCellBorder(canvas, x, y, groupW, cellH);
-                RenderLabel(canvas, label, format, x, y, cellW, cellH, headerW, printGridLines);
+                RenderLabel(canvas, label, format, settings, x, y, cellW, cellH, headerW, printGridLines);
             }
         }
 
@@ -148,7 +148,7 @@ public static class PrintService
     }
 
     private static void RenderLabel(
-        Canvas canvas, LabelViewModel label, FormatInfo format,
+        Canvas canvas, LabelViewModel label, FormatInfo format, LabelSettings settings,
         double x, double y, double cellW, double cellH, double headerW,
         bool printGridLines)
     {
@@ -157,7 +157,8 @@ public static class PrintService
         if (format.HasHeader)
         {
             if (!string.IsNullOrWhiteSpace(label.Header))
-                RenderHeader(canvas, label.Header, x, y, headerW, cellH, label.CellFontSize, label.CellFontFamily);
+                RenderHeader(canvas, label.Header, x, y, headerW, cellH,
+                    settings.HeaderFontSize, settings.HeaderIsBold, label.CellFontFamily);
 
             if (printGridLines)
             {
@@ -182,7 +183,7 @@ public static class PrintService
 
     private static void RenderHeader(
         Canvas canvas, string text,
-        double x, double y, double headerW, double cellH, int fontSize, string fontFamily = "Arial")
+        double x, double y, double headerW, double cellH, int fontSize, bool isBold, string fontFamily = "Arial")
     {
         var container = new Border
         {
@@ -190,7 +191,7 @@ public static class PrintService
             Height = cellH
         };
 
-        var tb = CreateTextBlock(text, fontSize, isBold: true, isItalic: false, fontFamily: fontFamily);
+        var tb = CreateTextBlock(text, fontSize, isBold: isBold, isItalic: false, fontFamily: fontFamily);
         tb.LayoutTransform = new RotateTransform(-90);
         tb.HorizontalAlignment = HorizontalAlignment.Center;
         tb.VerticalAlignment = VerticalAlignment.Center;
@@ -533,11 +534,11 @@ public static class PrintService
             // Ein zusammenhaengender Streifen: Header + Half0 + Divider + Half1
             double headerY = marginTop;
 
-            // Header einmal oben
+            // Header einmal oben — globaler Header-Style aus settings
             if (!string.IsNullOrWhiteSpace(mod.HeaderText))
             {
                 var tb = CreateTextBlock(mod.HeaderText.Replace("\n", " / "),
-                    mod.FontSize, true, false, mod.FontFamily);
+                    settings.HeaderFontSize, settings.HeaderIsBold, false, mod.FontFamily);
                 tb.Width = moduleW - 2;
                 tb.TextAlignment = TextAlignment.Center;
                 var container = new Border { Width = moduleW, Height = headerH };

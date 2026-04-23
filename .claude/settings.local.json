@@ -11,7 +11,8 @@
       "WebFetch(domain:docs.rs-online.com)",
       "PowerShell(dotnet test *)",
       "PowerShell(dotnet build C:/claude/Beschriftung/ET-Printer.sln --nologo -v m 2>&1 | Select-Object -Last 4; dotnet test C:/claude/Beschriftung/tests/ETPrinter.Tests/ETPrinter.Tests.csproj --nologo --no-build 2>&1 | Select-Object -Last 3)",
-      "PowerShell(dotnet build *)"
+      "PowerShell(dotnet build *)",
+      "PowerShell(Start-Sleep -Seconds 5; Get-Process -Name ET-Printer -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, @{N='RAM_MB';E={[math]::Round\\($_.WorkingSet64/1MB,0\\)}} -AutoSize)"
     ]
   }
 }

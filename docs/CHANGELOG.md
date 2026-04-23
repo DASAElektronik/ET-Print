@@ -9,6 +9,32 @@
 
 ---
 
+## 2026-04-23 - Projekttag 3 (Feature: Header-Style getrennt)
+
+### Feature
+- **Header-Schrift separat konfigurierbar** — global pro Projekt.
+  Bisher war die Kopfzeile auf den gleichen Style wie die Adressen
+  gezwungen (Größe, Fett, Kursiv, Font). Jetzt:
+  - `LabelSettings.HeaderFontSize` (Default 9 pt)
+  - `LabelSettings.HeaderIsBold` (Default true)
+  - Bezugsart: global, gilt fuer ALLE Etiketten/Module im Projekt
+  - UI: Settings-Panel bekommt Bereich "Header" (Groesse + Fett-Checkbox)
+  - Betrifft ET200SP (Vertikal-mit-Kopf) und ET200MP (Header-Zeile)
+
+### Implementierung
+- Models/LabelSettings: HeaderFontSize + HeaderIsBold + in Reset/Clone
+- Services/PrintService: RenderHeader nimmt fontSize/isBold aus settings.
+  PrintMp-Header rendert mit settings.HeaderFontSize/HeaderIsBold.
+- ViewModels/MainViewModel: InputHeaderFontSize/InputHeaderIsBold als
+  Eingabefelder; HeaderPreviewFontSize/HeaderPreviewFontWeight als
+  Convenience-Bindings fuer die XAML-Preview.
+- Controls/MpPreviewControl: Header-Zelle rendert mit Settings-Werten.
+- MainWindow.xaml: Settings-Panel um Header-Schrift-Bereich erweitert.
+- Alte Projekte: Defaults greifen automatisch beim Deserialisieren
+  (keine explizite Migration noetig).
+
+---
+
 ## 2026-04-23 - Projekttag 3 (Feature: Copy/Paste)
 
 ### Feature

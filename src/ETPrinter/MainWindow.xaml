@@ -321,21 +321,34 @@
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
 
-                            <!-- Schriftgroesse -->
+                            <!-- Schriftgroesse Adressen -->
                             <Grid Margin="0,0,0,5">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Schriftgroesse:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBlock Text="Adressen:" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="Schriftgroesse der Adressen (Line1/Line2 bzw. AddressCells)"/>
                                 <ComboBox Grid.Column="1"
                                           ItemsSource="{Binding FontSizes}"
                                           SelectedItem="{Binding InputFontSize}"/>
                             </Grid>
 
-                            <!-- Fett / Kursiv -->
-                            <CheckBox Content="Fett" IsChecked="{Binding InputIsBold}" Margin="0,0,0,3"/>
-                            <CheckBox Content="Kursiv" IsChecked="{Binding InputIsItalic}" Margin="0,0,0,3"/>
+                            <!-- Fett / Kursiv Adressen -->
+                            <CheckBox Content="Adressen fett" IsChecked="{Binding InputIsBold}" Margin="0,0,0,3"/>
+                            <CheckBox Content="Adressen kursiv" IsChecked="{Binding InputIsItalic}" Margin="0,0,0,3"/>
+
+                            <!-- Header-Schrift (global) -->
+                            <Grid Margin="0,5,0,5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Header:" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="Schriftgroesse der Kopfzeile (Header)"/>
+                                <ComboBox Grid.Column="1"
+                                          ItemsSource="{Binding FontSizes}"
+                                          SelectedItem="{Binding InputHeaderFontSize}"/>
+                            </Grid>
+                            <CheckBox Content="Header fett" IsChecked="{Binding InputHeaderIsBold}" Margin="0,0,0,3"/>
                             <CheckBox Content="Blanko A4 (alle Rahmen drucken)"
                                       IsChecked="{Binding PrintGridLines}"
                                       Margin="0,0,0,8" FontSize="11" Foreground="Gray"
@@ -567,9 +580,9 @@
                                                                          RelativeSource={RelativeSource AncestorType=Window},
                                                                          Converter={StaticResource BoolToVisibilityConverter}}">
                                                         <TextBlock Text="{Binding Header}"
-                                                                   FontSize="{Binding PreviewFontSize}"
+                                                                   FontSize="{Binding DataContext.HeaderPreviewFontSize, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                    FontFamily="{Binding PreviewFontFamily}"
-                                                                   FontWeight="Bold"
+                                                                   FontWeight="{Binding DataContext.HeaderPreviewFontWeight, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                    Foreground="#4A148C"
                                                                    HorizontalAlignment="Center"
                                                                    VerticalAlignment="Center"

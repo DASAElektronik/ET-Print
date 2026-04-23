@@ -40,6 +40,8 @@ public class MainViewModel : ViewModelBase
     private bool _inputIsBold;
     private bool _inputIsItalic;
     private string _inputFontFamily = "Arial";
+    private int _inputHeaderFontSize = 9;
+    private bool _inputHeaderIsBold = true;
     private double _inputMarginTop = 20.0;
     private double _inputMarginLeft = 30.0;
     private double _inputMarginBottom = 21.0;
@@ -455,6 +457,18 @@ public class MainViewModel : ViewModelBase
         set => SetProperty(ref _inputFontFamily, value);
     }
 
+    public int InputHeaderFontSize
+    {
+        get => _inputHeaderFontSize;
+        set => SetProperty(ref _inputHeaderFontSize, value);
+    }
+
+    public bool InputHeaderIsBold
+    {
+        get => _inputHeaderIsBold;
+        set => SetProperty(ref _inputHeaderIsBold, value);
+    }
+
     public double InputMarginTop
     {
         get => _inputMarginTop;
@@ -510,6 +524,10 @@ public class MainViewModel : ViewModelBase
     }
 
     public LabelSettings Settings => _settings;
+
+    // Preview-Convenience fuer XAML-Bindings auf den globalen Header-Style
+    public int HeaderPreviewFontSize => (int)Math.Round(_settings.HeaderFontSize * 1.06);
+    public FontWeight HeaderPreviewFontWeight => _settings.HeaderIsBold ? FontWeights.Bold : FontWeights.Normal;
 
     // Seitenraender fuer A4-Preview (3px/mm Skalierung)
     public Thickness PreviewMargin => new(
@@ -1046,12 +1064,17 @@ public class MainViewModel : ViewModelBase
         InputIsBold = _settings.IsBold;
         InputIsItalic = _settings.IsItalic;
         InputFontFamily = _settings.FontFamily;
+        InputHeaderFontSize = _settings.HeaderFontSize;
+        InputHeaderIsBold = _settings.HeaderIsBold;
         InputMarginTop = _settings.MarginTop;
         InputMarginLeft = _settings.MarginLeft;
         InputMarginBottom = _settings.MarginBottom;
         InputMarginRight = _settings.MarginRight;
         OnPropertyChanged(nameof(Settings));
         OnPropertyChanged(nameof(PreviewMargin));
+        OnPropertyChanged(nameof(HeaderPreviewFontSize));
+        OnPropertyChanged(nameof(HeaderPreviewFontWeight));
+        NotifyMpPreviewChanged();
         StatusMessage = "Einstellungen zurueckgesetzt";
     }
 
@@ -1066,8 +1089,13 @@ public class MainViewModel : ViewModelBase
         _settings.IsBold = InputIsBold;
         _settings.IsItalic = InputIsItalic;
         _settings.FontFamily = InputFontFamily;
+        _settings.HeaderFontSize = InputHeaderFontSize;
+        _settings.HeaderIsBold = InputHeaderIsBold;
         OnPropertyChanged(nameof(Settings));
         OnPropertyChanged(nameof(PreviewMargin));
+        OnPropertyChanged(nameof(HeaderPreviewFontSize));
+        OnPropertyChanged(nameof(HeaderPreviewFontWeight));
+        NotifyMpPreviewChanged();
 
         // Schrift aufs ausgewaehlte Etikett
         if (SelectedLabel is not null)
@@ -1324,6 +1352,8 @@ public class MainViewModel : ViewModelBase
             _settings.IsBold = project.Settings.IsBold;
             _settings.IsItalic = project.Settings.IsItalic;
             _settings.FontFamily = project.Settings.FontFamily;
+            _settings.HeaderFontSize = project.Settings.HeaderFontSize;
+            _settings.HeaderIsBold = project.Settings.HeaderIsBold;
             InputMarginTop = project.Settings.MarginTop;
             InputMarginLeft = project.Settings.MarginLeft;
             InputMarginBottom = project.Settings.MarginBottom;
@@ -1332,8 +1362,13 @@ public class MainViewModel : ViewModelBase
             InputIsBold = project.Settings.IsBold;
             InputIsItalic = project.Settings.IsItalic;
             InputFontFamily = project.Settings.FontFamily;
+            InputHeaderFontSize = project.Settings.HeaderFontSize;
+            InputHeaderIsBold = project.Settings.HeaderIsBold;
             OnPropertyChanged(nameof(Settings));
             OnPropertyChanged(nameof(PreviewMargin));
+            OnPropertyChanged(nameof(HeaderPreviewFontSize));
+            OnPropertyChanged(nameof(HeaderPreviewFontWeight));
+            NotifyMpPreviewChanged();
 
             // Kalibrierung + Druckoptionen
             CalibrationOffsetX = project.CalibrationOffsetX;

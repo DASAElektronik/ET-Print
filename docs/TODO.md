@@ -166,6 +166,12 @@
 
 ---
 
+## Phase 16: Header-Style separat (2026-04-23) [DONE]
+- [x] LabelSettings.HeaderFontSize + HeaderIsBold
+- [x] UI-Eingabefelder im Settings-Panel (Adressen vs. Header)
+- [x] Renderer (Print + Preview) nutzt Header-Style fuer Kopfzeile
+- [x] Betrifft ET200SP (Vertikal-mit-Kopf) und ET200MP (Modul-Header)
+
 ## Phase 15: Copy/Paste (2026-04-23) [DONE]
 - [x] LabelCell.CloneContent/CopyFrom, MpModule.CloneContent, MpAddressCell.Clone
 - [x] ClipboardService (app-intern, Modus-exklusiv ET200SP/MP)
