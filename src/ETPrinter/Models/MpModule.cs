@@ -39,6 +39,24 @@ public class MpModule
         || AddressCells.Any(c => !string.IsNullOrWhiteSpace(c.Text))
         || !string.IsNullOrWhiteSpace(NetAddress1)
         || !string.IsNullOrWhiteSpace(CpuName);
+
+    /// <summary>Kopiert alle Inhalte + Variante in eine neue Instanz.
+    /// ModuleIndex wird NICHT kopiert (kommt vom Ziel). AddressCells werden deep-kopiert.</summary>
+    public MpModule CloneContent() => new()
+    {
+        Variant = Variant,
+        HeaderText = HeaderText,
+        AddressCells = AddressCells.Select(c => c.Clone()).ToList(),
+        NetAddress1 = NetAddress1,
+        NetAddress2 = NetAddress2,
+        NetAddress3 = NetAddress3,
+        NetAddress4 = NetAddress4,
+        CpuName = CpuName,
+        FontSize = FontSize,
+        FontFamily = FontFamily,
+        IsBold = IsBold,
+        IsPrintEnabled = IsPrintEnabled,
+    };
 }
 
 /// <summary>
@@ -52,6 +70,8 @@ public class MpAddressCell
     public bool HasText => !string.IsNullOrWhiteSpace(Text);
 
     public void Clear() => Text = string.Empty;
+
+    public MpAddressCell Clone() => new() { CellIndex = CellIndex, Text = Text };
 }
 
 /// <summary>

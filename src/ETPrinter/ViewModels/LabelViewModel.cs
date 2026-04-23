@@ -7,6 +7,7 @@ public class LabelViewModel : ViewModelBase
 {
     private readonly LabelCell _cell;
     private bool _isSelected;
+    private bool _isChecked;
 
     public LabelViewModel(LabelCell cell)
     {
@@ -125,7 +126,38 @@ public class LabelViewModel : ViewModelBase
         set => SetProperty(ref _isSelected, value);
     }
 
+    /// <summary>True wenn das Etikett Teil einer Multi-Selection fuer Copy ist (Strg+Klick / Shift+Klick).</summary>
+    public bool IsChecked
+    {
+        get => _isChecked;
+        set => SetProperty(ref _isChecked, value);
+    }
+
     public LabelCell GetCell() => _cell;
+
+    /// <summary>Uebernimmt Inhalt einer anderen Zelle (fuer Paste). Index bleibt.</summary>
+    public void SetCell(LabelCell source)
+    {
+        _cell.CopyFrom(source);
+        OnPropertyChanged(nameof(Header));
+        OnPropertyChanged(nameof(Line1));
+        OnPropertyChanged(nameof(Line2));
+        OnPropertyChanged(nameof(Line1Parts));
+        OnPropertyChanged(nameof(Line2Parts));
+        OnPropertyChanged(nameof(HasLine2));
+        OnPropertyChanged(nameof(EffectiveLine2Parts));
+        OnPropertyChanged(nameof(CellFontSize));
+        OnPropertyChanged(nameof(CellIsBold));
+        OnPropertyChanged(nameof(CellIsItalic));
+        OnPropertyChanged(nameof(CellFontFamily));
+        OnPropertyChanged(nameof(IsPrintEnabled));
+        OnPropertyChanged(nameof(PrintOpacity));
+        OnPropertyChanged(nameof(HasText));
+        OnPropertyChanged(nameof(PreviewFontSize));
+        OnPropertyChanged(nameof(PreviewFontWeight));
+        OnPropertyChanged(nameof(PreviewFontStyle));
+        OnPropertyChanged(nameof(PreviewFontFamily));
+    }
 
     public void Clear()
     {

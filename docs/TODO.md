@@ -166,6 +166,15 @@
 
 ---
 
+## Phase 15: Copy/Paste (2026-04-23) [DONE]
+- [x] LabelCell.CloneContent/CopyFrom, MpModule.CloneContent, MpAddressCell.Clone
+- [x] ClipboardService (app-intern, Modus-exklusiv ET200SP/MP)
+- [x] CopyCommand/PasteCommand, Strg+C/V Shortcuts, Toolbar-Buttons, Context-Menu
+- [x] Multi-Selection mit Strg+Klick (Toggle) und Shift+Klick (Range)
+- [x] Visuelle Markierung der Multi-Selection (oranger Rahmen)
+- [x] Paste stoppt am Seitenende (keine auto-neue Seite)
+- [x] 7 neue Unit-Tests fuer Clone + ClipboardService
+
 ## Phase 14: Blanko-A4-Druck (2026-04-23) [DONE]
 - [x] Checkbox "Blanko A4 (alle Rahmen drucken)" ersetzt "Gitterlinien drucken"
 - [x] Rahmenfarbe schwarz (Schnittkanten 0.5pt, innere Rahmen 0.3pt)

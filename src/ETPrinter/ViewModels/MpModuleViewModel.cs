@@ -44,6 +44,7 @@ public class MpModuleViewModel : ViewModelBase
 {
     private readonly MpModule _module;
     private bool _isSelected;
+    private bool _isChecked;
 
     public MpModuleViewModel(MpModule module)
     {
@@ -140,7 +141,51 @@ public class MpModuleViewModel : ViewModelBase
         set => SetProperty(ref _isSelected, value);
     }
 
+    /// <summary>True wenn das Modul Teil einer Multi-Selection fuer Copy ist (Strg+Klick / Shift+Klick).</summary>
+    public bool IsChecked
+    {
+        get => _isChecked;
+        set => SetProperty(ref _isChecked, value);
+    }
+
     public MpModule GetModule() => _module;
+
+    /// <summary>Uebernimmt Inhalt eines anderen Moduls (fuer Paste). ModuleIndex bleibt.</summary>
+    public void SetModule(MpModule source)
+    {
+        // Variante setzen ueber Property, damit AddressCells neu aufgebaut werden
+        Variant = source.Variant;
+        _module.HeaderText = source.HeaderText;
+        _module.NetAddress1 = source.NetAddress1;
+        _module.NetAddress2 = source.NetAddress2;
+        _module.NetAddress3 = source.NetAddress3;
+        _module.NetAddress4 = source.NetAddress4;
+        _module.CpuName = source.CpuName;
+        _module.FontSize = source.FontSize;
+        _module.FontFamily = source.FontFamily;
+        _module.IsBold = source.IsBold;
+        _module.IsPrintEnabled = source.IsPrintEnabled;
+
+        // Zelltexte uebertragen (AddressCells-Liste wurde durch Variant-Setter neu angelegt)
+        for (int i = 0; i < Math.Min(source.AddressCells.Count, _module.AddressCells.Count); i++)
+            _module.AddressCells[i].Text = source.AddressCells[i].Text;
+
+        // UI informieren
+        OnPropertyChanged(nameof(HeaderText));
+        OnPropertyChanged(nameof(NetAddress1));
+        OnPropertyChanged(nameof(NetAddress2));
+        OnPropertyChanged(nameof(NetAddress3));
+        OnPropertyChanged(nameof(NetAddress4));
+        OnPropertyChanged(nameof(CpuName));
+        OnPropertyChanged(nameof(FontSize));
+        OnPropertyChanged(nameof(FontFamily));
+        OnPropertyChanged(nameof(IsBold));
+        OnPropertyChanged(nameof(IsPrintEnabled));
+        OnPropertyChanged(nameof(PrintOpacity));
+        OnPropertyChanged(nameof(HasText));
+        // AddressCell-Texte via RebuildCellViewModels neu durchreichen
+        RebuildCellViewModels();
+    }
 
     private void RebuildCellViewModels()
     {

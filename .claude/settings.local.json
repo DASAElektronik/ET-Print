@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Start-Sleep -Seconds 3; Get-Process -Name ET-Printer -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, @{N='RAM_MB';E={[math]::Round\\($_.WorkingSet64/1MB,0\\)}})",
+      "PowerShell(Start-Sleep -Seconds 2; Get-Process -Name ET-Printer -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, @{N='RAM_MB';E={[math]::Round\\($_.WorkingSet64/1MB,0\\)}} -AutoSize; Get-Content \"C:\\\\Users\\\\DSCHUC~1.DAS\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--claude-Beschriftung\\\\92a45463-c4bf-44a7-8726-e7cdc40e5c35\\\\tasks\\\\b025ptfsk.output\" -ErrorAction SilentlyContinue | Select-Object -Last 10)",
+      "PowerShell(Start-Sleep -Seconds 3; Get-Process -Name ET-Printer -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, @{N='RAM_MB';E={[math]::Round\\($_.WorkingSet64/1MB,0\\)}} -AutoSize)",
+      "PowerShell(Start-Sleep -Seconds 4; Get-Process -Name ET-Printer -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, @{N='RAM_MB';E={[math]::Round\\($_.WorkingSet64/1MB,0\\)}} -AutoSize)",
+      "WebFetch(domain:docs.tia.siemens.cloud)",
+      "WebFetch(domain:support.industry.siemens.com)",
+      "WebFetch(domain:docs.rs-online.com)",
+      "PowerShell(dotnet test *)",
+      "PowerShell(dotnet build C:/claude/Beschriftung/ET-Printer.sln --nologo -v m 2>&1 | Select-Object -Last 4; dotnet test C:/claude/Beschriftung/tests/ETPrinter.Tests/ETPrinter.Tests.csproj --nologo --no-build 2>&1 | Select-Object -Last 3)",
+      "PowerShell(dotnet build *)"
+    ]
+  }
+}

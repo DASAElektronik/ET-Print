@@ -24,10 +24,26 @@ public partial class MainWindow : Window
 
     private void Label_Click(object sender, MouseButtonEventArgs e)
     {
-        if (sender is Border border && border.DataContext is LabelViewModel label)
+        if (sender is not Border border || border.DataContext is not LabelViewModel label)
+            return;
+
+        var mods = Keyboard.Modifiers;
+        if ((mods & ModifierKeys.Shift) == ModifierKeys.Shift)
         {
+            // Shift+Klick: Range von letzter Selection bis aktuellem Label
+            ViewModel.CheckRangeToLabel(label);
+        }
+        else if ((mods & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            // Strg+Klick: Toggle Checked-Status (Multi-Select), Selected bleibt
+            label.IsChecked = !label.IsChecked;
             ViewModel.SelectLabel(label);
-            // Fokus auf Zeile-1-Eingabefeld setzen
+        }
+        else
+        {
+            // Normaler Klick: Single-Selection, alle Checks aufheben
+            ViewModel.ClearAllLabelChecks();
+            ViewModel.SelectLabel(label);
             Line1TextBox?.Focus();
         }
     }

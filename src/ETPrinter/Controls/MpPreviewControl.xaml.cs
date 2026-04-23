@@ -134,6 +134,24 @@ public partial class MpPreviewControl : UserControl
             // NetAddr + CpuName der unteren Position (immer rendern)
             RenderNetAddrAndCpu(mod, 1, modX + addrW, half1DataY,
                 col2W, col3W, dataRowH, halfDataH);
+
+            // Multi-Selection-Markierung: orange Umrandung ueber das gesamte Modul
+            if (mod.IsChecked)
+            {
+                double totalModH = headerH + halfDataH + separatorH + halfDataH;
+                var checkedFrame = new Rectangle
+                {
+                    Width = moduleW,
+                    Height = totalModH,
+                    Stroke = new SolidColorBrush(Color.FromRgb(255, 149, 0)),
+                    StrokeThickness = 2,
+                    Fill = Brushes.Transparent,
+                    IsHitTestVisible = false
+                };
+                Canvas.SetLeft(checkedFrame, modX);
+                Canvas.SetTop(checkedFrame, headerY);
+                PreviewCanvas.Children.Add(checkedFrame);
+            }
         }
     }
 
@@ -249,7 +267,27 @@ public partial class MpPreviewControl : UserControl
 
     private static void SelectCell(MainViewModel vm, MpModuleViewModel mod, MpAddressCellViewModel cell)
     {
-        vm.SelectedMpModule = mod;
-        vm.SelectedMpCell = cell;
+        var mods = Keyboard.Modifiers;
+        if ((mods & ModifierKeys.Shift) == ModifierKeys.Shift)
+        {
+            // Shift+Klick: Range von SelectedMpModule bis mod markieren
+            vm.CheckRangeToMpModule(mod);
+            vm.SelectedMpCell = cell;
+        }
+        else if ((mods & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            // Strg+Klick: Modul-Markierung togglen
+            mod.IsChecked = !mod.IsChecked;
+            vm.SelectedMpModule = mod;
+            vm.SelectedMpCell = cell;
+            vm.NotifyMpPreviewChanged();
+        }
+        else
+        {
+            // Normal-Klick: alle Checks aufheben, Single-Selection
+            vm.ClearAllMpModuleChecks();
+            vm.SelectedMpModule = mod;
+            vm.SelectedMpCell = cell;
+        }
     }
 }

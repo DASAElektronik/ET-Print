@@ -17,6 +17,8 @@
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}"/>
         <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenCommand}"/>
         <KeyBinding Gesture="Ctrl+P" Command="{Binding PrintCommand}"/>
+        <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}"/>
+        <KeyBinding Gesture="Ctrl+V" Command="{Binding PasteCommand}"/>
         <KeyBinding Gesture="Ctrl+PageDown" Command="{Binding NextPageCommand}"/>
         <KeyBinding Gesture="Ctrl+PageUp" Command="{Binding PrevPageCommand}"/>
     </Window.InputBindings>
@@ -86,6 +88,13 @@
             </Button>
             <Button Command="{Binding SaveCommand}" ToolTip="Speichern (Ctrl+S)">
                 <TextBlock Text="Speichern" Margin="5,0"/>
+            </Button>
+            <Separator/>
+            <Button Command="{Binding CopyCommand}" ToolTip="Kopieren (Ctrl+C)">
+                <TextBlock Text="Kopieren" Margin="5,0"/>
+            </Button>
+            <Button Command="{Binding PasteCommand}" ToolTip="Einfuegen (Ctrl+V)">
+                <TextBlock Text="Einfuegen" Margin="5,0"/>
             </Button>
             <Separator/>
             <Button Command="{Binding PrintCommand}" ToolTip="Drucken (Ctrl+P)">
@@ -496,6 +505,13 @@
                                                 </Border.LayoutTransform>
                                                 <Border.ContextMenu>
                                                     <ContextMenu>
+                                                        <MenuItem Header="Kopieren"
+                                                                  InputGestureText="Strg+C"
+                                                                  Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                        <MenuItem Header="Einfuegen"
+                                                                  InputGestureText="Strg+V"
+                                                                  Command="{Binding DataContext.PasteCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                        <Separator/>
                                                         <MenuItem Header="Druck umschalten" Click="TogglePrint_Click"/>
                                                     </ContextMenu>
                                                 </Border.ContextMenu>
@@ -509,6 +525,13 @@
                                                             <Trigger Property="IsMouseOver" Value="True">
                                                                 <Setter Property="Background" Value="#E0E8F0"/>
                                                             </Trigger>
+                                                            <!-- Multi-Selection: orange Rahmen (Strg+Klick / Shift+Klick) -->
+                                                            <DataTrigger Binding="{Binding IsChecked}" Value="True">
+                                                                <Setter Property="Background" Value="#FFF0D0"/>
+                                                                <Setter Property="BorderBrush" Value="#FF9500"/>
+                                                                <Setter Property="BorderThickness" Value="1.5"/>
+                                                            </DataTrigger>
+                                                            <!-- Single-Selection: blauer Rahmen (hat Prioritaet) -->
                                                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                                                 <Setter Property="Background" Value="#B8D4F0"/>
                                                                 <Setter Property="BorderBrush" Value="#0078D4"/>

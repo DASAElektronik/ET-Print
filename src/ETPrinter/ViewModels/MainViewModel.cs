@@ -111,6 +111,10 @@ public class MainViewModel : ViewModelBase
         SelectFilledForPrintCommand = new RelayCommand(SelectFilledForPrint);
         TogglePrintCommand = new RelayCommand(TogglePrint, () => SelectedLabel is not null);
 
+        // Copy / Paste
+        CopyCommand = new RelayCommand(CopySelection, CanCopy);
+        PasteCommand = new RelayCommand(PasteFromClipboard, CanPaste);
+
         LoadCalibration();
         RefreshRecentFiles();
         InitializeLabels();
@@ -544,6 +548,8 @@ public class MainViewModel : ViewModelBase
     public ICommand DeselectAllForPrintCommand { get; }
     public ICommand SelectFilledForPrintCommand { get; }
     public ICommand TogglePrintCommand { get; }
+    public ICommand CopyCommand { get; }
+    public ICommand PasteCommand { get; }
 
     private void InitializeLabels()
     {
@@ -858,6 +864,151 @@ public class MainViewModel : ViewModelBase
         }
         // Am Ende der letzten Seite: keine neue Seite automatisch anlegen
         // (ET200MP-Seiten werden manuell hinzugefuegt, Varianten pro Seite)
+    }
+
+    // === Multi-Selection (Check-State fuer Copy) ===
+
+    public void ClearAllLabelChecks()
+    {
+        foreach (var l in Labels) l.IsChecked = false;
+    }
+
+    public void ClearAllMpModuleChecks()
+    {
+        foreach (var m in MpModules) m.IsChecked = false;
+        NotifyMpPreviewChanged();
+    }
+
+    /// <summary>Shift+Klick: Range zwischen SelectedLabel (Anker) und target checken.</summary>
+    public void CheckRangeToLabel(LabelViewModel target)
+    {
+        var anchor = SelectedLabel;
+        int targetIndex = Labels.IndexOf(target);
+        if (targetIndex < 0) return;
+        int anchorIndex = anchor is not null ? Labels.IndexOf(anchor) : targetIndex;
+        if (anchorIndex < 0) anchorIndex = targetIndex;
+
+        int from = Math.Min(anchorIndex, targetIndex);
+        int to = Math.Max(anchorIndex, targetIndex);
+        for (int i = from; i <= to; i++)
+            Labels[i].IsChecked = true;
+        SelectedLabel = target;
+    }
+
+    /// <summary>Shift+Klick: Range zwischen SelectedMpModule (Anker) und target checken.</summary>
+    public void CheckRangeToMpModule(MpModuleViewModel target)
+    {
+        var anchor = SelectedMpModule;
+        int targetIndex = MpModules.IndexOf(target);
+        if (targetIndex < 0) return;
+        int anchorIndex = anchor is not null ? MpModules.IndexOf(anchor) : targetIndex;
+        if (anchorIndex < 0) anchorIndex = targetIndex;
+
+        int from = Math.Min(anchorIndex, targetIndex);
+        int to = Math.Max(anchorIndex, targetIndex);
+        for (int i = from; i <= to; i++)
+            MpModules[i].IsChecked = true;
+        SelectedMpModule = target;
+        NotifyMpPreviewChanged();
+    }
+
+    // === Copy / Paste ===
+
+    private bool CanCopy()
+    {
+        if (_selectedFormat.IsModuleBased)
+            return GetCopySourceModules().Any();
+        return GetCopySourceLabels().Any();
+    }
+
+    private bool CanPaste()
+    {
+        if (_selectedFormat.IsModuleBased)
+            return ClipboardService.HasModules && SelectedMpModule is not null;
+        return ClipboardService.HasLabels && SelectedLabel is not null;
+    }
+
+    private IReadOnlyList<LabelViewModel> GetCopySourceLabels()
+    {
+        // Phase B: Multi-Select via IsChecked wird hier beruecksichtigt.
+        // Phase A: nur das Single-Selected Label.
+        var checkedLabels = Labels.Where(l => l.IsChecked).ToList();
+        if (checkedLabels.Count > 0) return checkedLabels;
+        return SelectedLabel is not null ? [SelectedLabel] : [];
+    }
+
+    private IReadOnlyList<MpModuleViewModel> GetCopySourceModules()
+    {
+        var checkedModules = MpModules.Where(m => m.IsChecked).ToList();
+        if (checkedModules.Count > 0) return checkedModules;
+        return SelectedMpModule is not null ? [SelectedMpModule] : [];
+    }
+
+    private void CopySelection()
+    {
+        if (_selectedFormat.IsModuleBased)
+        {
+            var source = GetCopySourceModules();
+            if (source.Count == 0) return;
+            ClipboardService.SetModules(source.Select(vm => vm.GetModule()));
+            StatusMessage = $"{source.Count} Modul(e) kopiert";
+        }
+        else
+        {
+            var source = GetCopySourceLabels();
+            if (source.Count == 0) return;
+            ClipboardService.SetLabels(source.Select(vm => vm.GetCell()));
+            StatusMessage = $"{source.Count} Etikett(en) kopiert";
+        }
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void PasteFromClipboard()
+    {
+        if (_selectedFormat.IsModuleBased)
+            PasteModules();
+        else
+            PasteLabels();
+        IsDirty = true;
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void PasteLabels()
+    {
+        if (SelectedLabel is null) return;
+        var source = ClipboardService.GetLabels();
+        if (source.Count == 0) return;
+
+        int startIndex = SelectedLabel.Index;
+        int pasted = 0;
+        for (int i = 0; i < source.Count; i++)
+        {
+            int targetIndex = startIndex + i;
+            if (targetIndex >= Labels.Count) break; // Keine neue Seite automatisch
+            Labels[targetIndex].SetCell(source[i]);
+            pasted++;
+        }
+        StatusMessage = $"{pasted} Etikett(en) eingefuegt ab Position {startIndex + 1}";
+    }
+
+    private void PasteModules()
+    {
+        if (SelectedMpModule is null) return;
+        var source = ClipboardService.GetModules();
+        if (source.Count == 0) return;
+
+        int startIndex = MpModules.IndexOf(SelectedMpModule);
+        if (startIndex < 0) return;
+        int pasted = 0;
+        for (int i = 0; i < source.Count; i++)
+        {
+            int targetIndex = startIndex + i;
+            if (targetIndex >= MpModules.Count) break;
+            MpModules[targetIndex].SetModule(source[i]);
+            pasted++;
+        }
+        NotifyMpPreviewChanged();
+        StatusMessage = $"{pasted} Modul(e) eingefuegt ab Position {startIndex + 1}";
     }
 
     private void ClearAllLabels()

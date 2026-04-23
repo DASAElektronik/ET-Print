@@ -9,6 +9,41 @@
 
 ---
 
+## 2026-04-23 - Projekttag 3 (Feature: Copy/Paste)
+
+### Feature
+- **Copy/Paste fuer Etiketten und Module** — app-intern (kein Windows-
+  Zwischenablage-Austausch).
+  - **ET200SP**: Etiketten auswaehlen und duplizieren (z.B. gleichartige
+    Schaltschraenke mehrfach auf ein A4-Blatt).
+  - **ET200MP**: Ganze Module mit Variante + AddressCells + NetAdr + CPU kopieren.
+  - **Multi-Selection**:
+    - Strg+Klick: Etikett/Modul zur Copy-Auswahl hinzufuegen/entfernen
+      (orangefarbener Rahmen kennzeichnet markierte Elemente).
+    - Shift+Klick: Bereich zwischen zuletzt ausgewaehltem und geklicktem
+      Element markieren.
+    - Normaler Klick: alle Markierungen aufheben.
+  - **Bedienung**: Strg+C (Kopieren), Strg+V (Einfuegen), Toolbar-Buttons
+    "Kopieren"/"Einfuegen", Rechtsklick-Kontextmenue auf ET200SP-Etiketten.
+  - **Einfuegen**: Ueberschreibt ab dem Single-Selected-Etikett/Modul
+    sequentiell; stoppt am Seitenende (keine automatische Seitenerweiterung).
+  - **Umfang**: kompletter Inhalt (Text, Schrift, Druckmarke, bei MP die Variante).
+  - **Modus-exklusiv**: Clipboard-Buffer fuer ET200SP und ET200MP sind
+    getrennt; Wechsel leert den anderen.
+
+### Implementierung
+- Neu: Models/LabelCell.CloneContent, CopyFrom, MpModule.CloneContent, MpAddressCell.Clone
+- Neu: Services/ClipboardService.cs (static, app-intern)
+- LabelViewModel/MpModuleViewModel: IsChecked-Property + SetCell/SetModule
+- MainViewModel: CopyCommand, PasteCommand mit GetCopySource*-Helpern
+  (Multi-Select falls IsChecked, sonst Fallback auf Single-Selected)
+- MainWindow.xaml.cs: Label_Click mit Modifier-Key-Detection
+- MpPreviewControl.xaml.cs: SelectCell mit Modifier-Key-Detection
+- XAML: DataTrigger fuer IsChecked (oranger Rahmen), Toolbar, ContextMenu
+- 7 neue Unit-Tests (Clone + ClipboardService), 45/45 gruen.
+
+---
+
 ## 2026-04-23 - Projekttag 3 (Feature: Blanko A4)
 
 ### Fix
