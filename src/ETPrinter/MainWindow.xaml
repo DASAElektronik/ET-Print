@@ -607,10 +607,23 @@
                                                                 </Style>
                                                             </Grid.Style>
                                                             <Grid.RowDefinitions>
+                                                                <!-- Row 1 ist * wenn Line2 gefuellt (odd/even Split bei digital),
+                                                                     sonst volle Hoehe fuer Line1 (analog, nur eine Reihe) -->
                                                                 <RowDefinition Height="*"/>
-                                                                <RowDefinition Height="*"/>
+                                                                <RowDefinition>
+                                                                    <RowDefinition.Style>
+                                                                        <Style TargetType="RowDefinition">
+                                                                            <Setter Property="Height" Value="*"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding HasLine2}" Value="False">
+                                                                                    <Setter Property="Height" Value="0"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </RowDefinition.Style>
+                                                                </RowDefinition>
                                                             </Grid.RowDefinitions>
-                                                            <!-- Zeile 1: Ungerade Bits -->
+                                                            <!-- Zeile 1: Ungerade Bits / oder Analog komplett -->
                                                             <ItemsControl Grid.Row="0" ItemsSource="{Binding Line1Parts}">
                                                                 <ItemsControl.ItemsPanel>
                                                                     <ItemsPanelTemplate>

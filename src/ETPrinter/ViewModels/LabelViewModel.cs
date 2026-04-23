@@ -31,7 +31,7 @@ public class LabelViewModel : ViewModelBase
     public string Line2
     {
         get => _cell.Line2;
-        set { _cell.Line2 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line2Parts)); }
+        set { _cell.Line2 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line2Parts)); OnPropertyChanged(nameof(HasLine2)); }
     }
 
     // Per-Etikett Schrift-Einstellungen
@@ -94,6 +94,11 @@ public class LabelViewModel : ViewModelBase
     /// <summary>Einzelne Adressen aus Line2 (getrennt durch doppeltes Leerzeichen)</summary>
     public string[] Line2Parts => string.IsNullOrWhiteSpace(Line2) ? [] : Line2.Split("  ", StringSplitOptions.RemoveEmptyEntries);
 
+    /// <summary>True wenn Line2 befuellt ist. Steuert in vertikalen Etiketten, ob
+    /// Line1 ueber die volle Hoehe gerendert wird (z.B. Analog 6ES7134-6GF00-0AA1)
+    /// oder zweizeilig (digital mit odd/even Split).</summary>
+    public bool HasLine2 => Line2Parts.Length > 0;
+
     public bool HasText => _cell.HasText;
 
     public bool IsSelected
@@ -112,6 +117,7 @@ public class LabelViewModel : ViewModelBase
         OnPropertyChanged(nameof(Line2));
         OnPropertyChanged(nameof(Line1Parts));
         OnPropertyChanged(nameof(Line2Parts));
+        OnPropertyChanged(nameof(HasLine2));
         OnPropertyChanged(nameof(HasText));
     }
 }
