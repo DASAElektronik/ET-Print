@@ -172,6 +172,7 @@
 - [x] Schnittkanten nur fuer befuellte/druckaktive Etiketten (konsistent zu Adress-Rahmen)
 - [x] Druck-Output visuell identisch zur Preview (Preview = Druck)
 - [x] Fix: Eingabe-Tabs im S7-1500/ET200MP-Modus nicht mehr deaktiviert (HasSelection)
+- [x] Fix: MP-Preview refresht sofort nach Generator/Apply/Header (MpPreviewRefreshToken)
 
 ## Phase 13: Code-Qualitaet (2026-04-23) [DONE]
 - [x] Silent-Failures: bare catch{} in CalibrationService + ProjectService durch getypte Filter ersetzt

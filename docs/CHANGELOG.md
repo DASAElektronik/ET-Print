@@ -16,6 +16,11 @@
   komplett deaktiviert. Ursache: TabControl-IsEnabled war an SelectedLabel
   gebunden, das im MP-Modus immer null bleibt. Neue Property HasSelection
   deckt beide Modi ab (SelectedLabel OR SelectedMpModule).
+- MP-Preview refreshte nicht nach Generator/Apply/Header-Aenderung. Das
+  Canvas-basierte MpPreviewControl rendert manuell und hoerte nur auf
+  Module-/Selection-Wechsel — Zell-PropertyChanged allein triggerte kein
+  Re-Render. Refresh-Token in MainViewModel eingefuehrt; Control hoert
+  zusaetzlich auf MpPreviewRefreshToken.
 
 ### Feature
 - **Blanko-A4-Druck**: Checkbox "Gitterlinien drucken (Normalpapier)" umbenannt zu
