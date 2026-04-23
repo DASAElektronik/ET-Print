@@ -31,6 +31,12 @@
   Siemens ET200SP AI/AQ-Module (alle Kanaele auf einer Klemmenreihe,
   andere Reihe = UV). Verifiziert gegen Datenblatt 6ES7134-6GF00-0AA1
   (AI 8xI): Klemmen 1-8 = I0+..I7+. Tests entsprechend angepasst.
+- Vertikale Etiketten bleiben strukturell 2-zeilig (wie digital). Bei
+  Analog enthaelt die obere Reihe alle Kanal-Adressen, die untere Reihe
+  leere Platzhalter (gleiche Spaltenanzahl wie oben). Beim Blanko-A4-
+  Druck werden so die unbenutzten Klemmenplaetze als leere Rechtecke
+  mit Rahmen sichtbar. Neue Property LabelViewModel.EffectiveLine2Parts
+  + PrintService.EmptyPlaceholders.
 
 ### Feature
 - **Blanko-A4-Druck**: Checkbox "Gitterlinien drucken (Normalpapier)" umbenannt zu

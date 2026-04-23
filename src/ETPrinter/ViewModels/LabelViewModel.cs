@@ -25,13 +25,13 @@ public class LabelViewModel : ViewModelBase
     public string Line1
     {
         get => _cell.Line1;
-        set { _cell.Line1 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line1Parts)); }
+        set { _cell.Line1 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line1Parts)); OnPropertyChanged(nameof(EffectiveLine2Parts)); }
     }
 
     public string Line2
     {
         get => _cell.Line2;
-        set { _cell.Line2 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line2Parts)); OnPropertyChanged(nameof(HasLine2)); }
+        set { _cell.Line2 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line2Parts)); OnPropertyChanged(nameof(HasLine2)); OnPropertyChanged(nameof(EffectiveLine2Parts)); }
     }
 
     // Per-Etikett Schrift-Einstellungen
@@ -94,10 +94,26 @@ public class LabelViewModel : ViewModelBase
     /// <summary>Einzelne Adressen aus Line2 (getrennt durch doppeltes Leerzeichen)</summary>
     public string[] Line2Parts => string.IsNullOrWhiteSpace(Line2) ? [] : Line2.Split("  ", StringSplitOptions.RemoveEmptyEntries);
 
-    /// <summary>True wenn Line2 befuellt ist. Steuert in vertikalen Etiketten, ob
-    /// Line1 ueber die volle Hoehe gerendert wird (z.B. Analog 6ES7134-6GF00-0AA1)
-    /// oder zweizeilig (digital mit odd/even Split).</summary>
+    /// <summary>True wenn Line2 befuellt ist (digital odd/even Split).
+    /// Analog nutzt nur Line1, untere Reihe bleibt als leere Platzhalter sichtbar.</summary>
     public bool HasLine2 => Line2Parts.Length > 0;
+
+    /// <summary>Darstellung fuer die untere Reihe in vertikalen Etiketten.
+    /// Bei digital = Line2Parts (odd/even Split). Bei analog = leere Strings
+    /// mit gleicher Anzahl wie Line1Parts, damit die Schreibplaetze als
+    /// leere Rechtecke sichtbar bleiben (fuer Blanko-A4-Druck mit Rahmen).</summary>
+    public string[] EffectiveLine2Parts
+    {
+        get
+        {
+            if (Line2Parts.Length > 0) return Line2Parts;
+            var l1 = Line1Parts;
+            if (l1.Length == 0) return [];
+            var placeholders = new string[l1.Length];
+            for (int i = 0; i < l1.Length; i++) placeholders[i] = string.Empty;
+            return placeholders;
+        }
+    }
 
     public bool HasText => _cell.HasText;
 
@@ -118,6 +134,7 @@ public class LabelViewModel : ViewModelBase
         OnPropertyChanged(nameof(Line1Parts));
         OnPropertyChanged(nameof(Line2Parts));
         OnPropertyChanged(nameof(HasLine2));
+        OnPropertyChanged(nameof(EffectiveLine2Parts));
         OnPropertyChanged(nameof(HasText));
     }
 }

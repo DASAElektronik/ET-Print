@@ -246,12 +246,16 @@ public static class PrintService
         var line1Parts = label.Line1Parts;
         var line2Parts = label.Line2Parts;
 
-        if (rowsPerLabel >= 2 && line2Parts.Length > 0)
+        if (rowsPerLabel >= 2)
         {
+            // Zweizeilig: Digital nutzt beide Reihen (odd/even), Analog nur oben.
+            // Bei leerer Line2 werden leere Platzhalter gerendert — bei aktiven
+            // Gitterlinien werden so die unbenutzten Klemmenplaetze sichtbar.
             double rowH = cellH / 2.0;
             RenderAddressRow(canvas, line1Parts, x, y, cellW, rowH,
                 label.CellFontSize, label.CellIsBold, label.CellIsItalic, printGridLines, label.CellFontFamily);
-            RenderAddressRow(canvas, line2Parts, x, y + rowH, cellW, rowH,
+            var line2Effective = line2Parts.Length > 0 ? line2Parts : EmptyPlaceholders(line1Parts.Length);
+            RenderAddressRow(canvas, line2Effective, x, y + rowH, cellW, rowH,
                 label.CellFontSize, label.CellIsBold, label.CellIsItalic, printGridLines, label.CellFontFamily);
         }
         else
@@ -259,6 +263,14 @@ public static class PrintService
             RenderAddressRow(canvas, line1Parts, x, y, cellW, cellH,
                 label.CellFontSize, label.CellIsBold, label.CellIsItalic, printGridLines, label.CellFontFamily);
         }
+    }
+
+    private static string[] EmptyPlaceholders(int count)
+    {
+        if (count <= 0) return [];
+        var arr = new string[count];
+        for (int i = 0; i < count; i++) arr[i] = string.Empty;
+        return arr;
     }
 
     private static void RenderAddressRow(

@@ -175,6 +175,7 @@
 - [x] Fix: MP-Preview refresht sofort nach Generator/Apply/Header (MpPreviewRefreshToken)
 - [x] Fix: Auto-Advance zum naechsten MP-Modul nach Generate (AdvanceToNextMpModule)
 - [x] Fix: ET200SP Analog-Adressen immer in einer Reihe (entspricht Klemmenbelegung 6ES7134-6GF00-0AA1)
+- [x] Fix: Vertikal-Etikett bleibt 2-zeilig; Analog zeigt leere Platzhalter in unterer Reihe (Klemmenplaetze sichtbar)
 
 ## Phase 13: Code-Qualitaet (2026-04-23) [DONE]
 - [x] Silent-Failures: bare catch{} in CalibrationService + ProjectService durch getypte Filter ersetzt
