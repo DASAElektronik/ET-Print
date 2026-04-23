@@ -50,6 +50,9 @@ public static class AddressGenerator
     /// <summary>
     /// Generiert Beschriftung fuer ein analoges Modul (AI/AO).
     /// Jeder Kanal belegt 2 Bytes (1 Wort).
+    /// ET200SP Analog-Module haben alle Kanal-Anschluesse in einer Klemmenreihe
+    /// (z.B. 6ES7134-6GF00-0AA1 AI 8xI: Klemmen 1-8 = I0+..I7+, Klemmen 9-16 = UV).
+    /// Darum: alle Adressen in Line1, Line2 bleibt leer.
     /// </summary>
     public static GeneratedLabel GenerateAnalog(string moduleName, string prefix, int startByte, int channelCount)
     {
@@ -61,24 +64,11 @@ public static class AddressGenerator
             channels.Add($"{prefix} {addr}");
         }
 
-        // Bei Analog: alle Kanaele in einer Zeile, oder auf zwei Zeilen verteilen
-        if (channelCount <= 4)
-        {
-            return new GeneratedLabel(
-                Header: moduleName,
-                Line1: string.Join("  ", channels),
-                Line2: string.Empty
-            );
-        }
-        else
-        {
-            int half = channelCount / 2;
-            return new GeneratedLabel(
-                Header: moduleName,
-                Line1: string.Join("  ", channels.Take(half)),
-                Line2: string.Join("  ", channels.Skip(half))
-            );
-        }
+        return new GeneratedLabel(
+            Header: moduleName,
+            Line1: string.Join("  ", channels),
+            Line2: string.Empty
+        );
     }
 
     /// <summary>

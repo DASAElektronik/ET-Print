@@ -65,26 +65,20 @@ public class AddressGeneratorTests
 
     // ---- GenerateAnalog -------------------------------------------------
 
+    // ET200SP Analog: alle Kanaele in einer Reihe (Line1), Line2 bleibt leer —
+    // entspricht der physischen Klemmenbelegung (z.B. 6ES7134-6GF00-0AA1).
     [Theory]
     [InlineData(2)]
     [InlineData(4)]
-    public void GenerateAnalog_UpTo4Channels_Line2IsEmpty(int channelCount)
+    [InlineData(6)]
+    [InlineData(8)]
+    public void GenerateAnalog_AllChannelsInLine1_Line2Empty(int channelCount)
     {
         var label = AddressGenerator.GenerateAnalog("AI", "EW", startByte: 0, channelCount: channelCount);
 
         Assert.Empty(label.Line2);
-        Assert.NotEmpty(label.Line1);
-    }
-
-    [Theory]
-    [InlineData(6)]
-    [InlineData(8)]
-    public void GenerateAnalog_MoreThan4Channels_BothLinesPopulated(int channelCount)
-    {
-        var label = AddressGenerator.GenerateAnalog("AI", "EW", startByte: 0, channelCount: channelCount);
-
-        Assert.NotEmpty(label.Line1);
-        Assert.NotEmpty(label.Line2);
+        var line1Items = label.Line1.Split("  ", StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(channelCount, line1Items.Length);
     }
 
     [Fact]
@@ -98,15 +92,17 @@ public class AddressGeneratorTests
     }
 
     [Fact]
-    public void GenerateAnalog_8Channels_SplitsAtHalf()
+    public void GenerateAnalog_8Channels_AllInLine1_InOrder()
     {
         var label = AddressGenerator.GenerateAnalog("AI8", "EW", startByte: 0, channelCount: 8);
 
-        // half = 4, so Line1 has channels 0-3, Line2 has channels 4-7
-        var line1Items = label.Line1.Split("  ", StringSplitOptions.RemoveEmptyEntries);
-        var line2Items = label.Line2.Split("  ", StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(4, line1Items.Length);
-        Assert.Equal(4, line2Items.Length);
+        // Alle 8 Kanaele linksnachrechts in Line1: EW 0, 2, 4, 6, 8, 10, 12, 14
+        var items = label.Line1.Split("  ", StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(8, items.Length);
+        Assert.Equal("EW 0", items[0]);
+        Assert.Equal("EW 2", items[1]);
+        Assert.Equal("EW 14", items[7]);
+        Assert.Empty(label.Line2);
     }
 
     // ---- Generate (dispatcher) ------------------------------------------

@@ -26,6 +26,11 @@
   naechsten Seite gewechselt. Adressen werden NICHT automatisch neu
   generiert — User prueft Variante + Start-Byte und klickt erneut
   "Generieren + Uebertragen".
+- ET200SP Analog-Adressen jetzt korrekt in einer Reihe statt 4+4-Split
+  bei >4 Kanaelen. Entspricht der physischen Klemmenbelegung der
+  Siemens ET200SP AI/AQ-Module (alle Kanaele auf einer Klemmenreihe,
+  andere Reihe = UV). Verifiziert gegen Datenblatt 6ES7134-6GF00-0AA1
+  (AI 8xI): Klemmen 1-8 = I0+..I7+. Tests entsprechend angepasst.
 
 ### Feature
 - **Blanko-A4-Druck**: Checkbox "Gitterlinien drucken (Normalpapier)" umbenannt zu
