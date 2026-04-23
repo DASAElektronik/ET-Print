@@ -114,13 +114,13 @@ public static class PrintService
                 y = marginTop + physRow * cellH;
             }
 
-            // Zellenrahmen nur bei Option "Gitterlinien drucken"
-            if (printGridLines)
-                DrawCellBorder(canvas, x, y, groupW, cellH);
-
-            // Inhalt nur bei befuellten und druckaktiven Etiketten
+            // Schnittkanten + Inhalt nur bei befuellten und druckaktiven Etiketten
             if (label.HasText && label.IsPrintEnabled)
+            {
+                if (printGridLines)
+                    DrawCellBorder(canvas, x, y, groupW, cellH);
                 RenderLabel(canvas, label, format, x, y, cellW, cellH, headerW, printGridLines);
+            }
         }
 
         page.Children.Add(canvas);
@@ -512,6 +512,7 @@ public static class PrintService
         foreach (var mod in modules)
         {
             if (!mod.IsPrintEnabled) continue;
+            if (!mod.HasText) continue; // leere Module komplett ueberspringen (keine Schnittkanten)
 
             int col = mod.ModuleIndex;
             double modX = marginLeft + col * moduleW;
