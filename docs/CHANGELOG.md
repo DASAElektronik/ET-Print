@@ -11,6 +11,12 @@
 
 ## 2026-04-23 - Projekttag 3 (Feature: Blanko A4)
 
+### Fix
+- Eingabe-Tabs (Generator, Manuell, MP Modul) waren im S7-1500/ET200MP-Modus
+  komplett deaktiviert. Ursache: TabControl-IsEnabled war an SelectedLabel
+  gebunden, das im MP-Modus immer null bleibt. Neue Property HasSelection
+  deckt beide Modi ab (SelectedLabel OR SelectedMpModule).
+
 ### Feature
 - **Blanko-A4-Druck**: Checkbox "Gitterlinien drucken (Normalpapier)" umbenannt zu
   "Blanko A4 (alle Rahmen drucken)". Aktiviert druckt auf leeres A4-Papier
