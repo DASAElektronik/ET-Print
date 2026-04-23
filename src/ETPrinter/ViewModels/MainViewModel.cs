@@ -164,6 +164,10 @@ public class MainViewModel : ViewModelBase
     public bool IsMultiBand => _selectedFormat.BandsPerPage > 1;
     public bool IsModuleBased => _selectedFormat.IsModuleBased;
 
+    // True wenn im aktuellen Modus eine Auswahl (Label oder MP-Modul) existiert.
+    // Steuert IsEnabled der Eingabe-Tabs (Generator, Manuell, MP Modul).
+    public bool HasSelection => SelectedLabel is not null || SelectedMpModule is not null;
+
     public MpModuleViewModel? SelectedMpModule
     {
         get => _selectedMpModule;
@@ -177,6 +181,7 @@ public class MainViewModel : ViewModelBase
                     value.IsSelected = true;
                 OnPropertyChanged(nameof(SelectedMpModuleInfo));
                 OnPropertyChanged(nameof(SelectedMpVariant));
+                OnPropertyChanged(nameof(HasSelection));
             }
         }
     }
@@ -264,6 +269,7 @@ public class MainViewModel : ViewModelBase
                     StatusMessage = $"Etikett {value.DisplayPosition}/{Labels.Count} (Seite {_currentPageIndex + 1}/{PageCount})";
                 }
                 OnPropertyChanged(nameof(SelectedLabelInfo));
+                OnPropertyChanged(nameof(HasSelection));
             }
         }
     }
