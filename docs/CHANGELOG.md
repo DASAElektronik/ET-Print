@@ -21,6 +21,11 @@
   Module-/Selection-Wechsel — Zell-PropertyChanged allein triggerte kein
   Re-Render. Refresh-Token in MainViewModel eingefuehrt; Control hoert
   zusaetzlich auf MpPreviewRefreshToken.
+- Nach Generate im MP-Modus wird nun zum naechsten Modul gesprungen
+  (analog AdvanceToNextLabel bei ET200SP). Am Ende der Seite wird zur
+  naechsten Seite gewechselt. Adressen werden NICHT automatisch neu
+  generiert — User prueft Variante + Start-Byte und klickt erneut
+  "Generieren + Uebertragen".
 
 ### Feature
 - **Blanko-A4-Druck**: Checkbox "Gitterlinien drucken (Normalpapier)" umbenannt zu

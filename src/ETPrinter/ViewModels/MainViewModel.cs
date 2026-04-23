@@ -771,8 +771,10 @@ public class MainViewModel : ViewModelBase
 
             NotifyMpPreviewChanged();
 
-            // Auto-Advance: nur StartByte weiterschalten, NICHT zum naechsten Modul
-            // (User waehlt naechstes Modul selbst — vermeidet Varianten-Reset)
+            // Zum naechsten Modul springen (analog AdvanceToNextLabel bei ET200SP).
+            // Adressen werden NICHT automatisch neu generiert — User muss Variante
+            // und Start-Byte pruefen und erneut "Generieren + Uebertragen" druecken.
+            AdvanceToNextMpModule();
         }
         else if (SelectedLabel is not null)
         {
@@ -835,6 +837,27 @@ public class MainViewModel : ViewModelBase
             // At last label of last page, auto-create new page
             AddPage();
         }
+    }
+
+    private void AdvanceToNextMpModule()
+    {
+        if (SelectedMpModule is null) return;
+
+        int currentIndex = MpModules.IndexOf(SelectedMpModule);
+        if (currentIndex < 0) return;
+
+        if (currentIndex + 1 < MpModules.Count)
+        {
+            SelectedMpModule = MpModules[currentIndex + 1];
+        }
+        else if (_currentPageIndex < PageCount - 1)
+        {
+            NavigateToPage(_currentPageIndex + 1);
+            if (MpModules.Count > 0)
+                SelectedMpModule = MpModules[0];
+        }
+        // Am Ende der letzten Seite: keine neue Seite automatisch anlegen
+        // (ET200MP-Seiten werden manuell hinzugefuegt, Varianten pro Seite)
     }
 
     private void ClearAllLabels()
