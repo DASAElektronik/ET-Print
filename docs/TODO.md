@@ -166,6 +166,12 @@
 
 ---
 
+## Phase 14: Blanko-A4-Druck (2026-04-23) [DONE]
+- [x] Checkbox "Blanko A4 (alle Rahmen drucken)" ersetzt "Gitterlinien drucken"
+- [x] Rahmenfarbe schwarz (Schnittkanten 0.5pt, innere Rahmen 0.3pt)
+- [x] Schnittkanten nur fuer befuellte/druckaktive Etiketten (konsistent zu Adress-Rahmen)
+- [x] Druck-Output visuell identisch zur Preview (Preview = Druck)
+
 ## Phase 13: Code-Qualitaet (2026-04-23) [DONE]
 - [x] Silent-Failures: bare catch{} in CalibrationService + ProjectService durch getypte Filter ersetzt
 - [x] ProjectService.Load: File.Exists-Vorpruefung + 50 MB File-Size-Cap

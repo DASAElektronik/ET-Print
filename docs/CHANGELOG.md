@@ -9,6 +9,24 @@
 
 ---
 
+## 2026-04-23 - Projekttag 3 (Feature: Blanko A4)
+
+### Feature
+- **Blanko-A4-Druck**: Checkbox "Gitterlinien drucken (Normalpapier)" umbenannt zu
+  "Blanko A4 (alle Rahmen drucken)". Aktiviert druckt auf leeres A4-Papier
+  (z.B. 120g Karton, hellblau = Standard-Baugruppen, gelb = Safety-Baugruppen)
+  mit kompletten Schnittkanten + Adress-Rahmen + Kopfzeilen-Rahmen.
+- Rahmenfarbe von Hellgrau auf Schwarz: Schnittkanten 0.5pt, innere Rahmen 0.3pt.
+- Position der Rahmen stimmt 1:1 mit der Vorschau ueberein (Preview = Druck).
+
+### Fix
+- Schnittkanten wurden urspruenglich fuer ALLE 100 Etiketten gedruckt, auch leere.
+  Jetzt konsistent zu inneren Rahmen: nur befuellte und druckaktive Etiketten bekommen
+  Schnittkanten. Bei ET200MP zusaetzliches `!mod.HasText continue;` neben
+  `!IsPrintEnabled`.
+
+---
+
 ## 2026-04-23 - Projekttag 3 (Code-Qualitaet)
 
 ### Bugfixes (Session Code-Review)
