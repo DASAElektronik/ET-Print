@@ -166,6 +166,11 @@
 
 ---
 
+## Phase 17: Auto-Live-Preview (2026-04-23) [DONE]
+- [x] Input-Setter triggern sofort Apply (ohne "Uebernehmen"-Klick)
+- [x] Adress-Schrift wirkt auf SelectedLabel, Header + Ränder global
+- [x] Guard gegen Doppel-Apply bei programmatischem Input-Load
+
 ## Phase 16: Header-Style separat (2026-04-23) [DONE]
 - [x] LabelSettings.HeaderFontSize + HeaderIsBold
 - [x] UI-Eingabefelder im Settings-Panel (Adressen vs. Header)

@@ -9,6 +9,21 @@
 
 ---
 
+## 2026-04-23 - Projekttag 3 (Feature: Auto-Live-Preview)
+
+### Feature
+- **Live-Vorschau fuer Einstellungsaenderungen** — "Uebernehmen"-Klick
+  ist nicht mehr noetig; jede Aenderung einer Einstellung wirkt sich sofort
+  in der Vorschau aus.
+  - Schriftart / Groesse / Fett / Kursiv wirken sofort auf das aktuell
+    ausgewaehlte Etikett.
+  - Header-Groesse / Header-Fett wirken sofort global auf die ganze Seite.
+  - Seitenraender wirken sofort global.
+- Guard `_suspendLiveApply` verhindert Doppel-Apply beim programmatischen
+  Laden der Input-Felder (Label-Wechsel, Projekt-Laden, Reset).
+
+---
+
 ## 2026-04-23 - Projekttag 3 (Feature: Header-Style getrennt)
 
 ### Feature

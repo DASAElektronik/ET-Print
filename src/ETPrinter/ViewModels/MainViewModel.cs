@@ -47,6 +47,10 @@ public class MainViewModel : ViewModelBase
     private double _inputMarginBottom = 21.0;
     private double _inputMarginRight = 25.0;
 
+    // Guard: blockiert Auto-Apply waehrend die Input-Felder programmatisch
+    // geladen werden (z.B. beim Label-Wechsel oder Projekt-Laden).
+    private bool _suspendLiveApply;
+
     private bool _printGridLines;
     private double _calibrationOffsetX;
     private double _calibrationOffsetY;
@@ -278,11 +282,17 @@ public class MainViewModel : ViewModelBase
                     InputLine1 = value.Line1;
                     InputLine2 = value.Line2;
                     GenModuleName = value.Header; // Kopfzeile auch im Generator laden
-                    // Schrift-Einstellungen des Etiketts laden
-                    InputFontSize = value.CellFontSize;
-                    InputIsBold = value.CellIsBold;
-                    InputIsItalic = value.CellIsItalic;
-                    InputFontFamily = value.CellFontFamily;
+                    // Schrift-Einstellungen des Etiketts laden — Live-Apply aussetzen,
+                    // sonst wuerde das Label sofort auf seine eigenen Werte "ueberschrieben".
+                    _suspendLiveApply = true;
+                    try
+                    {
+                        InputFontSize = value.CellFontSize;
+                        InputIsBold = value.CellIsBold;
+                        InputIsItalic = value.CellIsItalic;
+                        InputFontFamily = value.CellFontFamily;
+                    }
+                    finally { _suspendLiveApply = false; }
                     StatusMessage = $"Etikett {value.DisplayPosition}/{Labels.Count} (Seite {_currentPageIndex + 1}/{PageCount})";
                 }
                 OnPropertyChanged(nameof(SelectedLabelInfo));
@@ -433,64 +443,106 @@ public class MainViewModel : ViewModelBase
     public int[] GenTypicalCounts => AddressGenerator.GetTypicalCounts(_genModuleType.Type);
 
     // === Einstellungen ===
+    // Alle Input-Setter triggern Live-Preview: Aenderungen werden sofort angewendet,
+    // ohne dass "Uebernehmen" geklickt werden muss.
     public int InputFontSize
     {
         get => _inputFontSize;
-        set => SetProperty(ref _inputFontSize, value);
+        set
+        {
+            if (SetProperty(ref _inputFontSize, value))
+                ApplyInputFontToSelected();
+        }
     }
 
     public bool InputIsBold
     {
         get => _inputIsBold;
-        set => SetProperty(ref _inputIsBold, value);
+        set
+        {
+            if (SetProperty(ref _inputIsBold, value))
+                ApplyInputFontToSelected();
+        }
     }
 
     public bool InputIsItalic
     {
         get => _inputIsItalic;
-        set => SetProperty(ref _inputIsItalic, value);
+        set
+        {
+            if (SetProperty(ref _inputIsItalic, value))
+                ApplyInputFontToSelected();
+        }
     }
 
     public string InputFontFamily
     {
         get => _inputFontFamily;
-        set => SetProperty(ref _inputFontFamily, value);
+        set
+        {
+            if (SetProperty(ref _inputFontFamily, value))
+                ApplyInputFontToSelected();
+        }
     }
 
     public int InputHeaderFontSize
     {
         get => _inputHeaderFontSize;
-        set => SetProperty(ref _inputHeaderFontSize, value);
+        set
+        {
+            if (SetProperty(ref _inputHeaderFontSize, value))
+                ApplyHeaderStyleToSettings();
+        }
     }
 
     public bool InputHeaderIsBold
     {
         get => _inputHeaderIsBold;
-        set => SetProperty(ref _inputHeaderIsBold, value);
+        set
+        {
+            if (SetProperty(ref _inputHeaderIsBold, value))
+                ApplyHeaderStyleToSettings();
+        }
     }
 
     public double InputMarginTop
     {
         get => _inputMarginTop;
-        set => SetProperty(ref _inputMarginTop, value);
+        set
+        {
+            if (SetProperty(ref _inputMarginTop, value))
+                ApplyMarginsToSettings();
+        }
     }
 
     public double InputMarginLeft
     {
         get => _inputMarginLeft;
-        set => SetProperty(ref _inputMarginLeft, value);
+        set
+        {
+            if (SetProperty(ref _inputMarginLeft, value))
+                ApplyMarginsToSettings();
+        }
     }
 
     public double InputMarginBottom
     {
         get => _inputMarginBottom;
-        set => SetProperty(ref _inputMarginBottom, value);
+        set
+        {
+            if (SetProperty(ref _inputMarginBottom, value))
+                ApplyMarginsToSettings();
+        }
     }
 
     public double InputMarginRight
     {
         get => _inputMarginRight;
-        set => SetProperty(ref _inputMarginRight, value);
+        set
+        {
+            if (SetProperty(ref _inputMarginRight, value))
+                ApplyMarginsToSettings();
+        }
     }
 
     public bool PrintGridLines
@@ -1057,19 +1109,62 @@ public class MainViewModel : ViewModelBase
         StatusMessage = "Alle Etiketten geloescht";
     }
 
+    // === Live-Preview Apply-Helfer (aus Input-Settern aufgerufen) ===
+
+    private void ApplyInputFontToSelected()
+    {
+        if (_suspendLiveApply) return;
+        if (SelectedLabel is null) return;
+        SelectedLabel.CellFontSize = _inputFontSize;
+        SelectedLabel.CellIsBold = _inputIsBold;
+        SelectedLabel.CellIsItalic = _inputIsItalic;
+        SelectedLabel.CellFontFamily = _inputFontFamily;
+        IsDirty = true;
+    }
+
+    private void ApplyHeaderStyleToSettings()
+    {
+        if (_suspendLiveApply) return;
+        _settings.HeaderFontSize = _inputHeaderFontSize;
+        _settings.HeaderIsBold = _inputHeaderIsBold;
+        OnPropertyChanged(nameof(Settings));
+        OnPropertyChanged(nameof(HeaderPreviewFontSize));
+        OnPropertyChanged(nameof(HeaderPreviewFontWeight));
+        NotifyMpPreviewChanged();
+        IsDirty = true;
+    }
+
+    private void ApplyMarginsToSettings()
+    {
+        if (_suspendLiveApply) return;
+        _settings.MarginTop = _inputMarginTop;
+        _settings.MarginLeft = _inputMarginLeft;
+        _settings.MarginBottom = _inputMarginBottom;
+        _settings.MarginRight = _inputMarginRight;
+        OnPropertyChanged(nameof(Settings));
+        OnPropertyChanged(nameof(PreviewMargin));
+        NotifyMpPreviewChanged();
+        IsDirty = true;
+    }
+
     private void ResetSettings()
     {
         _settings.ResetForFamily(_selectedProductFamily);
-        InputFontSize = _settings.FontSize;
-        InputIsBold = _settings.IsBold;
-        InputIsItalic = _settings.IsItalic;
-        InputFontFamily = _settings.FontFamily;
-        InputHeaderFontSize = _settings.HeaderFontSize;
-        InputHeaderIsBold = _settings.HeaderIsBold;
-        InputMarginTop = _settings.MarginTop;
-        InputMarginLeft = _settings.MarginLeft;
-        InputMarginBottom = _settings.MarginBottom;
-        InputMarginRight = _settings.MarginRight;
+        _suspendLiveApply = true;
+        try
+        {
+            InputFontSize = _settings.FontSize;
+            InputIsBold = _settings.IsBold;
+            InputIsItalic = _settings.IsItalic;
+            InputFontFamily = _settings.FontFamily;
+            InputHeaderFontSize = _settings.HeaderFontSize;
+            InputHeaderIsBold = _settings.HeaderIsBold;
+            InputMarginTop = _settings.MarginTop;
+            InputMarginLeft = _settings.MarginLeft;
+            InputMarginBottom = _settings.MarginBottom;
+            InputMarginRight = _settings.MarginRight;
+        }
+        finally { _suspendLiveApply = false; }
         OnPropertyChanged(nameof(Settings));
         OnPropertyChanged(nameof(PreviewMargin));
         OnPropertyChanged(nameof(HeaderPreviewFontSize));
@@ -1354,16 +1449,21 @@ public class MainViewModel : ViewModelBase
             _settings.FontFamily = project.Settings.FontFamily;
             _settings.HeaderFontSize = project.Settings.HeaderFontSize;
             _settings.HeaderIsBold = project.Settings.HeaderIsBold;
-            InputMarginTop = project.Settings.MarginTop;
-            InputMarginLeft = project.Settings.MarginLeft;
-            InputMarginBottom = project.Settings.MarginBottom;
-            InputMarginRight = project.Settings.MarginRight;
-            InputFontSize = project.Settings.FontSize;
-            InputIsBold = project.Settings.IsBold;
-            InputIsItalic = project.Settings.IsItalic;
-            InputFontFamily = project.Settings.FontFamily;
-            InputHeaderFontSize = project.Settings.HeaderFontSize;
-            InputHeaderIsBold = project.Settings.HeaderIsBold;
+            _suspendLiveApply = true;
+            try
+            {
+                InputMarginTop = project.Settings.MarginTop;
+                InputMarginLeft = project.Settings.MarginLeft;
+                InputMarginBottom = project.Settings.MarginBottom;
+                InputMarginRight = project.Settings.MarginRight;
+                InputFontSize = project.Settings.FontSize;
+                InputIsBold = project.Settings.IsBold;
+                InputIsItalic = project.Settings.IsItalic;
+                InputFontFamily = project.Settings.FontFamily;
+                InputHeaderFontSize = project.Settings.HeaderFontSize;
+                InputHeaderIsBold = project.Settings.HeaderIsBold;
+            }
+            finally { _suspendLiveApply = false; }
             OnPropertyChanged(nameof(Settings));
             OnPropertyChanged(nameof(PreviewMargin));
             OnPropertyChanged(nameof(HeaderPreviewFontSize));
