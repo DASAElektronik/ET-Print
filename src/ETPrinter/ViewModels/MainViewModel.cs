@@ -168,6 +168,17 @@ public class MainViewModel : ViewModelBase
     // Steuert IsEnabled der Eingabe-Tabs (Generator, Manuell, MP Modul).
     public bool HasSelection => SelectedLabel is not null || SelectedMpModule is not null;
 
+    // Incrementaler Token fuer MP-Preview-Refresh. MpPreviewControl hoert darauf
+    // und rendert neu, wenn der Generator o.ae. Daten innerhalb von Modulen aendert
+    // (Zell-PropertyChanged allein triggert kein Re-Render des Canvas-Controls).
+    private int _mpPreviewRefreshToken;
+    public int MpPreviewRefreshToken
+    {
+        get => _mpPreviewRefreshToken;
+        private set => SetProperty(ref _mpPreviewRefreshToken, value);
+    }
+    public void NotifyMpPreviewChanged() => MpPreviewRefreshToken++;
+
     public MpModuleViewModel? SelectedMpModule
     {
         get => _selectedMpModule;
@@ -691,6 +702,7 @@ public class MainViewModel : ViewModelBase
             if (SelectedMpCell is not null && SelectedMpCell.IsEditable)
                 SelectedMpCell.Text = InputLine1;
             IsDirty = true;
+            NotifyMpPreviewChanged();
             return;
         }
 
@@ -756,6 +768,8 @@ public class MainViewModel : ViewModelBase
             IsDirty = true;
             int filledCount = editableCells.Count(c => c.HasText);
             StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) → {filledCount} Adressen auf Modul {SelectedMpModule.ModuleIndex + 1}";
+
+            NotifyMpPreviewChanged();
 
             // Auto-Advance: nur StartByte weiterschalten, NICHT zum naechsten Modul
             // (User waehlt naechstes Modul selbst — vermeidet Varianten-Reset)
@@ -900,6 +914,7 @@ public class MainViewModel : ViewModelBase
         {
             SelectedMpModule.HeaderText = GenModuleName;
             IsDirty = true;
+            NotifyMpPreviewChanged();
             StatusMessage = $"Kopfzeile von Modul {SelectedMpModule.ModuleIndex + 1} geaendert";
             return;
         }

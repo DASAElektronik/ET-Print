@@ -42,7 +42,9 @@ public partial class MpPreviewControl : UserControl
             vm.MpModules.CollectionChanged += (_, _) => Render();
             vm.PropertyChanged += (_, e) =>
             {
-                if (e.PropertyName is nameof(vm.SelectedMpModule) or nameof(vm.SelectedMpCell))
+                if (e.PropertyName is nameof(vm.SelectedMpModule)
+                                    or nameof(vm.SelectedMpCell)
+                                    or nameof(vm.MpPreviewRefreshToken))
                     Render();
             };
             Render();
