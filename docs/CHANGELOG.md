@@ -9,6 +9,27 @@
 
 ---
 
+## 2026-04-23 - Projekttag 3 (Code-Qualitaet)
+
+### Bugfixes (Session Code-Review)
+- CalibrationService: bare catch{} durch getypte Exception-Filter ersetzt; Save() meldet Fehler via StatusMessage zurueck
+- ProjectService: bare catch{} getypt; Load() prueft File.Exists vorab und erzwingt 50MB File-Size-Cap gegen JSON-DoS
+- TestAutomationService.Dispose(): wartet bis 2s auf ListenLoop-Completion vor CTS.Dispose, vermeidet Race beim Shutdown
+- TestAutomationService.RunOnUI: voller Stacktrace ins Log, Exception-Typ in Response
+- TestAutomationService.ResizeWindow: Bounds-Check (400..10000), InvariantCulture beim Parsen
+- TestAutomationService: neue ValidateProjectPath() fuer save/load-project (erzwingt .etprint-Extension)
+
+### Neue Features / Hardening
+- **Logger**: neuer Log-Service (`Services/Log.cs`) schreibt nach `%LOCALAPPDATA%\ETPrinter\log.txt` mit 1MB-Rotation zu `.old.txt`. Thread-safe, IO-sicher mit Debug.WriteLine-Fallback. Debug.WriteLine-Calls in 3 Services migriert.
+- **Test-Automation-Flag**: Named-Pipe-Server startet nur bei `--test-automation` CLI-Arg oder `ETPRINTER_TEST=1` ENV-Var. Reduziert Attack-Surface in Production.
+- **Regex-Hardening**: alle 4 Patterns in SchematicParserService mit `RegexOptions.NonBacktracking` + 1s Timeout gegen pathologische PDF-Inhalte.
+- **Unit-Tests**: neues Projekt `tests/ETPrinter.Tests` (xUnit, net9.0-windows), in Solution integriert. 41 Tests fuer AddressGenerator (digital/analog Adressgenerierung, odd/even-Split, Byte-Stepping) und MpModuleLayoutFactory (Half==0-Invariante fuer alle 6 Varianten).
+
+### Code-Decisions
+- Half-1 Rendering-Pfad bleibt erhalten (Unit-Test pinnt Half==0-Invariante). Entfernen waere ohne Rendering-Tests zu riskant; Git-History bewahrt Code falls spaeter 2-Half-Layouts gebraucht werden.
+
+---
+
 ## 2026-03-23 - Projekttag 2
 
 ### Phase 12: Architektur-Korrektur + Generator-Fix (v2.5)

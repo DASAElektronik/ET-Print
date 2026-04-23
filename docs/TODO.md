@@ -163,3 +163,22 @@
 - [x] Schriftart: Variable, alle Windows-Fonts (Standard: Arial)
 - [x] Einzeldruck: Ja, Etiketten sollen einzeln druckbar sein
 - [x] CSV/Excel-Import: Ja, gewuenscht
+
+---
+
+## Phase 13: Code-Qualitaet (2026-04-23) [DONE]
+- [x] Silent-Failures: bare catch{} in CalibrationService + ProjectService durch getypte Filter ersetzt
+- [x] ProjectService.Load: File.Exists-Vorpruefung + 50 MB File-Size-Cap
+- [x] TestAutomationService.Dispose: wartet auf ListenLoop-Completion (2s Timeout)
+- [x] TestAutomationService.ResizeWindow: Bounds-Check + InvariantCulture
+- [x] TestAutomationService: ValidateProjectPath() fuer save/load-project
+- [x] File-Logger Log.cs mit 1MB-Rotation (Services/Log.cs)
+- [x] Named-Pipe nur bei --test-automation / ETPRINTER_TEST=1
+- [x] Regex NonBacktracking + Timeout in SchematicParserService
+- [x] xUnit Testprojekt (tests/ETPrinter.Tests) mit 41 Tests fuer AddressGenerator + MpModuleLayoutFactory
+
+## Blockierte Aufgaben (warten auf Hardware)
+- [ ] Exakte Masse per Stahllineal (6ES7592-1AX00, -2AX00)
+- [ ] 25mm-Template Variante
+- [ ] Feinabstimmung aller 12 ET200MP-Varianten gegen physische Boegen
+- [ ] Klemmenbelegungen: DQ (alle), AI/AQ (restliche), SIWAREX Waegemodule
