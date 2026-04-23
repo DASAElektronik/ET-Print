@@ -328,10 +328,10 @@
                             <!-- Fett / Kursiv -->
                             <CheckBox Content="Fett" IsChecked="{Binding InputIsBold}" Margin="0,0,0,3"/>
                             <CheckBox Content="Kursiv" IsChecked="{Binding InputIsItalic}" Margin="0,0,0,3"/>
-                            <CheckBox Content="Gitterlinien drucken (Normalpapier)"
+                            <CheckBox Content="Blanko A4 (alle Rahmen drucken)"
                                       IsChecked="{Binding PrintGridLines}"
                                       Margin="0,0,0,8" FontSize="11" Foreground="Gray"
-                                      ToolTip="Aktivieren fuer Druck auf Normalpapier zum Ausschneiden. Deaktiviert fuer perforierte Siemens-Etikettenboegen."/>
+                                      ToolTip="Aktivieren fuer Druck auf Blanko-A4-Papier (z.B. 120g Karton, hellblau = Standard, gelb = Safety). Druckt Schnittkanten + Rahmen um Adressen + Kopfzeile. Deaktiviert fuer perforierte Siemens-Etikettenboegen."/>
 
                             <!-- Seitenraender -->
                             <TextBlock Text="Seitenraender (mm):" FontWeight="SemiBold" Margin="0,0,0,5"/>

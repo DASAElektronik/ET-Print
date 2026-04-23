@@ -133,11 +133,12 @@ public static class PrintService
 
     private static void DrawCellBorder(Canvas canvas, double x, double y, double w, double h)
     {
+        // Schnittkanten schwarz, 0.5 pt — sichtbar zum Ausschneiden auf Blanko-A4
         var rect = new Rectangle
         {
             Width = w,
             Height = h,
-            Stroke = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
+            Stroke = Brushes.Black,
             StrokeThickness = 0.5,
             Fill = Brushes.Transparent
         };
@@ -164,7 +165,7 @@ public static class PrintService
                 {
                     X1 = x + headerW, Y1 = y,
                     X2 = x + headerW, Y2 = y + cellH,
-                    Stroke = new SolidColorBrush(Color.FromRgb(160, 160, 160)),
+                    Stroke = Brushes.Black,
                     StrokeThickness = 0.3
                 };
                 canvas.Children.Add(line);
@@ -279,7 +280,7 @@ public static class PrintService
                 {
                     Width = partW,
                     Height = rowHeight,
-                    Stroke = new SolidColorBrush(Color.FromRgb(160, 160, 160)),
+                    Stroke = Brushes.Black,
                     StrokeThickness = 0.3
                 };
                 Canvas.SetLeft(rect, px);
