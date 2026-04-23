@@ -38,8 +38,20 @@ public class TestAutomationService : IDisposable
 
     public void Dispose()
     {
-        _cts?.Cancel();
-        _cts?.Dispose();
+        // Hinweis: Dispose wird von App.OnExit auf dem UI-Thread aufgerufen.
+        // Falls ListenLoop gerade einen RunOnUI-Dispatch wartet, kann Wait() bis zum Timeout
+        // blockieren, weil der UI-Dispatcher durch diesen Aufruf nicht pumpt. Timeout = Obergrenze.
+        try
+        {
+            _cts?.Cancel();
+            try { _listenTask?.Wait(TimeSpan.FromSeconds(2)); }
+            catch (AggregateException) { /* OperationCanceledException erwartet */ }
+        }
+        finally
+        {
+            _cts?.Dispose();
+            _cts = null;
+        }
     }
 
     private async Task ListenLoop(CancellationToken ct)
@@ -68,7 +80,7 @@ public class TestAutomationService : IDisposable
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"TestAutomation error: {ex.Message}");
+                Log.Error($"Pipe-Fehler: {ex.GetType().Name}", ex);
             }
         }
     }
@@ -133,7 +145,11 @@ public class TestAutomationService : IDisposable
         _mainWindow.Dispatcher.InvokeAsync(() =>
         {
             try { tcs.SetResult(action()); }
-            catch (Exception ex) { tcs.SetResult(Error(ex.Message)); }
+            catch (Exception ex)
+            {
+                Log.Error($"Dispatch-Exception: {ex.GetType().Name}", ex);
+                tcs.SetResult(Error($"{ex.GetType().Name}: {ex.Message}"));
+            }
         });
         return tcs.Task;
     }
@@ -489,12 +505,31 @@ public class TestAutomationService : IDisposable
     private string ResizeWindow(string arg)
     {
         var parts = arg.Split('x', 'X');
-        if (parts.Length != 2 || !double.TryParse(parts[0], out double w) || !double.TryParse(parts[1], out double h))
+        if (parts.Length != 2
+            || !double.TryParse(parts[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out double w)
+            || !double.TryParse(parts[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out double h))
             return Error("Format: resize <breite>x<hoehe> (z.B. 1920x1080)");
+        if (double.IsNaN(w) || double.IsNaN(h) || w < 400 || h < 300 || w > 10000 || h > 10000)
+            return Error("Ungueltige Dimensionen (400..10000 x 300..10000)");
         _mainWindow.WindowState = WindowState.Normal;
         _mainWindow.Width = w;
         _mainWindow.Height = h;
         return Ok($"Fenster: {w}x{h}");
+    }
+
+    private static string? ValidateProjectPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return "Pfad angeben";
+        string fullPath;
+        try { fullPath = Path.GetFullPath(path); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return $"Ungueltiger Pfad: {ex.Message}";
+        }
+        if (!string.Equals(Path.GetExtension(fullPath), ".etprint", StringComparison.OrdinalIgnoreCase))
+            return "Nur .etprint-Dateien erlaubt";
+        return null;
     }
 
     // === Generator + Save/Load ===
@@ -531,8 +566,9 @@ public class TestAutomationService : IDisposable
 
     private string SaveProject(string path)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            return Error("Pfad angeben: save-project <pfad.etprint>");
+        var validationError = ValidateProjectPath(path);
+        if (validationError != null)
+            return Error($"save-project: {validationError}");
         try
         {
             var pages = new List<LabelPage>();
@@ -580,7 +616,10 @@ public class TestAutomationService : IDisposable
 
     private string LoadProject(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        var validationError = ValidateProjectPath(path);
+        if (validationError != null)
+            return Error($"load-project: {validationError}");
+        if (!File.Exists(path))
             return Error($"Datei nicht gefunden: {path}");
         try
         {

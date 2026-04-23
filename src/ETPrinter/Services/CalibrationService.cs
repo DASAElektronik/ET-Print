@@ -25,18 +25,26 @@ public static class CalibrationService
                 return JsonSerializer.Deserialize<CalibrationData>(json) ?? new();
             }
         }
-        catch { }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            Log.Warn($"{ex.GetType().Name}: {ex.Message}");
+        }
         return new();
     }
 
-    public static void Save(CalibrationData data)
+    public static bool Save(CalibrationData data)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
             var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(FilePath, json);
+            return true;
         }
-        catch { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"{ex.GetType().Name}: {ex.Message}");
+            return false;
+        }
     }
 }

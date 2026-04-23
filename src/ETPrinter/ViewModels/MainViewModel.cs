@@ -1224,11 +1224,13 @@ public class MainViewModel : ViewModelBase
 
     private void SaveCalibration()
     {
-        CalibrationService.Save(new CalibrationData
+        var ok = CalibrationService.Save(new CalibrationData
         {
             OffsetX = CalibrationOffsetX,
             OffsetY = CalibrationOffsetY
         });
+        if (!ok)
+            StatusMessage = "Warnung: Kalibrierung konnte nicht gespeichert werden";
     }
 
     // === Import Methods ===

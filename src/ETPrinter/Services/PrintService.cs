@@ -535,6 +535,8 @@ public static class PrintService
             if (printGridLines)
                 DrawCellBorder(canvas, modX, headerY, moduleW, headerH);
 
+            // Stand v2.6: Alle Layouts nutzen nur Half=0 (ein Modul = ein A4-Streifen).
+            // Die Half=1-Logik bleibt fuer potentielle zukuenftige Multi-Half-Layouts erhalten.
             int maxHalf = layout.AddressCells.Any(c => c.Half == 1) ? 2 : 1;
             for (int half = 0; half < maxHalf; half++)
             {

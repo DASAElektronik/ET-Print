@@ -7,21 +7,34 @@ namespace ETPrinter.Services;
 
 public static class SchematicParserService
 {
+    // NonBacktracking + Timeout schuetzen gegen pathologische PDF-Inhalte.
+    // NonBacktracking ist inkompatibel mit Compiled, dafuer garantiert linear.
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+
     private static readonly Regex ModuleTypePattern = new(
         @"\b(DI|DO|DQ|AI|AO|AQ)\s*\d*x?\s*\d+\b",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.NonBacktracking,
+        RegexTimeout);
 
     private static readonly Regex DigitalAddressPattern = new(
         @"[EA]\s*\d+\.\d+",
-        RegexOptions.Compiled);
+        RegexOptions.NonBacktracking,
+        RegexTimeout);
 
     private static readonly Regex AnalogAddressPattern = new(
         @"[EA]W\s*\d+",
-        RegexOptions.Compiled);
+        RegexOptions.NonBacktracking,
+        RegexTimeout);
 
     private static readonly Regex ModuleBmkPattern = new(
         @"[+=][\w.\-]+",
-        RegexOptions.Compiled);
+        RegexOptions.NonBacktracking,
+        RegexTimeout);
+
+    private static readonly Regex StartBytePattern = new(
+        @"\d+",
+        RegexOptions.NonBacktracking,
+        RegexTimeout);
 
     private const double LineToleranceY = 3.0;
     private const double ColumnGapX = 50.0;
@@ -188,7 +201,7 @@ public static class SchematicParserService
         if (module.Channels.Count > 0)
         {
             var firstAddress = module.Channels[0].Address;
-            var byteMatch = Regex.Match(firstAddress, @"\d+");
+            var byteMatch = StartBytePattern.Match(firstAddress);
             if (byteMatch.Success && int.TryParse(byteMatch.Value, out int startByte))
             {
                 module.StartByte = startByte;

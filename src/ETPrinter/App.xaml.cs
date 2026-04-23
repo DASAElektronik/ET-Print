@@ -12,13 +12,21 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        // Test-Automation starten (Named Pipe Server)
         MainWindow = new MainWindow();
         MainWindow.Show();
 
-        var viewModel = (MainViewModel)MainWindow.DataContext;
-        _testService = new TestAutomationService(MainWindow, viewModel);
-        _testService.Start();
+        // Test-Automation nur starten wenn explizit angefordert:
+        //   --test-automation oder Umgebungsvariable ETPRINTER_TEST=1
+        bool testMode =
+            e.Args.Any(a => string.Equals(a, "--test-automation", StringComparison.OrdinalIgnoreCase))
+            || string.Equals(Environment.GetEnvironmentVariable("ETPRINTER_TEST"), "1", StringComparison.Ordinal);
+
+        if (testMode)
+        {
+            var viewModel = (MainViewModel)MainWindow.DataContext;
+            _testService = new TestAutomationService(MainWindow, viewModel);
+            _testService.Start();
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

@@ -8,6 +8,7 @@ namespace ETPrinter.Services;
 public static class ProjectService
 {
     private const int MaxRecentFiles = 10;
+    private const long MaxProjectFileBytes = 50L * 1024 * 1024; // 50 MB cap to protect UI thread
 
     private static readonly string RecentFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -31,6 +32,14 @@ public static class ProjectService
 
     public static LabelProject Load(string filePath)
     {
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException($"Projektdatei nicht gefunden: {filePath}", filePath);
+
+        var info = new FileInfo(filePath);
+        if (info.Length > MaxProjectFileBytes)
+            throw new InvalidDataException(
+                $"Projektdatei zu gross ({info.Length / (1024 * 1024)} MB, max {MaxProjectFileBytes / (1024 * 1024)} MB).");
+
         var json = File.ReadAllText(filePath);
         var project = JsonSerializer.Deserialize<LabelProject>(json, JsonOptions)
             ?? throw new InvalidDataException("Ungueltige Projektdatei.");
@@ -79,7 +88,10 @@ public static class ProjectService
                 return JsonSerializer.Deserialize<List<string>>(json) ?? [];
             }
         }
-        catch { }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            Log.Warn($"{ex.GetType().Name}: {ex.Message}");
+        }
         return [];
     }
 
@@ -98,6 +110,9 @@ public static class ProjectService
             Directory.CreateDirectory(dir);
             File.WriteAllText(RecentFilePath, JsonSerializer.Serialize(recent, new JsonSerializerOptions { WriteIndented = true }));
         }
-        catch { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"{ex.GetType().Name}: {ex.Message}");
+        }
     }
 }
