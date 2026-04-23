@@ -88,11 +88,13 @@ public class LabelViewModel : ViewModelBase
     public FontStyle PreviewFontStyle => _cell.IsItalic ? FontStyles.Italic : FontStyles.Normal;
     public System.Windows.Media.FontFamily PreviewFontFamily => new(_cell.FontFamily);
 
-    /// <summary>Einzelne Adressen aus Line1 (getrennt durch doppeltes Leerzeichen)</summary>
-    public string[] Line1Parts => string.IsNullOrWhiteSpace(Line1) ? [] : Line1.Split("  ", StringSplitOptions.RemoveEmptyEntries);
+    /// <summary>Einzelne Adressen aus Line1 (getrennt durch doppeltes Leerzeichen).
+    /// Leere Strings bleiben erhalten — so sind bei analog Platzhalter-Slots zwischen
+    /// und hinter den Adressen sichtbar (z.B. EW 2    EW 6 → ["EW 2", "", "EW 6"]).</summary>
+    public string[] Line1Parts => string.IsNullOrEmpty(Line1) ? [] : Line1.Split("  ", StringSplitOptions.None);
 
-    /// <summary>Einzelne Adressen aus Line2 (getrennt durch doppeltes Leerzeichen)</summary>
-    public string[] Line2Parts => string.IsNullOrWhiteSpace(Line2) ? [] : Line2.Split("  ", StringSplitOptions.RemoveEmptyEntries);
+    /// <summary>Einzelne Adressen aus Line2 (getrennt durch doppeltes Leerzeichen).</summary>
+    public string[] Line2Parts => string.IsNullOrEmpty(Line2) ? [] : Line2.Split("  ", StringSplitOptions.None);
 
     /// <summary>True wenn Line2 befuellt ist (digital odd/even Split).
     /// Analog nutzt nur Line1, untere Reihe bleibt als leere Platzhalter sichtbar.</summary>

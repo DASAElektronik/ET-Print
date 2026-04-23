@@ -65,44 +65,61 @@ public class AddressGeneratorTests
 
     // ---- GenerateAnalog -------------------------------------------------
 
-    // ET200SP Analog: alle Kanaele in einer Reihe (Line1), Line2 bleibt leer —
-    // entspricht der physischen Klemmenbelegung (z.B. 6ES7134-6GF00-0AA1).
-    [Theory]
-    [InlineData(2)]
-    [InlineData(4)]
-    [InlineData(6)]
-    [InlineData(8)]
-    public void GenerateAnalog_AllChannelsInLine1_Line2Empty(int channelCount)
-    {
-        var label = AddressGenerator.GenerateAnalog("AI", "EW", startByte: 0, channelCount: channelCount);
-
-        Assert.Empty(label.Line2);
-        var line1Items = label.Line1.Split("  ", StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(channelCount, line1Items.Length);
-    }
-
+    // ET200SP Analog: alternierend wie digital. Ungerade Kanaele oben, gerade unten.
+    // Fix 8 Plaetze pro Reihe (BaseUnit hat 8 Klemmen pro Reihe); Restplaetze leer.
     [Fact]
-    public void GenerateAnalog_AddressesStepBy2Bytes()
-    {
-        var label = AddressGenerator.GenerateAnalog("AI4", "EW", startByte: 100, channelCount: 3);
-
-        Assert.Contains("EW 100", label.Line1);
-        Assert.Contains("EW 102", label.Line1);
-        Assert.Contains("EW 104", label.Line1);
-    }
-
-    [Fact]
-    public void GenerateAnalog_8Channels_AllInLine1_InOrder()
+    public void GenerateAnalog_8Channels_OddChannelsInLine1_EvenInLine2()
     {
         var label = AddressGenerator.GenerateAnalog("AI8", "EW", startByte: 0, channelCount: 8);
 
-        // Alle 8 Kanaele linksnachrechts in Line1: EW 0, 2, 4, 6, 8, 10, 12, 14
-        var items = label.Line1.Split("  ", StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(8, items.Length);
-        Assert.Equal("EW 0", items[0]);
-        Assert.Equal("EW 2", items[1]);
-        Assert.Equal("EW 14", items[7]);
-        Assert.Empty(label.Line2);
+        // Oben (K1, K3, K5, K7): EW 2, EW 6, EW 10, EW 14, "", "", "", ""
+        var line1 = label.Line1.Split("  ", StringSplitOptions.None);
+        Assert.Equal(8, line1.Length);
+        Assert.Equal("EW 2", line1[0]);
+        Assert.Equal("EW 6", line1[1]);
+        Assert.Equal("EW 10", line1[2]);
+        Assert.Equal("EW 14", line1[3]);
+        Assert.Equal("", line1[4]);
+        Assert.Equal("", line1[7]);
+
+        // Unten (K0, K2, K4, K6): EW 0, EW 4, EW 8, EW 12, "", "", "", ""
+        var line2 = label.Line2.Split("  ", StringSplitOptions.None);
+        Assert.Equal(8, line2.Length);
+        Assert.Equal("EW 0", line2[0]);
+        Assert.Equal("EW 4", line2[1]);
+        Assert.Equal("EW 8", line2[2]);
+        Assert.Equal("EW 12", line2[3]);
+        Assert.Equal("", line2[4]);
+    }
+
+    [Fact]
+    public void GenerateAnalog_4Channels_2OddInLine1_2EvenInLine2()
+    {
+        var label = AddressGenerator.GenerateAnalog("AI4", "EW", startByte: 0, channelCount: 4);
+
+        var line1 = label.Line1.Split("  ", StringSplitOptions.None);
+        var line2 = label.Line2.Split("  ", StringSplitOptions.None);
+
+        Assert.Equal(8, line1.Length); // immer 8 Plaetze pro Reihe
+        Assert.Equal("EW 2", line1[0]);
+        Assert.Equal("EW 6", line1[1]);
+        Assert.Equal("", line1[2]);
+
+        Assert.Equal(8, line2.Length);
+        Assert.Equal("EW 0", line2[0]);
+        Assert.Equal("EW 4", line2[1]);
+        Assert.Equal("", line2[2]);
+    }
+
+    [Fact]
+    public void GenerateAnalog_AddressesStepBy2Bytes_FromStartByteOffset()
+    {
+        var label = AddressGenerator.GenerateAnalog("AI", "EW", startByte: 100, channelCount: 4);
+
+        Assert.Contains("EW 100", label.Line2);
+        Assert.Contains("EW 102", label.Line1);
+        Assert.Contains("EW 104", label.Line2);
+        Assert.Contains("EW 106", label.Line1);
     }
 
     // ---- Generate (dispatcher) ------------------------------------------
@@ -124,7 +141,9 @@ public class AddressGeneratorTests
     {
         var label = AddressGenerator.Generate("M", type, startByte: 0, count: 2);
 
-        Assert.Contains(expectedPrefix + " 0", label.Line1);
+        // K0 (gerade) in Line2 = EW/AW 0, K1 (ungerade) in Line1 = EW/AW 2
+        Assert.Contains(expectedPrefix + " 0", label.Line2);
+        Assert.Contains(expectedPrefix + " 2", label.Line1);
     }
 
     // ---- GetNextStartByte -----------------------------------------------

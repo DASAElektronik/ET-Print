@@ -50,24 +50,36 @@ public static class AddressGenerator
     /// <summary>
     /// Generiert Beschriftung fuer ein analoges Modul (AI/AO).
     /// Jeder Kanal belegt 2 Bytes (1 Wort).
-    /// ET200SP Analog-Module haben alle Kanal-Anschluesse in einer Klemmenreihe
-    /// (z.B. 6ES7134-6GF00-0AA1 AI 8xI: Klemmen 1-8 = I0+..I7+, Klemmen 9-16 = UV).
-    /// Darum: alle Adressen in Line1, Line2 bleibt leer.
+    /// ET200SP vertikales Etikett hat 8 Plaetze pro Reihe (BU mit 16 Klemmen = 8 oben + 8 unten).
+    /// Adressen werden alternierend verteilt wie bei digital:
+    ///   - Ungerade Kanaele (K1, K3, K5, K7) in Line1 (oben)
+    ///   - Gerade Kanaele   (K0, K2, K4, K6) in Line2 (unten)
+    /// Restplaetze bleiben als leere Slots erhalten (fuer Rahmen-Druck auf Blanko-A4).
     /// </summary>
     public static GeneratedLabel GenerateAnalog(string moduleName, string prefix, int startByte, int channelCount)
     {
-        var channels = new List<string>();
+        const int SlotsPerRow = 8; // ET200SP BaseUnit A0/A1 hat 8 Klemmen pro Reihe
 
-        for (int i = 0; i < channelCount; i++)
+        var oben = new string[SlotsPerRow];
+        var unten = new string[SlotsPerRow];
+        for (int i = 0; i < SlotsPerRow; i++) { oben[i] = string.Empty; unten[i] = string.Empty; }
+
+        int maxChannels = Math.Min(channelCount, SlotsPerRow * 2);
+        for (int k = 0; k < maxChannels; k++)
         {
-            int addr = startByte + (i * 2);
-            channels.Add($"{prefix} {addr}");
+            int addr = startByte + (k * 2);
+            string addressStr = $"{prefix} {addr}";
+            int slotPos = k / 2; // Position 0..7 in der Reihe
+            if (k % 2 == 0)
+                unten[slotPos] = addressStr;
+            else
+                oben[slotPos] = addressStr;
         }
 
         return new GeneratedLabel(
             Header: moduleName,
-            Line1: string.Join("  ", channels),
-            Line2: string.Empty
+            Line1: string.Join("  ", oben),
+            Line2: string.Join("  ", unten)
         );
     }
 

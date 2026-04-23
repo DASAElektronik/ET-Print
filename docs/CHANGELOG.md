@@ -26,17 +26,15 @@
   naechsten Seite gewechselt. Adressen werden NICHT automatisch neu
   generiert — User prueft Variante + Start-Byte und klickt erneut
   "Generieren + Uebertragen".
-- ET200SP Analog-Adressen jetzt korrekt in einer Reihe statt 4+4-Split
-  bei >4 Kanaelen. Entspricht der physischen Klemmenbelegung der
-  Siemens ET200SP AI/AQ-Module (alle Kanaele auf einer Klemmenreihe,
-  andere Reihe = UV). Verifiziert gegen Datenblatt 6ES7134-6GF00-0AA1
-  (AI 8xI): Klemmen 1-8 = I0+..I7+. Tests entsprechend angepasst.
-- Vertikale Etiketten bleiben strukturell 2-zeilig (wie digital). Bei
-  Analog enthaelt die obere Reihe alle Kanal-Adressen, die untere Reihe
-  leere Platzhalter (gleiche Spaltenanzahl wie oben). Beim Blanko-A4-
-  Druck werden so die unbenutzten Klemmenplaetze als leere Rechtecke
-  mit Rahmen sichtbar. Neue Property LabelViewModel.EffectiveLine2Parts
-  + PrintService.EmptyPlaceholders.
+- ET200SP Analog-Adressen jetzt alternierend wie digital verteilt:
+  Ungerade Kanaele (K1, K3, K5, K7) in Line1 (oben), gerade (K0, K2,
+  K4, K6) in Line2 (unten). Fix 8 Plaetze pro Reihe; nicht genutzte
+  Plaetze als leere Slots. Beispiel AI 8xI (8 Kanaele):
+    Oben:  EW 2   EW 6   EW 10  EW 14  (leer) (leer) (leer) (leer)
+    Unten: EW 0   EW 4   EW 8   EW 12  (leer) (leer) (leer) (leer)
+  Die 8 Plaetze entsprechen den Klemmen pro Reihe auf der BU A0/A1.
+- LabelViewModel.Line1Parts/Line2Parts: StringSplitOptions.None statt
+  RemoveEmptyEntries, damit leere Slots in der Reihe erhalten bleiben.
 
 ### Feature
 - **Blanko-A4-Druck**: Checkbox "Gitterlinien drucken (Normalpapier)" umbenannt zu
