@@ -71,4 +71,14 @@ public static class MpModuleCatalog
         string.IsNullOrEmpty(articleNo)
             ? null
             : Entries.FirstOrDefault(e => e.ArticleNo == articleNo);
+
+    /// <summary>Katalog-Eintraege, die zur Familie passen. Fuer 25mm gibt es noch
+    /// keine verifizierten Eintraege -> nur "Benutzerdefiniert".</summary>
+    public static IReadOnlyList<MpCatalogEntry> EntriesForFamily(ProductFamily family)
+    {
+        if (family == ProductFamily.S71500_ET200MP_25mm)
+            return [CustomEntry];
+        // 35mm: alle Eintraege (deren Varianten sind 35mm-Varianten)
+        return Entries;
+    }
 }

@@ -69,16 +69,17 @@ public partial class MpPreviewControl : UserControl
 
         double moduleW = printW / familyInfo.ColumnsPerPage;
 
-        double col0W = moduleW * MpModuleLayoutFactory.Col0Ratio;
-        double col1W = moduleW * MpModuleLayoutFactory.Col1Ratio;
-        double col2W = moduleW * MpModuleLayoutFactory.Col2Ratio;
-        double col3W = moduleW * MpModuleLayoutFactory.Col3Ratio;
+        // Spalten-Anteile familienabhaengig (25mm hat keine Net-Address-Spalte)
+        double col0W = moduleW * familyInfo.Col0Ratio;
+        double col1W = moduleW * familyInfo.Col1Ratio;
+        double col2W = moduleW * familyInfo.Col2Ratio;
+        double col3W = moduleW * familyInfo.Col3Ratio;
         double addrW = col0W + col1W;
 
         double headerH = familyInfo.EstimatedHeaderHeight * PxPerMm;
         double band2HeaderH = familyInfo.EstimatedBand2HeaderHeight * PxPerMm;
         double dataRowH = familyInfo.EstimatedChannelRowHeight * PxPerMm;
-        double bandDataH = MpModuleLayoutFactory.RowsPerHalf * dataRowH;
+        double bandDataH = familyInfo.RowsPerHalf * dataRowH;
 
         PreviewCanvas.Width = FormatDefinitions.PageWidth * PxPerMm;
         PreviewCanvas.Height = FormatDefinitions.PageHeight * PxPerMm;
@@ -108,7 +109,7 @@ public partial class MpPreviewControl : UserControl
             RenderHalfCells(vm, mod, definitions, 0, modX, dataStartY,
                 col0W, col1W, addrW, dataRowH, format.IsVertical, isModSelected);
             RenderNetAddrAndCpu(mod, modX + addrW, dataStartY,
-                col2W, col3W, dataRowH, bandDataH);
+                col2W, col3W, dataRowH, bandDataH, familyInfo.HasNetAddressColumn);
 
             // Multi-Selection-Markierung: orange Umrandung ueber die Streifen-Position
             if (mod.IsChecked)
@@ -173,15 +174,20 @@ public partial class MpPreviewControl : UserControl
 
     private void RenderNetAddrAndCpu(MpModuleViewModel mod,
         double col2X, double dataStartY,
-        double col2W, double col3W, double dataRowH, double bandDataH)
+        double col2W, double col3W, double dataRowH, double bandDataH,
+        bool hasNetAddress)
     {
-        double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
         double fs = mod.FontSize * PtToPx;
 
-        DrawCell(col2X, dataStartY, col2W, blockH,
-            mod.NetAddress1, NetAddrBgBrush, false, fontSize: fs, rotate: true, fontFamily: mod.FontFamily);
-        DrawCell(col2X, dataStartY + blockH, col2W, blockH,
-            mod.NetAddress2, NetAddrBgBrush, false, fontSize: fs, rotate: true, fontFamily: mod.FontFamily);
+        // Net-Address-Spalte nur bei 35mm (25mm hat keine)
+        if (hasNetAddress)
+        {
+            double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
+            DrawCell(col2X, dataStartY, col2W, blockH,
+                mod.NetAddress1, NetAddrBgBrush, false, fontSize: fs, rotate: true, fontFamily: mod.FontFamily);
+            DrawCell(col2X, dataStartY + blockH, col2W, blockH,
+                mod.NetAddress2, NetAddrBgBrush, false, fontSize: fs, rotate: true, fontFamily: mod.FontFamily);
+        }
 
         double col3X = col2X + col2W;
         DrawCell(col3X, dataStartY, col3W, bandDataH,

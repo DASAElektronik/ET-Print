@@ -57,19 +57,24 @@
 - Katalog-Eintraege WP521 ST (7MH4980-1AA01) + WP522 ST (7MH4980-2AA01).
 - 77 Tests (4 neue: SIWAREX-Pinout). Smoke: Pinout-Streifen visuell verifiziert.
 
-### AP5 (Teil 2, offen): 25mm-Template (6ES7592-2AX00) — vollstaendig analysiert
-Excel-Dump ausgewertet (2026-07-03) — 25mm ist strukturell ANDERS als 35mm:
-- **20 Module pro Bogen** (10 Spalten x 2 Baender; 35mm hat 10).
-- Modulbreite **17.36mm** (3 Excel-Spalten), Gesamtbreite 174.7mm.
-- Modulstruktur: **Adresse (colspan 2) + CPU-Name (rotiert)** — KEINE Net-Address-Spalte.
-- Adresse = **1 Zeile pro Kanal** (I 0.1, I 0.2 ...), 16 bzw. 32 Kanaele.
-- 5 Mappen nach Modultyp: 16_DI, 16_DQ, 16_DI_16_DQ, 32_DI, 32_DQ. Raender L25/R6/O14/U19.
+### AP5 (Teil 2): 25mm-Template (6ES7592-2AX00) — IMPLEMENTIERT (2026-07-03)
+Excel-Dump aller 5 Mappen ausgewertet, 25mm-Modell umgesetzt:
+- **20 Module pro Bogen** (10 Spalten x 2 Baender), Modulbreite 17.36mm.
+- Modulstruktur: **Adresse + CPU-Name**, KEINE Net-Address-Spalte (Col2Ratio=0).
+- 2 neue Varianten: **MP25_16** (20 Zeilen colspan-2, keine M/L+-Struktur) und
+  **MP25_32** (20 Zeilen x 2 Spalten = 40 Slots; deckt 16_DI_16_DQ mit ab).
+- Spalten-Ratios sind jetzt **familienabhaengig** (ProductFamilyInfo.Col0-3Ratio +
+  HasNetAddressColumn); Renderer (PrintService/MpPreviewControl) lesen sie von dort,
+  35mm unveraendert. Kein separater Renderpfad noetig.
+- Varianten- UND Katalog-Auswahl familiengefiltert (25mm zeigt nur MP25-Varianten
+  + "Benutzerdefiniert"); neue 25mm-Seiten defaulten auf MP25_16.
+- Generator: 25mm-Digital nutzt GenCount (Bytes) statt Auto-Ableitung -> ein 32-DI
+  fuellt 32 statt 40 Slots (die 8 generischen Reserve-Slots bleiben leer).
+- 96 Tests (9 neu: MP25-Layouts, Familien-Filter, Geometrie/Band-Spalte). Smoke:
+  25mm-Familie -> 20 Module, MP25_16/MP25_32 befuellt, Rendering + v5-Roundtrip
+  visuell + per JSON verifiziert.
 
-Warum offen: Die Renderer (PrintService.CreateMpPage, MpPreviewControl) sind fest auf
-das 35mm-4-Spalten-Modell (Col0-3: addr-L/addr-R/netaddr/cpu) verdrahtet und wuerden
-25mm falsch rendern. Voller Support braucht ein eigenes 25mm-Layout-/Spaltenmodell
-(2 Spalten statt 4) + 5 neue Varianten + AQ 2xU/I ST Katalog. MP25-Geometrie in
-ProductFamily.cs ist mit den vermessenen Werten + Warnkommentar dokumentiert.
+Offen bleibt nur: AQ 2xU/I ST (25mm) als Katalog-Eintrag + Feinmasse per Stahllineal.
 
 ---
 

@@ -162,9 +162,11 @@
   - [x] Vertikale Varianten — strukturidentisch zu horizontalen (nur rotiert), verifiziert
 - [x] DQ 32x24VDC/0.5A HF Klemmenbelegung verifiziert + Katalog-Eintrag (2026-07-03)
 - [x] SIWAREX WP521/WP522 verifiziert (A5E36695151A) — eigene Variante + Katalog (2026-07-03)
-- [ ] Offen: DQ 8x24VDC/2A HF, DI 16x230VAC BA Labels (Katalog-Eintraege)
-- [ ] Offen: 25mm-Template (6ES7592-2AX00) — strukturell anders (5 Mappen/Modultyp,
-      52 Spalten), braucht Merge-Analyse + eigenes Layout-Modell + AQ 2xU/I Katalog
+- [x] 25mm-Template (6ES7592-2AX00) IMPLEMENTIERT (2026-07-03): 20 Module/Bogen,
+      familienabhaengiges Spaltenmodell (Adresse+CPU, keine Net-Address), Varianten
+      MP25_16/MP25_32, familiengefilterte Varianten/Katalog, GenCount-Generator. 96 Tests.
+- [ ] Offen: DQ 8x24VDC/2A HF, DI 16x230VAC BA Labels (35mm-Katalog-Eintraege)
+- [ ] Offen: AQ 2xU/I ST (25mm) Katalog-Eintrag; 25mm-Feinmasse per Stahllineal
 - [ ] Exakte Masse per Stahllineal (wenn Boegen geliefert)
 - [ ] 25mm-Template Variante
 

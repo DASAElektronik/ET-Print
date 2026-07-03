@@ -50,7 +50,51 @@ public class MpModuleLayoutFactoryTests
     [Fact]
     public void All_ContainsAllVariants()
     {
-        Assert.Equal(7, MpModuleLayoutFactory.All.Count);
+        Assert.Equal(9, MpModuleLayoutFactory.All.Count);
+    }
+
+    // 25mm-Varianten: keine M/L+-Struktur, alle Zeilen editierbar.
+    [Fact]
+    public void MP25_16_Has20EditableColspan2Rows()
+    {
+        var cells = MpModuleLayoutFactory.GetLayout(MpModuleVariant.MP25_16).AddressCells;
+        Assert.Equal(20, cells.Length);
+        Assert.All(cells, c => Assert.True(c.IsEditable));
+        Assert.All(cells, c => Assert.Equal(2, c.ColSpan));
+        Assert.All(cells, c => Assert.Equal(1, c.RowSpan));
+    }
+
+    [Fact]
+    public void MP25_32_Has40EditableTwoColumnRows()
+    {
+        var cells = MpModuleLayoutFactory.GetLayout(MpModuleVariant.MP25_32).AddressCells;
+        Assert.Equal(40, cells.Length);
+        Assert.All(cells, c => Assert.True(c.IsEditable));
+        Assert.Equal(20, cells.Count(c => c.StartCol == 0));
+        Assert.Equal(20, cells.Count(c => c.StartCol == 1));
+    }
+
+    [Fact]
+    public void VariantsForFamily_25mm_OnlyMP25Variants()
+    {
+        var v25 = MpModuleLayoutFactory.VariantsForFamily(ProductFamily.S71500_ET200MP_25mm);
+        Assert.Equal(2, v25.Count);
+        Assert.All(v25, l => Assert.True(
+            l.Variant is MpModuleVariant.MP25_16 or MpModuleVariant.MP25_32));
+
+        var v35 = MpModuleLayoutFactory.VariantsForFamily(ProductFamily.S71500_ET200MP);
+        Assert.Equal(7, v35.Count);
+        Assert.DoesNotContain(v35, l =>
+            l.Variant is MpModuleVariant.MP25_16 or MpModuleVariant.MP25_32);
+    }
+
+    [Fact]
+    public void DefaultVariantFor_PicksFamilyAppropriateVariant()
+    {
+        Assert.Equal(MpModuleVariant.MP25_16,
+            MpModuleLayoutFactory.DefaultVariantFor(ProductFamily.S71500_ET200MP_25mm));
+        Assert.Equal(MpModuleVariant.DI_DQ_16,
+            MpModuleLayoutFactory.DefaultVariantFor(ProductFamily.S71500_ET200MP));
     }
 
     // SIWAREX: fester Pinout, 20 Klemmen pro Spalte, beide Spalten identisch,

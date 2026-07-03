@@ -80,7 +80,7 @@ public class MainViewModel : ViewModelBase
         Labels = new ObservableCollection<LabelViewModel>();
         MpModules = new ObservableCollection<MpModuleViewModel>();
         AvailableMpVariants = new ObservableCollection<MpModuleLayout>(
-            Services.MpModuleLayoutFactory.All);
+            Services.MpModuleLayoutFactory.VariantsForFamily(_selectedProductFamily));
         FontSizes = [4, 5, 6, 7, 8, 9, 10];
         AvailableFonts = new ObservableCollection<string>(
             Fonts.SystemFontFamilies
@@ -203,6 +203,12 @@ public class MainViewModel : ViewModelBase
                 foreach (var fmt in FormatDefinitions.GetFormatsForFamily(_selectedProductFamily))
                     AvailableFormats.Add(fmt);
 
+                // Modul-Varianten familiengerecht filtern (25mm vs 35mm)
+                AvailableMpVariants.Clear();
+                foreach (var v in MpModuleLayoutFactory.VariantsForFamily(_selectedProductFamily))
+                    AvailableMpVariants.Add(v);
+                OnPropertyChanged(nameof(AvailableMpArticles));
+
                 // Erstes Format der neuen Familie waehlen — Inhaltsverlust wurde
                 // hier schon bestaetigt, daher kein zweiter Format-Prompt.
                 _suppressContentLossConfirm = true;
@@ -291,7 +297,7 @@ public class MainViewModel : ViewModelBase
 
     // === Modul-Katalog (konkrete Siemens-Module mit exakter Klemmenbelegung) ===
 
-    public IReadOnlyList<MpCatalogEntry> AvailableMpArticles => MpModuleCatalog.Entries;
+    public IReadOnlyList<MpCatalogEntry> AvailableMpArticles => MpModuleCatalog.EntriesForFamily(_selectedProductFamily);
 
     public MpCatalogEntry? SelectedMpArticle
     {
@@ -766,10 +772,12 @@ public class MainViewModel : ViewModelBase
 
     private List<MpModuleViewModel> CreateEmptyMpPage(int moduleCount)
     {
+        // Default-Variante haengt an der Familie (25mm: MP25_16, sonst DI_DQ_16)
+        var defaultVariant = MpModuleLayoutFactory.DefaultVariantFor(_selectedFormat.Family);
         var page = new List<MpModuleViewModel>(moduleCount);
         for (int i = 0; i < moduleCount; i++)
         {
-            var module = new MpModule { ModuleIndex = i };
+            var module = new MpModule { ModuleIndex = i, Variant = defaultVariant };
             module.AddressCells = MpModuleLayoutFactory.CreateCells(module.Variant);
             page.Add(new MpModuleViewModel(module) { ContentChanged = OnMpContentChanged });
         }
@@ -927,8 +935,16 @@ public class MainViewModel : ViewModelBase
 
             if (info.IsBitAddressed)
             {
-                // Digital: Anzahl Bytes = editierbare Zellen / 8
-                int byteCount = Math.Max(1, editableCount / 8);
+                // Byte-Anzahl: 35mm-Varianten haben ein festes Kanalraster -> aus den
+                // editierbaren Zellen ableiten. 25mm-Varianten haben generische 20/40
+                // Slots (mehr als Kanaele) -> GenCount (Bytes) entscheidet, Rest leer.
+                int maxBytes = editableCount / 8;
+                bool is25 = SelectedMpModule.Variant
+                    is MpModuleVariant.MP25_16 or MpModuleVariant.MP25_32;
+                int byteCount = is25
+                    ? Math.Clamp(GenCount, 1, maxBytes)
+                    : Math.Max(1, maxBytes);
+
                 var addresses = new List<string>();
                 for (int b = 0; b < byteCount; b++)
                 {
@@ -936,8 +952,8 @@ public class MainViewModel : ViewModelBase
                     for (int bit = 0; bit < 8; bit++)
                         addresses.Add($"{info.Prefix} {byteNum}.{bit}");
                 }
-                for (int i = 0; i < editableCells.Count && i < addresses.Count; i++)
-                    editableCells[i].Text = addresses[i];
+                for (int i = 0; i < editableCells.Count; i++)
+                    editableCells[i].Text = i < addresses.Count ? addresses[i] : string.Empty;
 
                 // Auto-Advance: um die tatsaechliche Byte-Anzahl weiterschalten
                 if (GenAutoAdvanceAddress)

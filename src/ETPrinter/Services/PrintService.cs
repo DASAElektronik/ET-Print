@@ -530,16 +530,17 @@ public static class PrintService
         double moduleWidthMm = printWidthMm / familyInfo.ColumnsPerPage;
         double moduleW = moduleWidthMm * MmToWpf;
 
-        double col0W = moduleW * MpModuleLayoutFactory.Col0Ratio;
-        double col1W = moduleW * MpModuleLayoutFactory.Col1Ratio;
-        double col2W = moduleW * MpModuleLayoutFactory.Col2Ratio;
-        double col3W = moduleW * MpModuleLayoutFactory.Col3Ratio;
+        // Spalten-Anteile familienabhaengig (25mm hat keine Net-Address-Spalte)
+        double col0W = moduleW * familyInfo.Col0Ratio;
+        double col1W = moduleW * familyInfo.Col1Ratio;
+        double col2W = moduleW * familyInfo.Col2Ratio;
+        double col3W = moduleW * familyInfo.Col3Ratio;
         double addrW = col0W + col1W;
 
         double headerH = familyInfo.EstimatedHeaderHeight * MmToWpf;
         double band2HeaderH = familyInfo.EstimatedBand2HeaderHeight * MmToWpf;
         double dataRowH = familyInfo.EstimatedChannelRowHeight * MmToWpf;
-        double bandDataH = MpModuleLayoutFactory.RowsPerHalf * dataRowH;
+        double bandDataH = familyInfo.RowsPerHalf * dataRowH;
 
         foreach (var mod in modules)
         {
@@ -617,17 +618,20 @@ public static class PrintService
                 }
             }
 
-            // Col 2: Net Address (Zeilen 1-10) + Net Name (Zeilen 11-20)
+            // Col 2: Net Address (Zeilen 1-10) + Net Name (Zeilen 11-20) — nur 35mm
             double col2X = modX + addrW;
-            double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
-            RenderRotatedText(canvas, mod.NetAddress1, col2X, dataStartY, col2W, blockH,
-                mod.FontSize, mod.FontFamily);
-            RenderRotatedText(canvas, mod.NetAddress2, col2X, dataStartY + blockH, col2W, blockH,
-                mod.FontSize, mod.FontFamily);
-            if (printGridLines)
+            if (familyInfo.HasNetAddressColumn)
             {
-                DrawCellBorder(canvas, col2X, dataStartY, col2W, blockH);
-                DrawCellBorder(canvas, col2X, dataStartY + blockH, col2W, blockH);
+                double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
+                RenderRotatedText(canvas, mod.NetAddress1, col2X, dataStartY, col2W, blockH,
+                    mod.FontSize, mod.FontFamily);
+                RenderRotatedText(canvas, mod.NetAddress2, col2X, dataStartY + blockH, col2W, blockH,
+                    mod.FontSize, mod.FontFamily);
+                if (printGridLines)
+                {
+                    DrawCellBorder(canvas, col2X, dataStartY, col2W, blockH);
+                    DrawCellBorder(canvas, col2X, dataStartY + blockH, col2W, blockH);
+                }
             }
 
             // Col 3: CPU-Name

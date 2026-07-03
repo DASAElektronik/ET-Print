@@ -8,7 +8,11 @@ public enum MpModuleVariant
     DQ_230V_8,      // 8 DQ 230V: Gemischtes Pattern
     AI_AQ_8,        // 8 AI/AQ: 5 editierbare 4-Zeilen-Bloecke pro Spalte
     AQ_4,           // 4 AQ: 5 gemergte 4-Zeilen-Bloecke
-    SIWAREX_WP52x   // SIWAREX Waegemodul: fester Pinout (Waegezelle + DI/DQ), 20 Klemmen/Spalte
+    SIWAREX_WP52x,  // SIWAREX Waegemodul: fester Pinout (Waegezelle + DI/DQ), 20 Klemmen/Spalte
+
+    // === 25mm-Module (schmaler, keine Net-Address-Spalte) ===
+    MP25_16,        // 25mm 16 Kanal: 20 Zeilen colspan-2 editierbar, keine Struktur
+    MP25_32         // 25mm 32 Kanal / DI+DQ gemischt: 20 Zeilen x 2 Spalten editierbar
 }
 
 /// <summary>

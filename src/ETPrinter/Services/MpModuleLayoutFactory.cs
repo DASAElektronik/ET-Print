@@ -39,7 +39,31 @@ public static class MpModuleLayoutFactory
 
         [MpModuleVariant.SIWAREX_WP52x] = new(MpModuleVariant.SIWAREX_WP52x, "SIWAREX WP52x (Waegemodul)",
             CreateLayout_SIWAREX()),
+
+        [MpModuleVariant.MP25_16] = new(MpModuleVariant.MP25_16, "25mm 16 Kanal (1 Spalte)",
+            CreateLayout_MP25_16()),
+
+        [MpModuleVariant.MP25_32] = new(MpModuleVariant.MP25_32, "25mm 32 Kanal / DI+DQ (2 Spalten)",
+            CreateLayout_MP25_32()),
     };
+
+    /// <summary>Varianten, die zur Produktfamilie passen (35mm-Standard vs 25mm).</summary>
+    public static IReadOnlyList<MpModuleLayout> VariantsForFamily(ProductFamily family)
+    {
+        bool is25 = family == ProductFamily.S71500_ET200MP_25mm;
+        return _layouts.Values
+            .Where(l => Is25mmVariant(l.Variant) == is25)
+            .ToList();
+    }
+
+    private static bool Is25mmVariant(MpModuleVariant v) =>
+        v is MpModuleVariant.MP25_16 or MpModuleVariant.MP25_32;
+
+    /// <summary>Standard-Variante fuer eine neu angelegte Modul-Seite der Familie.</summary>
+    public static MpModuleVariant DefaultVariantFor(ProductFamily family) =>
+        family == ProductFamily.S71500_ET200MP_25mm
+            ? MpModuleVariant.MP25_16
+            : MpModuleVariant.DI_DQ_16;
 
     public static MpModuleLayout GetLayout(MpModuleVariant variant) => _layouts[variant];
     public static IReadOnlyList<MpModuleLayout> All => _layouts.Values.ToList();
@@ -242,6 +266,33 @@ public static class MpModuleLayoutFactory
                 cells.Add(new(Half: 0, StartRow: row, RowSpan: 1, StartCol: col, ColSpan: 1,
                     IsEditable: false, Label: terminals[row]));
 
+        return cells.ToArray();
+    }
+
+    // =================================================================
+    // 25mm 16 Kanal (16_DI, 16_DQ) — verifiziert gegen Excel 25mm-Template.
+    // 20 Zeilen, je 1 Adresse ueber die volle Adressbreite (colspan 2),
+    // alle editierbar, KEINE M/L+-Strukturzeilen (im 25mm-Template nicht vorhanden).
+    // =================================================================
+    private static MpCellDefinition[] CreateLayout_MP25_16()
+    {
+        var cells = new List<MpCellDefinition>();
+        for (int row = 0; row < RowsPerHalf; row++)
+            cells.Add(new(Half: 0, StartRow: row, RowSpan: 1, StartCol: 0, ColSpan: 2, IsEditable: true));
+        return cells.ToArray();
+    }
+
+    // =================================================================
+    // 25mm 32 Kanal / DI+DQ gemischt (32_DI, 32_DQ, 16_DI_16_DQ) — Excel-verifiziert.
+    // 20 Zeilen x 2 Spalten = 40 Adress-Slots, alle editierbar. Linke Spalte zuerst
+    // (Generator fuellt spaltenweise: links Bytes 0/1, rechts Bytes 2/3 bzw. DI|DQ).
+    // =================================================================
+    private static MpCellDefinition[] CreateLayout_MP25_32()
+    {
+        var cells = new List<MpCellDefinition>();
+        for (int col = 0; col < 2; col++)
+            for (int row = 0; row < RowsPerHalf; row++)
+                cells.Add(new(Half: 0, StartRow: row, RowSpan: 1, StartCol: col, ColSpan: 1, IsEditable: true));
         return cells.ToArray();
     }
 }
