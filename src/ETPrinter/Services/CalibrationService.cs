@@ -15,6 +15,9 @@ public static class CalibrationService
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "ETPrinter", "calibration.json");
 
+    /// <summary>True wenn dieser Rechner bereits eine lokale Kalibrierung hat.</summary>
+    public static bool Exists => File.Exists(FilePath);
+
     public static CalibrationData Load()
     {
         try

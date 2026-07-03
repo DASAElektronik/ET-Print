@@ -42,10 +42,12 @@ public class MainViewModel : ViewModelBase
     private string _inputFontFamily = "Arial";
     private int _inputHeaderFontSize = 9;
     private bool _inputHeaderIsBold = true;
-    private double _inputMarginTop = 20.0;
-    private double _inputMarginLeft = 30.0;
-    private double _inputMarginBottom = 21.0;
-    private double _inputMarginRight = 25.0;
+    // Startwerte = LabelSettings-Defaults (ET200SP), sonst verstellt der erste
+    // Live-Apply drei nicht angefasste Raender auf die abweichenden Input-Werte.
+    private double _inputMarginTop = 20.5;
+    private double _inputMarginLeft = 27.5;
+    private double _inputMarginBottom = 20.5;
+    private double _inputMarginRight = 27.5;
 
     // Guard: blockiert Auto-Apply waehrend die Input-Felder programmatisch
     // geladen werden (z.B. beim Label-Wechsel oder Projekt-Laden).
@@ -138,29 +140,74 @@ public class MainViewModel : ViewModelBase
     // Modultypen fuer ComboBox
     public ModuleTypeInfo[] AvailableModuleTypes => AddressGenerator.ModuleTypes;
 
+    // Unterdrueckt die Inhaltsverlust-Rueckfrage bei programmatischen Wechseln
+    // (Projekt laden, Neues Projekt, Test-Automation).
+    private bool _suppressContentLossConfirm;
+    internal bool SuppressContentLossConfirm
+    {
+        get => _suppressContentLossConfirm;
+        set => _suppressContentLossConfirm = value;
+    }
+
+    private bool HasAnyContent() =>
+        _allPages.Any(p => p.Any(l => l.HasText))
+        || _allMpPages.Any(p => p.Any(m => m.HasText));
+
+    /// <summary>Warnt vor Format-/Familienwechsel, wenn befuellte Etiketten/Module
+    /// verworfen wuerden. True = fortfahren.</summary>
+    private bool ConfirmContentLoss()
+    {
+        if (_suppressContentLossConfirm || !HasAnyContent()) return true;
+        var result = MessageBox.Show(
+            "Beim Wechsel von Druckformat oder Produktfamilie werden alle\n" +
+            "befuellten Etiketten/Module verworfen.\n\nFortfahren?",
+            "Format wechseln", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        return result == MessageBoxResult.Yes;
+    }
+
     public ProductFamilyInfo SelectedProductFamilyInfo
     {
         get => ProductFamilyDefinitions.Get(_selectedProductFamily);
         set
         {
-            if (value is not null && SetProperty(ref _selectedProductFamily, value.Family))
+            if (value is null || value.Family == _selectedProductFamily) return;
+            if (!ConfirmContentLoss())
             {
-                // Ränder auf Family-Defaults setzen
+                // ComboBox-Auswahl asynchron zuruecksetzen (synchrones
+                // PropertyChanged wird vom laufenden Binding-Update verschluckt)
+                Application.Current?.Dispatcher.BeginInvoke(
+                    new Action(() => OnPropertyChanged(nameof(SelectedProductFamilyInfo))));
+                return;
+            }
+            if (SetProperty(ref _selectedProductFamily, value.Family))
+            {
+                // Ränder auf Family-Defaults setzen. Guard verhindert, dass der erste
+                // Input-Setter via Live-Apply die noch alten Input-Werte der vorherigen
+                // Familie in _settings zurueckschreibt (Regression aus 06d52ad).
                 _settings.ResetForFamily(_selectedProductFamily);
-                InputMarginTop = _settings.MarginTop;
-                InputMarginLeft = _settings.MarginLeft;
-                InputMarginBottom = _settings.MarginBottom;
-                InputMarginRight = _settings.MarginRight;
+                _suspendLiveApply = true;
+                try
+                {
+                    InputMarginTop = _settings.MarginTop;
+                    InputMarginLeft = _settings.MarginLeft;
+                    InputMarginBottom = _settings.MarginBottom;
+                    InputMarginRight = _settings.MarginRight;
+                }
+                finally { _suspendLiveApply = false; }
                 OnPropertyChanged(nameof(Settings));
                 OnPropertyChanged(nameof(PreviewMargin));
+                NotifyMpPreviewChanged();
 
                 // Formate filtern
                 AvailableFormats.Clear();
                 foreach (var fmt in FormatDefinitions.GetFormatsForFamily(_selectedProductFamily))
                     AvailableFormats.Add(fmt);
 
-                // Erstes Format der neuen Familie waehlen
-                SelectedFormat = FormatDefinitions.GetDefaultFormat(_selectedProductFamily);
+                // Erstes Format der neuen Familie waehlen — Inhaltsverlust wurde
+                // hier schon bestaetigt, daher kein zweiter Format-Prompt.
+                _suppressContentLossConfirm = true;
+                try { SelectedFormat = FormatDefinitions.GetDefaultFormat(_selectedProductFamily); }
+                finally { _suppressContentLossConfirm = false; }
                 OnPropertyChanged(nameof(SelectedProductFamily));
                 OnPropertyChanged(nameof(BandsPerPage));
                 OnPropertyChanged(nameof(IsMultiBand));
@@ -202,6 +249,7 @@ public class MainViewModel : ViewModelBase
                     value.IsSelected = true;
                 OnPropertyChanged(nameof(SelectedMpModuleInfo));
                 OnPropertyChanged(nameof(SelectedMpVariant));
+                OnPropertyChanged(nameof(SelectedMpArticle));
                 OnPropertyChanged(nameof(HasSelection));
             }
         }
@@ -231,27 +279,76 @@ public class MainViewModel : ViewModelBase
         {
             if (value is not null && _selectedMpModule is not null)
             {
+                // Manuelle Variantenwahl = benutzerdefiniert (Katalog-Artikel abwaehlen)
+                _selectedMpModule.ArticleNumber = null;
                 _selectedMpModule.Variant = value.Variant;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectedMpModuleInfo));
+                OnPropertyChanged(nameof(SelectedMpArticle));
             }
         }
     }
 
-    public string SelectedMpModuleInfo => _selectedMpModule is not null
-        ? $"Modul {_selectedMpModule.ModuleIndex + 1} / {MpModules.Count} (Spalte {_selectedMpModule.ModuleIndex + 1})"
-        : "Kein Modul ausgewaehlt";
+    // === Modul-Katalog (konkrete Siemens-Module mit exakter Klemmenbelegung) ===
+
+    public IReadOnlyList<MpCatalogEntry> AvailableMpArticles => MpModuleCatalog.Entries;
+
+    public MpCatalogEntry? SelectedMpArticle
+    {
+        get => _selectedMpModule is null
+            ? null
+            : MpModuleCatalog.Find(_selectedMpModule.ArticleNumber) ?? MpModuleCatalog.CustomEntry;
+        set
+        {
+            if (value is null || _selectedMpModule is null) return;
+
+            _selectedMpModule.ArticleNumber =
+                string.IsNullOrEmpty(value.ArticleNo) ? null : value.ArticleNo;
+
+            // Generator-Modultyp am Katalogeintrag vorbelegen (DI/DO/AI/AO)
+            if (!string.IsNullOrEmpty(value.ArticleNo))
+            {
+                var typeInfo = AddressGenerator.ModuleTypes.FirstOrDefault(t => t.Type == value.IoType);
+                if (typeInfo is not null)
+                    GenModuleType = typeInfo;
+            }
+
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedMpVariant));
+            OnPropertyChanged(nameof(SelectedMpModuleInfo));
+        }
+    }
+
+    public string SelectedMpModuleInfo
+    {
+        get
+        {
+            if (_selectedMpModule is null) return "Kein Modul ausgewaehlt";
+            var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
+            int band = familyInfo.BandOf(_selectedMpModule.ModuleIndex);
+            int col = familyInfo.ColumnOf(_selectedMpModule.ModuleIndex);
+            return $"Modul {_selectedMpModule.ModuleIndex + 1} / {MpModules.Count} (Spalte {col + 1}, Band {band + 1})";
+        }
+    }
 
     public FormatInfo SelectedFormat
     {
         get => _selectedFormat;
         set
         {
+            if (value is null || value.Format == _selectedFormat.Format) return;
+            if (!ConfirmContentLoss())
+            {
+                Application.Current?.Dispatcher.BeginInvoke(
+                    new Action(() => OnPropertyChanged(nameof(SelectedFormat))));
+                return;
+            }
             if (SetProperty(ref _selectedFormat, value))
             {
                 InitializeLabels();
                 OnPropertyChanged(nameof(HasHeader));
                 OnPropertyChanged(nameof(IsDoubleLine));
+                OnPropertyChanged(nameof(Line2RowHeight));
                 OnPropertyChanged(nameof(IsVertical));
                 OnPropertyChanged(nameof(LabelsPerRow));
                 OnPropertyChanged(nameof(LabelRows));
@@ -308,6 +405,12 @@ public class MainViewModel : ViewModelBase
     public bool HasHeader => _selectedFormat.HasHeader;
     public bool IsDoubleLine => _selectedFormat.RowsPerLabel == 2;
     public bool IsVertical => _selectedFormat.IsVertical;
+
+    // Hoehe der zweiten Adressreihe in der Vertikal-Preview: einzeilige Formate
+    // drucken keine Line2, also auch keine untere Reihe anzeigen (Preview = Druck).
+    public GridLength Line2RowHeight => IsDoubleLine
+        ? new GridLength(1, GridUnitType.Star)
+        : new GridLength(0);
     public int LabelsPerRow => _selectedFormat.LabelsPerRow;
     public int LabelRows => _selectedFormat.LabelRows;
 
@@ -668,9 +771,19 @@ public class MainViewModel : ViewModelBase
         {
             var module = new MpModule { ModuleIndex = i };
             module.AddressCells = MpModuleLayoutFactory.CreateCells(module.Variant);
-            page.Add(new MpModuleViewModel(module));
+            page.Add(new MpModuleViewModel(module) { ContentChanged = OnMpContentChanged });
         }
         return page;
+    }
+
+    // Direktbindungen des MP-Tabs (Header, Netzadressen, Zelltexte, Variante)
+    // mutieren das Model ohne Command — Dirty-Markierung und Preview-Refresh
+    // haengen deshalb am ContentChanged-Callback der Modul-VMs.
+    private void OnMpContentChanged()
+    {
+        if (_suspendLiveApply) return;
+        IsDirty = true;
+        NotifyMpPreviewChanged();
     }
 
     private List<LabelViewModel> CreateEmptyPage(int count)
@@ -683,6 +796,11 @@ public class MainViewModel : ViewModelBase
 
     private void NavigateToPage(int index)
     {
+        // Multi-Selection ist seitenlokal: beim Seitenwechsel ALLE Markierungen
+        // (auch auf unsichtbaren Seiten) aufheben — sonst kopiert Strg+C spaeter
+        // unsichtbar markierte Etiketten einer anderen Seite.
+        ClearChecksOnAllPages();
+
         if (_selectedFormat.IsModuleBased)
         {
             if (index < 0 || index >= _allMpPages.Count) return;
@@ -827,15 +945,33 @@ public class MainViewModel : ViewModelBase
             }
             else
             {
-                // Analog: Anzahl Kanaele = editierbare Zellen
-                var addresses = new List<string>();
-                for (int ch = 0; ch < editableCount; ch++)
-                    addresses.Add($"{info.Prefix} {GenStartByte + ch * 2}");
-                for (int i = 0; i < editableCells.Count && i < addresses.Count; i++)
-                    editableCells[i].Text = addresses[i];
+                // Analog: GenCount Kanaele, SPALTENAUSGEGLICHEN verteilen. Das Excel-
+                // Layout hat 5 generische Bloecke pro Spalte (inkl. MANA/Reserve);
+                // ein AI 8 hat physisch CH0-3 links + CH4-7 rechts, also 4+4 statt 5+3.
+                // Restbloecke bleiben leer (fuer manuelle MANA-Beschriftung).
+                int channelCount = Math.Min(Math.Max(GenCount, 0), editableCount);
+                var byColumn = editableCells
+                    .GroupBy(c => c.StartCol)
+                    .OrderBy(g => g.Key)
+                    .Select(g => g.ToList())
+                    .ToList();
+                int numCols = byColumn.Count;
+
+                // Alle Zellen leeren, dann kanalweise spaltenausgeglichen befuellen
+                foreach (var c in editableCells) c.Text = string.Empty;
+                int ch = 0;
+                for (int colIdx = 0; colIdx < numCols && ch < channelCount; colIdx++)
+                {
+                    // Diese Spalte bekommt ceil(rest / verbleibende Spalten) Kanaele
+                    int remainingCols = numCols - colIdx;
+                    int perCol = (int)Math.Ceiling((channelCount - ch) / (double)remainingCols);
+                    var colCells = byColumn[colIdx];
+                    for (int k = 0; k < perCol && k < colCells.Count; k++)
+                        colCells[k].Text = $"{info.Prefix} {GenStartByte + ch++ * 2}";
+                }
 
                 if (GenAutoAdvanceAddress)
-                    GenStartByte += editableCount * 2;
+                    GenStartByte += channelCount * 2;
             }
 
             // GenCount fuer UI-Anzeige aktualisieren (damit Preview stimmt)
@@ -855,23 +991,54 @@ public class MainViewModel : ViewModelBase
         else if (SelectedLabel is not null)
         {
             // ET200SP: bisherige Logik
+            string line1 = result.Line1;
+            string line2 = result.Line2;
+
+            // Einzeilige Formate drucken Line2 nicht — Adressen kanal-aufsteigend
+            // in Line1 zusammenfuehren statt sie unsichtbar in Line2 abzulegen.
+            if (!IsDoubleLine && !string.IsNullOrWhiteSpace(line2))
+            {
+                line1 = MergeAddressLines(result.Line1, result.Line2);
+                line2 = string.Empty;
+            }
+
             InputHeader = result.Header;
-            InputLine1 = result.Line1;
-            InputLine2 = result.Line2;
+            InputLine1 = line1;
+            InputLine2 = line2;
 
             SelectedLabel.Header = result.Header;
-            SelectedLabel.Line1 = result.Line1;
-            SelectedLabel.Line2 = result.Line2;
+            SelectedLabel.Line1 = line1;
+            SelectedLabel.Line2 = line2;
             ApplyFontToLabel(SelectedLabel);
 
             IsDirty = true;
             StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte}";
 
             if (GenAutoAdvanceAddress)
-                GenStartByte = AddressGenerator.GetNextStartByte(GenModuleType.Type, GenStartByte, GenCount);
+            {
+                // Nur um die tatsaechlich aufs Etikett gepasste Anzahl weiterschalten
+                // (Generator kappt Digital bei 2 Bytes) — sonst gehen Adressen verloren.
+                int effective = AddressGenerator.GetEffectiveCount(GenModuleType.Type, GenCount);
+                GenStartByte = AddressGenerator.GetNextStartByte(GenModuleType.Type, GenStartByte, effective);
+            }
 
             AdvanceToNextLabel();
         }
+    }
+
+    /// <summary>Verschraenkt Zeile 1 (ungerade Bits, oben) und Zeile 2 (gerade Bits,
+    /// unten) slotweise kanal-aufsteigend zu einer Zeile (fuer einzeilige Formate).</summary>
+    private static string MergeAddressLines(string line1, string line2)
+    {
+        var odd = line1.Split("  ", StringSplitOptions.None);
+        var even = line2.Split("  ", StringSplitOptions.None);
+        var merged = new List<string>();
+        for (int i = 0; i < Math.Max(odd.Length, even.Length); i++)
+        {
+            if (i < even.Length && !string.IsNullOrWhiteSpace(even[i])) merged.Add(even[i]);
+            if (i < odd.Length && !string.IsNullOrWhiteSpace(odd[i])) merged.Add(odd[i]);
+        }
+        return string.Join("  ", merged);
     }
 
     private void UpdateGeneratorPreview()
@@ -941,6 +1108,14 @@ public class MainViewModel : ViewModelBase
     public void ClearAllLabelChecks()
     {
         foreach (var l in Labels) l.IsChecked = false;
+    }
+
+    private void ClearChecksOnAllPages()
+    {
+        foreach (var page in _allPages)
+            foreach (var l in page) l.IsChecked = false;
+        foreach (var page in _allMpPages)
+            foreach (var m in page) m.IsChecked = false;
     }
 
     public void ClearAllMpModuleChecks()
@@ -1083,6 +1258,33 @@ public class MainViewModel : ViewModelBase
 
     private void ClearAllLabels()
     {
+        if (_selectedFormat.IsModuleBased)
+        {
+            // ET200MP: alle Modul-Seiten auf eine leere Seite zuruecksetzen
+            _allMpPages.Clear();
+            MpModules.Clear();
+            SelectedMpModule = null;
+            SelectedMpCell = null;
+
+            var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
+            var firstMpPage = CreateEmptyMpPage(familyInfo.ModulesPerPage);
+            _allMpPages.Add(firstMpPage);
+            _currentPageIndex = 0;
+
+            foreach (var vm in firstMpPage)
+                MpModules.Add(vm);
+
+            NotifyPageProperties();
+            NotifyMpPreviewChanged();
+
+            if (MpModules.Count > 0)
+                SelectedMpModule = MpModules[0];
+
+            IsDirty = true;
+            StatusMessage = "Alle Module geloescht";
+            return;
+        }
+
         // Clear all pages and reset to single empty page
         _allPages.Clear();
         Labels.Clear();
@@ -1232,23 +1434,29 @@ public class MainViewModel : ViewModelBase
 
     private void NewProject()
     {
+        // Dirty-Check hat den User schon gefragt — kein zweiter Inhaltsverlust-Prompt
         if (!ConfirmDiscardChanges()) return;
-        _currentFilePath = null;
-        _selectedProductFamily = ProductFamily.ET200SP;
-        AvailableFormats.Clear();
-        foreach (var fmt in FormatDefinitions.GetFormatsForFamily(ProductFamily.ET200SP))
-            AvailableFormats.Add(fmt);
-        OnPropertyChanged(nameof(SelectedProductFamilyInfo));
-        OnPropertyChanged(nameof(SelectedProductFamily));
-        _settings.Reset();
-        ResetSettings();
-        GenModuleName = string.Empty;
-        GenStartByte = 0;
-        GenCount = 2;
-        SelectedFormat = FormatDefinitions.GetDefaultFormat(ProductFamily.ET200SP);
-        IsDirty = false;
-        OnPropertyChanged(nameof(WindowTitle));
-        StatusMessage = "Neues Projekt erstellt";
+        _suppressContentLossConfirm = true;
+        try
+        {
+            _currentFilePath = null;
+            _selectedProductFamily = ProductFamily.ET200SP;
+            AvailableFormats.Clear();
+            foreach (var fmt in FormatDefinitions.GetFormatsForFamily(ProductFamily.ET200SP))
+                AvailableFormats.Add(fmt);
+            OnPropertyChanged(nameof(SelectedProductFamilyInfo));
+            OnPropertyChanged(nameof(SelectedProductFamily));
+            _settings.Reset();
+            ResetSettings();
+            GenModuleName = string.Empty;
+            GenStartByte = 0;
+            GenCount = 2;
+            SelectedFormat = FormatDefinitions.GetDefaultFormat(ProductFamily.ET200SP);
+            IsDirty = false;
+            OnPropertyChanged(nameof(WindowTitle));
+            StatusMessage = "Neues Projekt erstellt";
+        }
+        finally { _suppressContentLossConfirm = false; }
     }
 
     private void SaveProject()
@@ -1269,47 +1477,61 @@ public class MainViewModel : ViewModelBase
             DoSave(dialog.FileName);
     }
 
-    private void DoSave(string filePath)
+    /// <summary>Serialisiert den KOMPLETTEN Projektzustand (alle Seiten aus
+    /// _allPages/_allMpPages). Gemeinsame Quelle fuer DoSave und Test-Automation —
+    /// der Automation-Pfad speicherte frueher nur die sichtbare Seite.</summary>
+    internal LabelProject BuildProject()
+    {
+        // Build pages from _allPages (LabelViewModels -> LabelCells)
+        var pages = _allPages.Select(pageVms => new LabelPage
+        {
+            Labels = pageVms.Select(vm => vm.GetCell()).ToList()
+        }).ToList();
+
+        // MP-Module serialisieren
+        List<MpModulePage>? mpPages = null;
+        if (_selectedFormat.IsModuleBased)
+        {
+            mpPages = _allMpPages.Select(pageMods => new MpModulePage
+            {
+                Modules = pageMods.Select(vm => vm.GetModule()).ToList()
+            }).ToList();
+        }
+
+        return new LabelProject
+        {
+            ProductFamily = _selectedProductFamily,
+            Format = _selectedFormat.Format,
+            Settings = _settings.Clone(),
+            Pages = pages,
+            MpPages = mpPages,
+            CalibrationOffsetX = CalibrationOffsetX,
+            CalibrationOffsetY = CalibrationOffsetY,
+            PrintGridLines = PrintGridLines
+        };
+    }
+
+    private bool DoSave(string filePath)
     {
         try
         {
-            // Build pages from _allPages (LabelViewModels -> LabelCells)
-            var pages = _allPages.Select(pageVms => new LabelPage
-            {
-                Labels = pageVms.Select(vm => vm.GetCell()).ToList()
-            }).ToList();
-
-            // MP-Module serialisieren
-            List<MpModulePage>? mpPages = null;
-            if (_selectedFormat.IsModuleBased)
-            {
-                mpPages = _allMpPages.Select(pageMods => new MpModulePage
-                {
-                    Modules = pageMods.Select(vm => vm.GetModule()).ToList()
-                }).ToList();
-            }
-
-            var project = new LabelProject
-            {
-                ProductFamily = _selectedProductFamily,
-                Format = _selectedFormat.Format,
-                Settings = _settings.Clone(),
-                Pages = pages,
-                MpPages = mpPages,
-                CalibrationOffsetX = CalibrationOffsetX,
-                CalibrationOffsetY = CalibrationOffsetY,
-                PrintGridLines = PrintGridLines
-            };
-            ProjectService.Save(project, filePath);
+            ProjectService.Save(BuildProject(), filePath);
             _currentFilePath = filePath;
             IsDirty = false;
             OnPropertyChanged(nameof(WindowTitle));
             RefreshRecentFiles();
             StatusMessage = $"Gespeichert: {Path.GetFileName(filePath)} ({PageCount} Seiten)";
+            return true;
         }
         catch (Exception ex)
         {
             StatusMessage = $"Speicherfehler: {ex.Message}";
+            // Modal melden: beim Schliessen/Neu/Oeffnen ist die Statusleiste nicht
+            // (mehr) sichtbar — ohne Dialog wuerden Daten kommentarlos verworfen.
+            MessageBox.Show(
+                $"Das Projekt konnte nicht gespeichert werden:\n{ex.Message}",
+                "Speicherfehler", MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
         }
     }
 
@@ -1341,7 +1563,25 @@ public class MainViewModel : ViewModelBase
         try
         {
             var project = ProjectService.Load(filePath);
+            ApplyLoadedProject(project, filePath);
+            StatusMessage = $"Geladen: {Path.GetFileName(filePath)} ({PageCount} Seiten)";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Ladefehler: {ex.Message}";
+        }
+    }
 
+    /// <summary>Uebertraegt ein geladenes Projekt vollstaendig in den ViewModel-Zustand
+    /// (Familie, Format, alle Seiten/Module, Einstellungen, Kalibrierung). Gemeinsame
+    /// Quelle fuer DoOpen und Test-Automation — Gegenstueck zu <see cref="BuildProject"/>.</summary>
+    internal void ApplyLoadedProject(LabelProject project, string? filePath)
+    {
+        // Laden ersetzt den gesamten Zustand — der Aufrufer hat via
+        // ConfirmDiscardChanges bereits gefragt; kein Inhaltsverlust-Prompt.
+        _suppressContentLossConfirm = true;
+        try
+        {
             // ProductFamily setzen (filtert Formate, setzt Raender)
             _selectedProductFamily = project.ProductFamily;
             AvailableFormats.Clear();
@@ -1376,7 +1616,7 @@ public class MainViewModel : ViewModelBase
                                 // Zellen neu generieren falls noetig
                                 if (mod.AddressCells.Count == 0)
                                     mod.AddressCells = MpModuleLayoutFactory.CreateCells(mod.Variant);
-                                return new MpModuleViewModel(mod);
+                                return new MpModuleViewModel(mod) { ContentChanged = OnMpContentChanged };
                             })
                             .ToList();
                         _allMpPages.Add(pageVms);
@@ -1470,9 +1710,15 @@ public class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(HeaderPreviewFontWeight));
             NotifyMpPreviewChanged();
 
-            // Kalibrierung + Druckoptionen
-            CalibrationOffsetX = project.CalibrationOffsetX;
-            CalibrationOffsetY = project.CalibrationOffsetY;
+            // Druckoptionen uebernehmen; Kalibrierung ist MASCHINENspezifisch:
+            // die lokale calibration.json hat Vorrang vor den Projektwerten,
+            // sonst verstellt ein fremdes Projekt den eigenen Druckversatz
+            // (und der naechste Druck persistiert die fremden Werte).
+            if (!CalibrationService.Exists)
+            {
+                CalibrationOffsetX = project.CalibrationOffsetX;
+                CalibrationOffsetY = project.CalibrationOffsetY;
+            }
             PrintGridLines = project.PrintGridLines;
 
             _currentFilePath = filePath;
@@ -1480,12 +1726,8 @@ public class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(WindowTitle));
             RefreshRecentFiles();
             if (Labels.Count > 0) SelectedLabel = Labels[0];
-            StatusMessage = $"Geladen: {Path.GetFileName(filePath)} ({PageCount} Seiten)";
         }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Ladefehler: {ex.Message}";
-        }
+        finally { _suppressContentLossConfirm = false; }
     }
 
     private void RefreshRecentFiles()
@@ -1862,12 +2104,9 @@ public class MainViewModel : ViewModelBase
             };
             if (dialog.ShowDialog() != true)
                 return false;
-            DoSave(dialog.FileName);
+            return DoSave(dialog.FileName);
         }
-        else
-        {
-            DoSave(_currentFilePath);
-        }
-        return true;
+
+        return DoSave(_currentFilePath);
     }
 }

@@ -48,9 +48,52 @@ public class MpModuleLayoutFactoryTests
     }
 
     [Fact]
-    public void All_ContainsAllSixVariants()
+    public void All_ContainsAllVariants()
     {
-        Assert.Equal(6, MpModuleLayoutFactory.All.Count);
+        Assert.Equal(7, MpModuleLayoutFactory.All.Count);
+    }
+
+    // SIWAREX: fester Pinout, 20 Klemmen pro Spalte, beide Spalten identisch,
+    // alle nicht-editierbar mit Funktionslabel (verifiziert A5E36695151A).
+    [Fact]
+    public void SIWAREX_HasFixedPinout_40TerminalsAllLabeled()
+    {
+        var cells = MpModuleLayoutFactory.GetLayout(MpModuleVariant.SIWAREX_WP52x).AddressCells;
+
+        Assert.Equal(40, cells.Length);
+        Assert.All(cells, c => Assert.False(c.IsEditable));
+        Assert.All(cells, c => Assert.False(string.IsNullOrEmpty(c.Label)));
+        // K1 = EXC+, K9 = DQ.L+, K20 = M (linke Spalte)
+        Assert.Equal("EXC+", cells.First(c => c.StartCol == 0 && c.StartRow == 0).Label);
+        Assert.Equal("DQ.L+", cells.First(c => c.StartCol == 0 && c.StartRow == 8).Label);
+        Assert.Equal("M", cells.First(c => c.StartCol == 0 && c.StartRow == 19).Label);
+        // Rechte Spalte identisch
+        Assert.Equal("EXC+", cells.First(c => c.StartCol == 1 && c.StartRow == 0).Label);
+    }
+
+    // AI/AQ: Excel horizontal_8_AI_AQ/4_AQ haben 5 editierbare 4-Zeilen-Bloecke
+    // pro Spalte, KEIN hartkodiertes MANA (Analog-Verdrahtung ist modusabhaengig).
+    [Fact]
+    public void AI_AQ_8_HasFiveEditableBlocksPerColumn_NoStructLabels()
+    {
+        var cells = MpModuleLayoutFactory.GetLayout(MpModuleVariant.AI_AQ_8).AddressCells;
+
+        Assert.Equal(10, cells.Length);
+        Assert.All(cells, c => Assert.True(c.IsEditable));
+        Assert.All(cells, c => Assert.Equal(4, c.RowSpan));
+        Assert.Equal(5, cells.Count(c => c.StartCol == 0));
+        Assert.Equal(5, cells.Count(c => c.StartCol == 1));
+    }
+
+    [Fact]
+    public void AQ_4_HasFiveMergedEditableBlocks_NoStructLabels()
+    {
+        var cells = MpModuleLayoutFactory.GetLayout(MpModuleVariant.AQ_4).AddressCells;
+
+        Assert.Equal(5, cells.Length);
+        Assert.All(cells, c => Assert.True(c.IsEditable));
+        Assert.All(cells, c => Assert.Equal(2, c.ColSpan));
+        Assert.All(cells, c => Assert.Equal(4, c.RowSpan));
     }
 
     [Fact]

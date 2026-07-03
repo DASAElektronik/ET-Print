@@ -174,25 +174,33 @@
 | Rechts | 12.0 mm |
 
 ### Modulstruktur (4 Spalten pro Modul)
-| Spalte | Excel-Breite | Anteil | Inhalt |
-|--------|-------------|--------|--------|
-| Col 0  | 1499        | 32.8%  | Klemmen links (linke Modulseite) |
-| Col 1  | 1499        | 32.8%  | Klemmen rechts (rechte Modulseite) |
-| Col 2  | 804         | 17.6%  | Netzadresse (90 Grad, merged 10 Zeilen) |
-| Col 3  | 768         | 16.8%  | CPU-Name (90 Grad, merged 20 Zeilen) |
+| Spalte | Excel-Breite (pt / mm) | Anteil | Inhalt |
+|--------|------------------------|--------|--------|
+| Col 0  | 31.5 / 11.11           | 32.7%  | Klemmen links (linke Modulseite) |
+| Col 1  | 31.5 / 11.11           | 32.7%  | Klemmen rechts (rechte Modulseite) |
+| Col 2  | 17.1 / 6.03            | 17.8%  | Net Address (Zeilen 1-10) + Net Name (11-20), 90 Grad |
+| Col 3  | 16.2 / 5.71            | 16.8%  | CPU-Name (90 Grad, merged 20 Zeilen) |
 
-### Zeilenhoehen
-| Zeile  | Twips | ~mm  | Inhalt |
-|--------|-------|------|--------|
-| 0      | 1455  | 25.7 | Modul-Header (Device/Module/Slot) |
-| 1-8    | 315   | 5.6  | Kanalgruppe a/c (8 Kanaele) |
-| 9      | 330   | 5.8  | M (Masse) Trennklemme |
-| 10-17  | 315   | 5.6  | Kanalgruppe b/d (8 Kanaele) |
-| 18     | 315   | 5.6  | L+ (Power) |
-| 19     | 315   | 5.6  | M (Ground) |
-| 20     | 330   | 5.8  | (leer) |
-| 21     | 1170  | 20.6 | Modul-Header (gleicher Text wie Zeile 0) |
-| 22-41  |       |      | (gleiche Struktur wie 1-20 fuer untere Haelfte) |
+Streifenbreite laut Excel: 96.3pt = **33.97mm** (App rechnet aktuell (210-25-12)/5 = 34.6mm).
+Die PageSetup-Raender des Excel (L:35 R:22 O:25 U:20) sind unbrauchbar — der Inhalt
+(169.9 x 269.7mm) passt damit nicht auf A4; vermutlich setzt das Druck-Makro eigene Werte.
+Endgueltige Breite/Pitch bei Lieferung der Boegen per Stahllineal verifizieren.
+
+### Zeilenhoehen (aus Excel_Template_S71500_ET200MP.xls, Sheet horizontal_32_DI_DQ)
+| Zeile  | Punkte | ~mm  | Inhalt (Klemme links / rechts, DI 32) |
+|--------|--------|------|----------------------------------------|
+| 0      | 72.8   | 25.7 | Modul-Header (Device/Module/Slot) |
+| 1-8    | 15.8   | 5.6  | K1-8 / K21-28: Kanalgruppe a bzw. c |
+| 9-10   | 15.8   | 5.6  | K9-10 / K29-30: unbelegt (leer) |
+| 11-18  | 15.8   | 5.6  | K11-18 / K31-38: Kanalgruppe b bzw. d |
+| 19     | 15.8   | 5.6  | K19 / K39: L+ (Power) |
+| 20     | 15.8   | 5.6  | K20 / K40: M (Ground) |
+| 21     | 58.5   | 20.6 | Header des ZWEITEN Bandes (eigener Streifen) |
+| 22-41  | 15.8   | 5.6  | Band 2: gleiche Struktur wie Zeilen 1-20 |
+
+Hinweis: Jede 5. Klemmenzeile (5, 10, 15, 20 innerhalb eines Bandes) ist 16.5 Punkte
+(~5.8mm) statt 15.8 hoch. Im Excel hat jedes Band eigene Header-, Net-Address-,
+Net-Name- und CPU-Name-Bloecke (Net Address = Zeilen 1-10, Net Name = Zeilen 11-20).
 
 ### Physische Klemmenbelegung (Quelle: Siemens Equipment Manual)
 
@@ -215,7 +223,7 @@ Klemme | Belegung         Klemme | Belegung
   6    | CH5  (DI a.5)      26   | CH21 (DI c.5)
   7    | CH6  (DI a.6)      27   | CH22 (DI c.6)
   8    | CH7  (DI a.7)      28   | CH23 (DI c.7)
-  9    | (M - Masse)        29   | (M - Masse)
+  9    | (leer)              29   | (leer)
  10    | (leer)              30   | (leer)
 ```
 
@@ -231,10 +239,57 @@ Klemme | Belegung         Klemme | Belegung
  15    | CH12 (DI b.4)      35   | CH28 (DI d.4)
  16    | CH13 (DI b.5)      36   | CH29 (DI d.5)
  17    | CH14 (DI b.6)      37   | CH30 (DI d.6)
- 18    | CH15 (DI b.7)      38   | CH31 (DI d.7) / 2L+
- 19    | 1L+  (Power)        39   | 2M   (Ground)
- 20    | 1M   (Ground)       40   | (leer)
+ 18    | CH15 (DI b.7)      38   | CH31 (DI d.7)
+ 19    | 1L+  (Power)        39   | 2L+  (Power)
+ 20    | 1M   (Ground)       40   | 2M   (Ground)
 ```
+
+> Verifiziert am Blockdiagramm (Figure 3-1) des Equipment Manuals A5E03485935-AH (05/2022):
+> K9/K10/K29/K30 sind unbelegt; Versorgung liegt auf K19/K20 (Gruppe 1) und K39/K40 (Gruppe 2).
+> Potentialbruecken verbinden K19-K39 (xL+) und K20-K40 (xM).
+
+#### 16-Kanal-Module (Vorlage 16_DI_DQ) — Klemmenbelegung je Modultyp
+
+Alle 16er-Typen: K1-8 = CH0-7, K11-18 = CH8-15, rechte Seite (K21-40) unbelegt.
+Die Struktur-Klemmen unterscheiden sich aber je Modultyp (verifiziert an den Equipment Manuals):
+
+| Klemme | DI 16 BA (-1BH10) | DI 16 HF (-1BH00) | DQ 16 ST (6ES7522-1BH00) |
+|--------|-------------------|-------------------|---------------------------|
+| 9      | (leer)            | (leer)            | 1L+ |
+| 10     | (leer)            | (leer)            | 1M  |
+| 19     | (leer)            | L+                | 2L+ |
+| 20     | M                 | M                 | 2M  |
+
+Seit v3.0 uebernimmt der **Modul-Katalog** (MpModuleCatalog) die exakten Labels je
+konkretem Modul; ohne Katalog-Auswahl gilt die generische DI-16-HF-Belegung.
+
+#### DQ 32x24VDC/0.5A HF (6ES7522-1BL01-0AB0) — verifiziert (109480716)
+
+Anders als DI 32 sind hier K9/K10 und K19/K20 belegt (Potentialbruecken 9-29/10-30/
+19-39/20-40, 24V DC auf 19/20):
+
+| Klemme | links | rechts |
+|--------|-------|--------|
+| 9/29   | 1L+   | 3L+ |
+| 10/30  | 1M    | 3M  |
+| 19/39  | 2L+   | 4L+ |
+| 20/40  | 2M    | 4M  |
+
+#### 8x230VAC/5A ST Relay (6ES7522-5HF00-0AB0) — verifiziert (A5E03485590-AD)
+
+Relais-Modul: jeder Kanal = 2 Klemmen (Kontakt). Links CH0-3 = K1-2/K4-5/K11-12/K14-15,
+rechts CH4-7 = K21-22/K24-25/K31-32/K35-36. Versorgung 24V DC auf K19/20 (L+/M) und
+K39/40. Die Bloecke zwischen den Kanaelen sind Luecken; das Excel-Template laesst sie
+(wie alle 230V-Struktur-Bloecke) LEER — daher keine App-Labels.
+
+#### AI 8xU/I/RTD/TC ST + AQ 4xU/I ST — modusabhaengig (KEINE feste Belegung)
+
+Die Analog-Manuals (A5E...KF / A5E03484696-AC) zeigen pro Verdrahtungsmodus
+(U/I/RTD/TC bzw. Spannungs-/Stromausgang) ein EIGENES Diagramm — es gibt keine feste
+Klemmen-Kanal-Zuordnung. Das Excel-Template bietet deshalb **5 generische 4-Zeilen-
+Bloecke pro Spalte** (kein hartkodiertes MANA). Der Generator verteilt GenCount Kanaele
+spaltenausgeglichen (AI 8: CH0-3 links, CH4-7 rechts), der 5. Block bleibt fuer MANA/
+Reserve frei.
 
 **Kanalgruppen und Byte-Zuordnung:**
 - Gruppe a: CH0-CH7   = Byte 0 (E x.0 bis E x.7) — Klemmen 1-8 links

@@ -81,6 +81,11 @@ public class TestAutomationService : IDisposable
             catch (Exception ex)
             {
                 Log.Error($"Pipe-Fehler: {ex.GetType().Name}", ex);
+                // Backoff gegen Busy-Spin: schlaegt schon die Pipe-Erzeugung fehl
+                // (z.B. Pipe-Name durch zweite Instanz belegt), wuerde die Schleife
+                // sonst tausendfach pro Sekunde loggen und die Log-Rotation fluten.
+                try { await Task.Delay(TimeSpan.FromSeconds(1), ct); }
+                catch (OperationCanceledException) { break; }
             }
         }
     }
@@ -121,6 +126,7 @@ public class TestAutomationService : IDisposable
                 "select-cell" => await RunOnUI(() => SelectMpCell(arg)),
                 "set-cell-text" => await RunOnUI(() => SetMpCellText(arg)),
                 "set-module-variant" => await RunOnUI(() => SetModuleVariant(arg)),
+                "set-module-article" => await RunOnUI(() => SetModuleArticle(arg)),
                 "list-variants" => await RunOnUI(() => ListVariants()),
                 "mp-state" => await RunOnUI(() => GetMpState()),
                 "set-generator" => await RunOnUI(() => SetGenerator(arg)),
@@ -142,7 +148,7 @@ public class TestAutomationService : IDisposable
     private Task<string> RunOnUI(Func<string> action)
     {
         var tcs = new TaskCompletionSource<string>();
-        _mainWindow.Dispatcher.InvokeAsync(() =>
+        var operation = _mainWindow.Dispatcher.InvokeAsync(() =>
         {
             try { tcs.SetResult(action()); }
             catch (Exception ex)
@@ -151,6 +157,10 @@ public class TestAutomationService : IDisposable
                 tcs.SetResult(Error($"{ex.GetType().Name}: {ex.Message}"));
             }
         });
+        // Beim App-Shutdown bricht der Dispatcher wartende Operationen ab —
+        // ohne diesen Hook bliebe die TCS unerfuellt und Dispose() hinge
+        // die vollen 2 Sekunden auf dem verwaisten ListenLoop-Task.
+        operation.Aborted += (_, _) => tcs.TrySetResult(Error("Abgebrochen (App-Shutdown)"));
         return tcs.Task;
     }
 
@@ -222,7 +232,11 @@ public class TestAutomationService : IDisposable
         if (!Enum.TryParse<ProductFamily>(familyName, true, out var family))
             return Error($"Unbekannte Familie: {familyName}. Gueltig: {string.Join(", ", Enum.GetNames<ProductFamily>())}");
 
-        _viewModel.SelectedProductFamilyInfo = ProductFamilyDefinitions.Get(family);
+        // Automation ist absichtlich — keine modale Inhaltsverlust-Rueckfrage
+        // (wuerde headless haengen).
+        _viewModel.SuppressContentLossConfirm = true;
+        try { _viewModel.SelectedProductFamilyInfo = ProductFamilyDefinitions.Get(family); }
+        finally { _viewModel.SuppressContentLossConfirm = false; }
         return Ok($"Familie gewechselt zu {family}");
     }
 
@@ -236,7 +250,9 @@ public class TestAutomationService : IDisposable
         if (match == null)
             return Error($"Format nicht gefunden: {formatArg}. Verfuegbar: {string.Join(", ", _viewModel.AvailableFormats.Select(f => f.Format.ToString()))}");
 
-        _viewModel.SelectedFormat = match;
+        _viewModel.SuppressContentLossConfirm = true;
+        try { _viewModel.SelectedFormat = match; }
+        finally { _viewModel.SuppressContentLossConfirm = false; }
         return Ok($"Format gewechselt zu {match.DisplayName}");
     }
 
@@ -402,7 +418,19 @@ public class TestAutomationService : IDisposable
         if (!int.TryParse(indexStr, out int index) || index < 0 || index >= _viewModel.MpModules.Count)
             return Error($"Ungueltiger Modul-Index: {indexStr}. Gueltig: 0-{_viewModel.MpModules.Count - 1}");
         _viewModel.SelectedMpModule = _viewModel.MpModules[index];
-        return Ok($"Modul {index} ausgewaehlt (Spalte {index + 1})");
+        var info = ProductFamilyDefinitions.Get(_viewModel.SelectedFormat.Family);
+        return Ok($"Modul {index} ausgewaehlt (Spalte {info.ColumnOf(index) + 1}, Band {info.BandOf(index) + 1})");
+    }
+
+    private string SetModuleArticle(string articleNo)
+    {
+        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewaehlt");
+        var entry = MpModuleCatalog.Find(articleNo);
+        if (entry is null && !string.IsNullOrEmpty(articleNo) && articleNo != "custom")
+            return Error($"Unbekannter Artikel: {articleNo}. Verfuegbar: " +
+                string.Join(", ", MpModuleCatalog.Entries.Where(e => e.ArticleNo != "").Select(e => e.ArticleNo)));
+        _viewModel.SelectedMpArticle = entry ?? MpModuleCatalog.CustomEntry;
+        return Ok($"Modul-Artikel gesetzt: {(entry?.DisplayName ?? "Benutzerdefiniert")} (Variante {_viewModel.SelectedMpModule.Variant})");
     }
 
     private string SetModuleHeader(string text)
@@ -571,41 +599,9 @@ public class TestAutomationService : IDisposable
             return Error($"save-project: {validationError}");
         try
         {
-            var pages = new List<LabelPage>();
-            if (!_viewModel.IsModuleBased)
-            {
-                // SP: ueber reflection oder direkt via Save-Logik
-            }
-
-            // Direkt das SaveCommand mit Pfad triggern geht nicht einfach,
-            // daher nutzen wir ProjectService direkt
-            var project = new LabelProject
-            {
-                ProductFamily = _viewModel.SelectedProductFamily,
-                Format = _viewModel.SelectedFormat.Format,
-                Settings = _viewModel.Settings.Clone(),
-                CalibrationOffsetX = _viewModel.CalibrationOffsetX,
-                CalibrationOffsetY = _viewModel.CalibrationOffsetY,
-                PrintGridLines = _viewModel.PrintGridLines
-            };
-
-            // Labels/Module sammeln
-            if (_viewModel.IsModuleBased)
-            {
-                project.MpPages = [new MpModulePage
-                {
-                    Modules = _viewModel.MpModules.Select(m => m.GetModule()).ToList()
-                }];
-            }
-            else
-            {
-                project.Pages = [new LabelPage
-                {
-                    Labels = _viewModel.Labels.Select(l => l.GetCell()).ToList()
-                }];
-            }
-
-            ProjectService.Save(project, path);
+            // BuildProject serialisiert ALLE Seiten (_allPages/_allMpPages) —
+            // frueher wurde hier nur die sichtbare Seite geschrieben (Datenverlust).
+            ProjectService.Save(_viewModel.BuildProject(), path);
             return Ok($"Gespeichert: {path}");
         }
         catch (Exception ex)
@@ -623,34 +619,12 @@ public class TestAutomationService : IDisposable
             return Error($"Datei nicht gefunden: {path}");
         try
         {
-            // Lade ueber die ViewModel-Methode (reflektiert DoOpen)
+            // Vollstaendige Ladelogik aus dem ViewModel wiederverwenden —
+            // laedt alle Seiten, SP-Labels UND Einstellungen (frueher wurde
+            // hier nur MpPages[0] geladen, SP-Projekte kamen leer an).
             var project = ProjectService.Load(path);
-
-            // ProductFamily setzen
-            _viewModel.SelectedProductFamilyInfo = ProductFamilyDefinitions.Get(project.ProductFamily);
-
-            // Format setzen
-            var formatInfo = FormatDefinitions.Get(project.Format);
-            if (formatInfo.Family != project.ProductFamily)
-                formatInfo = FormatDefinitions.GetDefaultFormat(project.ProductFamily);
-            _viewModel.SelectedFormat = formatInfo;
-
-            // Daten laden — bei MP die Module
-            if (formatInfo.IsModuleBased && project.MpPages?.Count > 0)
-            {
-                // Module manuell in die MpModules laden
-                _viewModel.MpModules.Clear();
-                foreach (var mod in project.MpPages[0].Modules)
-                {
-                    if (mod.AddressCells.Count == 0)
-                        mod.AddressCells = MpModuleLayoutFactory.CreateCells(mod.Variant);
-                    _viewModel.MpModules.Add(new MpModuleViewModel(mod));
-                }
-                if (_viewModel.MpModules.Count > 0)
-                    _viewModel.SelectedMpModule = _viewModel.MpModules[0];
-            }
-
-            return Ok($"Geladen: {path}");
+            _viewModel.ApplyLoadedProject(project, path);
+            return Ok($"Geladen: {path} ({_viewModel.PageCount} Seiten)");
         }
         catch (Exception ex)
         {

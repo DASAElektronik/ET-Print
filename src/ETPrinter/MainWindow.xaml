@@ -271,7 +271,21 @@
                                 <TextBlock Text="{Binding SelectedMpModuleInfo, Mode=OneWay}"
                                            Foreground="#0078D4" Margin="0,0,0,8"/>
 
-                                <Label Content="Modulvariante:" Padding="0" Margin="0,0,0,2"/>
+                                <Label Content="Siemens-Modul:" Padding="0" Margin="0,0,0,2"/>
+                                <ComboBox ItemsSource="{Binding AvailableMpArticles}"
+                                          SelectedItem="{Binding SelectedMpArticle}"
+                                          Margin="0,0,0,8">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock>
+                                                <Run Text="{Binding DisplayName, Mode=OneWay}"/>
+                                                <Run Text="{Binding ArticleNo, Mode=OneWay}" Foreground="Gray" FontSize="10"/>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+
+                                <Label Content="Modulvariante (Layout):" Padding="0" Margin="0,0,0,2"/>
                                 <ComboBox ItemsSource="{Binding AvailableMpVariants}"
                                           SelectedItem="{Binding SelectedMpVariant}"
                                           DisplayMemberPath="DisplayName"
@@ -286,7 +300,7 @@
                                 <TextBox Text="{Binding SelectedMpModule.NetAddress1, UpdateSourceTrigger=PropertyChanged}"
                                          Margin="0,0,0,4"/>
 
-                                <Label Content="Netzadresse (Block 2 / Net Name):" Padding="0" Margin="0,0,0,2"/>
+                                <Label Content="Netzname (Block 2):" Padding="0" Margin="0,0,0,2"/>
                                 <TextBox Text="{Binding SelectedMpModule.NetAddress2, UpdateSourceTrigger=PropertyChanged}"
                                          Margin="0,0,0,4"/>
 
@@ -625,7 +639,20 @@
                                                                        FontFamily="{Binding PreviewFontFamily}"
                                                                        TextTrimming="CharacterEllipsis"
                                                                        HorizontalAlignment="Center"
-                                                                       Foreground="#37474F"/>
+                                                                       Foreground="#37474F">
+                                                                <TextBlock.Style>
+                                                                    <!-- Einzeilige Formate drucken Line2 nicht — Preview = Druck -->
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding DataContext.IsDoubleLine,
+                                                                                         RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                         Value="False">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
                                                         </StackPanel>
 
                                                         <!-- VERTIKAL: Einzelne Adress-Rechtecke pro Zeile -->
@@ -644,7 +671,12 @@
                                                             </Grid.Style>
                                                             <Grid.RowDefinitions>
                                                                 <RowDefinition Height="*"/>
-                                                                <RowDefinition Height="*"/>
+                                                                <!-- Einzeilige Formate: untere Reihe auf 0 (Druck rendert dort
+                                                                     nur bei RowsPerLabel >= 2) — Preview = Druck. Bindung ueber
+                                                                     Application.Current, da RowDefinition kein Visual-Tree-Element
+                                                                     ist und RelativeSource dort nicht traegt. -->
+                                                                <RowDefinition Height="{Binding MainWindow.DataContext.Line2RowHeight,
+                                                                               Source={x:Static Application.Current}}"/>
                                                             </Grid.RowDefinitions>
                                                             <!-- Zeile 1: Ungerade Bits / Analog-Adressen -->
                                                             <ItemsControl Grid.Row="0" ItemsSource="{Binding Line1Parts}">

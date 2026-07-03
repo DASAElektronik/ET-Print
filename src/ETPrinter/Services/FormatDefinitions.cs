@@ -121,10 +121,10 @@ public static class FormatDefinitions
 
         if (format.BandsPerPage > 1)
         {
-            // ET200MP: 2 Baender mit Header-Zeile und Trennband
+            // ET200MP: 2 Baender mit eigenen Header-Zeilen (25.7mm oben, 20.6mm unten)
             var familyInfo = ProductFamilyDefinitions.Get(format.Family);
-            double totalBandHeight = printHeight - familyInfo.EstimatedSeparatorHeight
-                - (familyInfo.EstimatedHeaderHeight * format.BandsPerPage);
+            double totalBandHeight = printHeight - familyInfo.EstimatedHeaderHeight
+                - familyInfo.EstimatedBand2HeaderHeight;
             double bandHeight = totalBandHeight / format.BandsPerPage;
             cellHeight = bandHeight / format.ChannelRowsPerBand;
 

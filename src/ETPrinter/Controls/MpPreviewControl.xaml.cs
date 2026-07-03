@@ -11,12 +11,14 @@ namespace ETPrinter.Controls;
 
 /// <summary>
 /// Canvas-basierte Vorschau fuer ET200MP Module.
-/// Jedes Modul hat 2 Haelften (obere + untere), die zum selben physischen Streifen gehoeren.
-/// 5 Module (Spalten) pro A4-Seite.
+/// Der A4-Bogen hat 10 Streifen-Positionen: Band 0 (oben, Header 25.7mm) und
+/// Band 1 (unten, Header 20.6mm) mit je 5 Spalten. Jede Position = 1 Modul.
 /// </summary>
 public partial class MpPreviewControl : UserControl
 {
     private const double PxPerMm = 3.0;
+    // FontSize ist in Punkt (docs/PRINT-FORMATS: 7pt Standard); 1pt = 25.4/72 mm.
+    private const double PtToPx = PxPerMm * 25.4 / 72.0;
 
     private static readonly Brush EmptyBrush = new SolidColorBrush(Color.FromRgb(240, 240, 240));
     private static readonly Brush FilledBrush = new SolidColorBrush(Color.FromRgb(208, 232, 208));
@@ -65,8 +67,7 @@ public partial class MpPreviewControl : UserControl
         double marginL = settings.MarginLeft * PxPerMm;
         double marginT = settings.MarginTop * PxPerMm;
 
-        int modulesPerPage = familyInfo.ModulesPerPage;
-        double moduleW = printW / modulesPerPage;
+        double moduleW = printW / familyInfo.ColumnsPerPage;
 
         double col0W = moduleW * MpModuleLayoutFactory.Col0Ratio;
         double col1W = moduleW * MpModuleLayoutFactory.Col1Ratio;
@@ -75,76 +76,47 @@ public partial class MpPreviewControl : UserControl
         double addrW = col0W + col1W;
 
         double headerH = familyInfo.EstimatedHeaderHeight * PxPerMm;
-        double separatorH = familyInfo.EstimatedSeparatorHeight * PxPerMm;
+        double band2HeaderH = familyInfo.EstimatedBand2HeaderHeight * PxPerMm;
         double dataRowH = familyInfo.EstimatedChannelRowHeight * PxPerMm;
-        double halfDataH = MpModuleLayoutFactory.RowsPerHalf * dataRowH;
+        double bandDataH = MpModuleLayoutFactory.RowsPerHalf * dataRowH;
 
         PreviewCanvas.Width = FormatDefinitions.PageWidth * PxPerMm;
         PreviewCanvas.Height = FormatDefinitions.PageHeight * PxPerMm;
 
         foreach (var mod in vm.MpModules)
         {
-            int col = mod.ModuleIndex;
+            // 10 Positionen: Band 0 oben (hoher Header), Band 1 unten (flacher Header)
+            int band = familyInfo.BandOf(mod.ModuleIndex);
+            int col = familyInfo.ColumnOf(mod.ModuleIndex);
             double modX = marginL + col * moduleW;
             bool isModSelected = mod == vm.SelectedMpModule;
 
-            var layout = MpModuleLayoutFactory.GetLayout(mod.Variant);
+            // Katalog-Belegung (konkretes Siemens-Modul) oder Varianten-Default
+            var definitions = MpModuleLayoutFactory.GetDefinitions(mod.GetModule());
 
-            // === EIN ZUSAMMENHAENGENDER STREIFEN pro Modul ===
+            double modHeaderH = band == 0 ? headerH : band2HeaderH;
+            double headerY = band == 0 ? marginT : marginT + headerH + bandDataH;
 
-            // Header (einmal, oben) — globaler Header-Style aus Settings.
-            // Preview-Skalierung: Canvas rendert kleiner als A4-Druck, darum Faktor 0.7.
-            double headerFs = settings.HeaderFontSize * 0.7;
-            double headerY = marginT;
-            DrawCell(modX, headerY, moduleW, headerH,
-                mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: headerFs, isBold: settings.HeaderIsBold);
+            // Header — globaler Header-Style aus Settings.
+            double headerFs = settings.HeaderFontSize * PtToPx;
+            DrawCell(modX, headerY, moduleW, modHeaderH,
+                mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: headerFs,
+                isBold: settings.HeaderIsBold, fontFamily: mod.FontFamily,
+                clickAction: () => SelectModule(vm, mod));
 
-            // Obere Haelfte (Half 0) — direkt unter Header
-            double half0DataY = headerY + headerH;
-            RenderHalfCells(vm, mod, layout, 0, modX, half0DataY,
+            double dataStartY = headerY + modHeaderH;
+            RenderHalfCells(vm, mod, definitions, 0, modX, dataStartY,
                 col0W, col1W, addrW, dataRowH, format.IsVertical, isModSelected);
-            RenderNetAddrAndCpu(mod, 0, modX + addrW, half0DataY,
-                col2W, col3W, dataRowH, halfDataH);
+            RenderNetAddrAndCpu(mod, modX + addrW, dataStartY,
+                col2W, col3W, dataRowH, bandDataH);
 
-            // Untere Etiketten-Position (immer rendern — leere Gitterstruktur wenn kein Inhalt)
-            double dividerY = half0DataY + halfDataH;
-            double dividerH = separatorH;
-
-            // Separator/Header der unteren Position
-            DrawCell(modX, dividerY, moduleW, dividerH,
-                "", HeaderBgBrush, false, fontSize: 5);
-
-            double half1DataY = dividerY + dividerH;
-
-            bool hasHalf1 = layout.AddressCells.Any(c => c.Half == 1);
-            if (hasHalf1)
-            {
-                // Zellen der unteren Position rendern
-                RenderHalfCells(vm, mod, layout, 1, modX, half1DataY,
-                    col0W, col1W, addrW, dataRowH, format.IsVertical, isModSelected);
-            }
-            else
-            {
-                // Leere Gitterstruktur fuer die untere Position
-                for (int row = 0; row < MpModuleLayoutFactory.RowsPerHalf; row++)
-                {
-                    double cellY = half1DataY + row * dataRowH;
-                    DrawCell(modX, cellY, addrW, dataRowH, "", EmptyBrush, false);
-                }
-            }
-
-            // NetAddr + CpuName der unteren Position (immer rendern)
-            RenderNetAddrAndCpu(mod, 1, modX + addrW, half1DataY,
-                col2W, col3W, dataRowH, halfDataH);
-
-            // Multi-Selection-Markierung: orange Umrandung ueber das gesamte Modul
+            // Multi-Selection-Markierung: orange Umrandung ueber die Streifen-Position
             if (mod.IsChecked)
             {
-                double totalModH = headerH + halfDataH + separatorH + halfDataH;
                 var checkedFrame = new Rectangle
                 {
                     Width = moduleW,
-                    Height = totalModH,
+                    Height = modHeaderH + bandDataH,
                     Stroke = new SolidColorBrush(Color.FromRgb(255, 149, 0)),
                     StrokeThickness = 2,
                     Fill = Brushes.Transparent,
@@ -158,14 +130,14 @@ public partial class MpPreviewControl : UserControl
     }
 
     private void RenderHalfCells(MainViewModel vm, MpModuleViewModel mod,
-        MpModuleLayout layout, int half,
+        MpCellDefinition[] definitions, int half,
         double modX, double dataStartY,
         double col0W, double col1W, double addrW, double dataRowH,
         bool isVertical, bool isModSelected)
     {
-        for (int i = 0; i < mod.AddressCells.Count && i < layout.AddressCells.Length; i++)
+        for (int i = 0; i < mod.AddressCells.Count && i < definitions.Length; i++)
         {
-            var def = layout.AddressCells[i];
+            var def = definitions[i];
             if (def.Half != half) continue;
 
             var cellVm = mod.AddressCells[i];
@@ -192,34 +164,34 @@ public partial class MpPreviewControl : UserControl
 
             DrawCell(cellX, cellY, cellW, cellH,
                 displayText, bg, isCellSelected,
-                fontSize: 5, rotate: isVertical && def.IsEditable,
+                fontSize: mod.FontSize * PtToPx, rotate: isVertical && def.IsEditable,
+                isBold: mod.IsBold, fontFamily: mod.FontFamily,
                 foreground: def.IsEditable ? null : StructTextBrush,
                 clickAction: def.IsEditable ? () => SelectCell(vm, mod, cellVm) : null);
         }
     }
 
-    private void RenderNetAddrAndCpu(MpModuleViewModel mod, int half,
+    private void RenderNetAddrAndCpu(MpModuleViewModel mod,
         double col2X, double dataStartY,
-        double col2W, double col3W, double dataRowH, double halfDataH)
+        double col2W, double col3W, double dataRowH, double bandDataH)
     {
         double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
-
-        string net1 = half == 0 ? mod.NetAddress1 : mod.NetAddress3;
-        string net2 = half == 0 ? mod.NetAddress2 : mod.NetAddress4;
+        double fs = mod.FontSize * PtToPx;
 
         DrawCell(col2X, dataStartY, col2W, blockH,
-            net1, NetAddrBgBrush, false, fontSize: 5, rotate: true);
+            mod.NetAddress1, NetAddrBgBrush, false, fontSize: fs, rotate: true, fontFamily: mod.FontFamily);
         DrawCell(col2X, dataStartY + blockH, col2W, blockH,
-            net2, NetAddrBgBrush, false, fontSize: 5, rotate: true);
+            mod.NetAddress2, NetAddrBgBrush, false, fontSize: fs, rotate: true, fontFamily: mod.FontFamily);
 
         double col3X = col2X + col2W;
-        DrawCell(col3X, dataStartY, col3W, halfDataH,
-            mod.CpuName, CpuNameBgBrush, false, fontSize: 5, rotate: true);
+        DrawCell(col3X, dataStartY, col3W, bandDataH,
+            mod.CpuName, CpuNameBgBrush, false, fontSize: fs, rotate: true, fontFamily: mod.FontFamily);
     }
 
     private void DrawCell(double x, double y, double w, double h,
         string text, Brush background, bool isSelected,
         double fontSize = 5, bool rotate = false, bool isBold = false,
+        string fontFamily = "Arial",
         Brush? foreground = null, Action? clickAction = null)
     {
         var rect = new Rectangle
@@ -243,27 +215,50 @@ public partial class MpPreviewControl : UserControl
                 Text = text.Replace("\n", " / "),
                 FontSize = fontSize,
                 FontWeight = isBold ? FontWeights.Bold : FontWeights.Normal,
-                FontFamily = new FontFamily("Arial"),
+                FontFamily = new FontFamily(fontFamily),
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Foreground = foreground ?? Brushes.Black,
                 MaxWidth = rotate ? h - 2 : w - 2,
                 MaxHeight = rotate ? w - 2 : h - 2
             };
 
+            // Wie im Druck (RenderRotatedText): Border als Container zentriert den
+            // Text auf beiden Achsen — identische Struktur garantiert Preview = Druck.
+            var container = new Border
+            {
+                Width = w, Height = h,
+                Child = tb,
+                IsHitTestVisible = false
+            };
+            tb.HorizontalAlignment = HorizontalAlignment.Center;
+            tb.VerticalAlignment = VerticalAlignment.Center;
             if (rotate)
-            {
                 tb.LayoutTransform = new RotateTransform(-90);
-                tb.Measure(new Size(h, w));
-                Canvas.SetLeft(tb, x + (w + tb.DesiredSize.Width) / 2);
-                Canvas.SetTop(tb, y + (h + tb.DesiredSize.Height) / 2);
-            }
-            else
-            {
-                tb.Measure(new Size(w - 2, h - 2));
-                Canvas.SetLeft(tb, x + 1);
-                Canvas.SetTop(tb, y + (h - tb.DesiredSize.Height) / 2);
-            }
-            PreviewCanvas.Children.Add(tb);
+            Canvas.SetLeft(container, x);
+            Canvas.SetTop(container, y);
+            PreviewCanvas.Children.Add(container);
+        }
+    }
+
+    /// <summary>Klick auf den Modul-Header: Modul selektieren (ohne Zellwechsel).
+    /// Wichtig fuer Band-2-Positionen, die sonst nur ueber Zellklicks erreichbar waeren.</summary>
+    private static void SelectModule(MainViewModel vm, MpModuleViewModel mod)
+    {
+        var mods = Keyboard.Modifiers;
+        if ((mods & ModifierKeys.Shift) == ModifierKeys.Shift)
+        {
+            vm.CheckRangeToMpModule(mod);
+        }
+        else if ((mods & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            mod.IsChecked = !mod.IsChecked;
+            vm.SelectedMpModule = mod;
+            vm.NotifyMpPreviewChanged();
+        }
+        else
+        {
+            vm.ClearAllMpModuleChecks();
+            vm.SelectedMpModule = mod;
         }
     }
 

@@ -145,14 +145,26 @@
 - [x] TestAutomation: zoom, maximize, resize
 - [ ] Mappe-fuer-Mappe Feinabstimmung gegen Excel:
   - [x] horizontal_32_DI_DQ — Grundstruktur + Adressen korrekt
-  - [ ] horizontal_32_DI_DQ — Feinvergleich untere Haelfte + Debug
-  - [ ] horizontal_16_DI_DQ
-  - [ ] horizontal_16_DI_230V
-  - [ ] horizontal_8_DQ_230V
-  - [ ] horizontal_8_AI_AQ
-  - [ ] horizontal_4_AQ
-  - [ ] Vertikale Varianten
-- [ ] Weitere Klemmenbelegungen aus Datenblaettern (DQ, AI, AQ, SIWAREX)
+  - [x] horizontal_32_DI_DQ — Feinvergleich untere Haelfte + Debug (2026-07-02)
+    - K9/K29 sind laut Blockdiagramm UNBELEGT (App zeigte faelschlich "M") — gefixt
+    - K19/K39 = xL+, K20/K40 = xM bestaetigt (PRINT-FORMATS-Tabelle war falsch, korrigiert)
+    - Spalten-Ratios gegen exakte Excel-Punktbreiten geprueft: Abweichung < 0.1% — ok
+  - [x] horizontal_16_DI_DQ (2026-07-02)
+    - Merge-Struktur (A:B ueber alle 20 Zeilen) stimmt mit Excel ueberein
+    - K9 "M" entfernt (bei DI16 BA/HF unbelegt); Belegungs-Matrix je Modultyp in PRINT-FORMATS.md
+    - Offen: Struktur-Labels Modultyp-abhaengig machen (DQ16 ST: K9/K10 = 1L+/1M)
+  - [x] horizontal_16_DI_230V — Merge exakt wie Excel; geratene Labels entfernt (2026-07-03)
+  - [x] horizontal_8_DQ_230V — DQ 8x230VAC/5A Relay verifiziert (A5E03485590-AD),
+        Labels entfernt (Relais 24V-versorgt, Excel-Bloecke leer) (2026-07-03)
+  - [x] horizontal_8_AI_AQ — GEFIXT: 5 editierbare 4-Zeilen-Bloecke/Spalte, kein MANA;
+        Analog modusabhaengig (Datenblatt-verifiziert) (2026-07-03)
+  - [x] horizontal_4_AQ — GEFIXT: 5 gemergte 4-Zeilen-Bloecke, kein MANA (2026-07-03)
+  - [x] Vertikale Varianten — strukturidentisch zu horizontalen (nur rotiert), verifiziert
+- [x] DQ 32x24VDC/0.5A HF Klemmenbelegung verifiziert + Katalog-Eintrag (2026-07-03)
+- [x] SIWAREX WP521/WP522 verifiziert (A5E36695151A) — eigene Variante + Katalog (2026-07-03)
+- [ ] Offen: DQ 8x24VDC/2A HF, DI 16x230VAC BA Labels (Katalog-Eintraege)
+- [ ] Offen: 25mm-Template (6ES7592-2AX00) — strukturell anders (5 Mappen/Modultyp,
+      52 Spalten), braucht Merge-Analyse + eigenes Layout-Modell + AQ 2xU/I Katalog
 - [ ] Exakte Masse per Stahllineal (wenn Boegen geliefert)
 - [ ] 25mm-Template Variante
 
@@ -206,6 +218,33 @@
 - [x] Named-Pipe nur bei --test-automation / ETPRINTER_TEST=1
 - [x] Regex NonBacktracking + Timeout in SchematicParserService
 - [x] xUnit Testprojekt (tests/ETPrinter.Tests) mit 41 Tests fuer AddressGenerator + MpModuleLayoutFactory
+
+## Phase 19: v3.0 — 10 Streifen-Positionen pro A4 (2026-07-02) [DONE]
+- [x] AP1: Band/Spalten-Positionslogik (ColumnsPerPage, BandOf/ColumnOf)
+- [x] Band-2-Header 20.6mm (ex-"Separator"), Preview + Druck + Kalibrierseite
+- [x] Persistenz v5 mit v4-Padding-Migration (+ 3 Migrationstests)
+- [x] NetAddress3/4 stillgelegt, Header-Klick selektiert Modul
+- Offen (AP2-AP5 laut Plan): Modul-Katalog, Datenblatt-Verifikation AI/AQ+230V+DQ,
+  Review-Findings, SIWAREX + 25mm
+
+## Phase 18: Bugfix-Review (2026-07-02) [DONE]
+- [x] Multi-Agent-Review: 50 Findings, 23 adversarial bestaetigt, alle 23 gefixt
+- [x] KRITISCH: MP-Dirty-Tracking (ContentChanged-Callback, auch Live-Preview-Refresh)
+- [x] KRITISCH: Familienwechsel-Raender-Korruption (Live-Apply-Guard)
+- [x] Culture-Fix Komma-Eingabe, pt->DIP-Schriftgroessen, Einzeilen-Formate,
+      8-Klemmen-Raster digital, HasText, MP-Zentrierungen, Kalibrierseiten-Geometrie,
+      230V-Spaltenreihenfolge, DoSave-Fehlerbehandlung, ClearAll-MP, TAS-Mehrseiten-Save,
+      ListenLoop-Backoff, PDF-Import-Regex, CSV-Encoding
+- [x] 59 Tests gruen (14 neu), Smoke-Test via TestAutomation mit Screenshots
+
+## Offene Review-Findings [DONE 2026-07-03, AP4]
+- [x] Format-/Familienwechsel verwirft befuellte Seiten ohne Rueckfrage (ConfirmContentLoss)
+- [x] Multi-Selection ueberlebt Seitenwechsel unsichtbar (ClearChecksOnAllPages in NavigateToPage)
+- [x] Excel-Import ohne Kopfzeile: feste Spalten A/B/C statt UsedRange (firstCol-basiert)
+- [x] load-project (Automation) laedt SP-Labels/Settings nicht (ApplyLoadedProject wiederverwendet)
+- [x] RunOnUI-TCS haengt bei abgebrochener DispatcherOperation (operation.Aborted-Hook)
+- [x] Projekt-Laden ueberschreibt maschinenspezifische calibration.json (lokale hat Vorrang)
+- [x] CSV-Separator-Erkennung zaehlt Zeichen in quoted Feldern mit (quote-aware)
 
 ## Blockierte Aufgaben (warten auf Hardware)
 - [ ] Exakte Masse per Stahllineal (6ES7592-1AX00, -2AX00)

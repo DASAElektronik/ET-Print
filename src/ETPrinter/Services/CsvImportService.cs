@@ -46,32 +46,37 @@ public static class CsvImportService
 
     private static List<string> ReadFileLines(string filePath)
     {
+        // Strikte UTF-8-Dekodierung: ungueltige Bytes werfen statt U+FFFD zu erzeugen,
+        // damit ANSI-Dateien mit Umlauten in beliebigen Zeilen erkannt werden.
+        var bytes = File.ReadAllBytes(filePath);
+        var strictUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+        string text;
         try
         {
-            var lines = File.ReadAllLines(filePath, Encoding.UTF8).ToList();
-            if (lines.Count > 0 && !ContainsValidText(lines[0]))
-            {
-                Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-                lines = File.ReadAllLines(filePath, Encoding.GetEncoding(1252)).ToList();
-            }
-            return lines;
+            text = strictUtf8.GetString(bytes);
         }
-        catch
+        catch (DecoderFallbackException)
         {
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-            return File.ReadAllLines(filePath, Encoding.GetEncoding(1252)).ToList();
+            text = Encoding.GetEncoding(1252).GetString(bytes);
         }
-    }
-
-    private static bool ContainsValidText(string text)
-    {
-        return !text.Contains('\uFFFD');
+        if (text.StartsWith('﻿'))
+            text = text[1..];
+        return text.Split(["\r\n", "\n", "\r"], StringSplitOptions.None).ToList();
     }
 
     private static char DetectSeparator(string firstLine)
     {
-        int semicolons = firstLine.Count(c => c == ';');
-        int commas = firstLine.Count(c => c == ',');
+        // Nur Trenner AUSSERHALB von Anführungszeichen zaehlen — sonst kippen
+        // Kommas in quoted Feldern ("Störung, Lüfter") die Erkennung.
+        int semicolons = 0, commas = 0;
+        bool inQuotes = false;
+        foreach (char c in firstLine)
+        {
+            if (c == '"') inQuotes = !inQuotes;
+            else if (!inQuotes && c == ';') semicolons++;
+            else if (!inQuotes && c == ',') commas++;
+        }
         return semicolons >= commas ? ';' : ',';
     }
 

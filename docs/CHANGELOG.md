@@ -2,10 +2,160 @@
 
 ## [Unreleased]
 ### Geplant
-- Mappe-fuer-Mappe Feinabstimmung der Modultypen gegen Excel-Template
+- 8_AI_AQ / 4_AQ: Excel hat 5x 4-Zeilen-Bloecke pro Spalte, App rendert MANA+leer — Datenblatt pruefen
+- Struktur-Labels Modultyp-abhaengig machen (DQ16 ST: K9/K10 = 1L+/1M)
 - Weitere Modultypen: DQ, AI, AQ Klemmenbelegungen aus Datenblaettern
 - SIWAREX Waegemodule
 - Exakte Masse per Stahllineal (wenn Beschriftungsboegen geliefert)
+- Architekturfrage: Excel-Template hat 10 Streifen-Positionen pro A4 (2 Baender x 5 Spalten),
+  App bedruckt nur das obere Band (5 Module) — mit physischen Boegen klaeren
+
+---
+
+## 2026-07-03 - Projekttag 5 (v3.0: Modul-Katalog + Review-Findings)
+
+### AP2: Modul-Katalog (konkrete Siemens-Module)
+- Neu MpModuleCatalog: konkrete Artikelnummern mit exakter Klemmenbelegung.
+  Variante = Layout (Merges), Katalog-Eintrag = Struktur-Labels (M/L+/leer).
+- Parametrisierte Layout-Factory (CreateLayout_DI_DQ_16/32 mit Klemmen-Labels);
+  GetDefinitions(module) waehlt Katalog- oder generische Belegung.
+- Verifizierte Eintraege: DI 32x24VDC HF, DI 16x24VDC BA, DI 16x24VDC HF,
+  DQ 16x24VDC/0.5A ST (K9/K10 = 1L+/1M — Unterschied zu DI16 jetzt korrekt).
+- UI: "Siemens-Modul"-ComboBox ueber der Varianten-ComboBox; Katalogwahl setzt
+  Variante + Belegung + Generator-Modultyp (DI/DO/AI/AO). MpModule.ArticleNumber (v5).
+- TAS-Befehl set-module-article; 8 Katalog-Tests. Smoke: DQ16 ST verifiziert.
+
+### AP4: 7 offene Review-Findings gefixt
+- Format-/Familienwechsel bei befuellten Etiketten: Rueckfrage (ConfirmContentLoss),
+  bei Abbruch ComboBox-Reset; programmatische Pfade (Laden/Neu/Automation) unterdrueckt.
+- Multi-Selection seitenlokal: NavigateToPage hebt Checks auf ALLEN Seiten auf.
+- Excel-Import ohne Kopfzeile: Spalten ab UsedRange.FirstColumn statt fix A/B/C.
+- TAS load-project nutzt jetzt ApplyLoadedProject (laedt SP-Labels + Settings + alle
+  Seiten; Gegenstueck zu BuildProject) statt nur MpPages[0].
+- RunOnUI: operation.Aborted-Hook — Dispose haengt beim Shutdown nicht mehr 2s.
+- Projekt-Laden: lokale calibration.json hat Vorrang (maschinenspezifisch).
+- CSV-Separator-Erkennung ignoriert Trenner in Anfuehrungszeichen.
+- 71 Tests (11 neu: Katalog, CSV, Migration). Smoke: SP-Roundtrip, Format-Wechsel.
+
+### AP3: Datenblatt-Verifikation AI/AQ, 230V, DQ (2026-07-03)
+- **AI 8xU/I / AQ 4xU/I sind modusabhaengig** — kein festes Klemmen-Label. AI_AQ_8
+  und AQ_4 auf Excel-Struktur korrigiert: 5 editierbare 4-Zeilen-Bloecke pro Spalte,
+  KEIN hartkodiertes MANA (App zeigte vorher 4 Bloecke + MANA + leer).
+- MP-Analog-Generator: spaltenausgeglichene Verteilung von GenCount Kanaelen
+  (AI 8: CH0-3 links, CH4-7 rechts), Restbloecke bleiben leer.
+- **DQ 8x230VAC/5A Relay** verifiziert (A5E03485590-AD): 24V-versorgt, Versorgung nur
+  K19/20 + K39/40. Die geratenen 230V-Labels ("M", "L1/N/PE") entfernt — Excel laesst
+  diese Bloecke leer, die App jetzt auch.
+- **DQ 32x24VDC/0.5A HF** verifiziert (109480716) und als Katalog-Eintrag ergaenzt
+  (K9/10=1L+/1M, K19/20=2L+/2M — anders als DI 32).
+- 73 Tests (2 neue: AI/AQ-Struktur). Smoke: AI-4+4-Verteilung + DQ32-Katalog verifiziert.
+
+### AP5 (Teil 1): SIWAREX Waegemodule (2026-07-03)
+- Neue Variante SIWAREX_WP52x: fester Frontstecker-Pinout, verifiziert am Manual
+  A5E36695151A (04/2016). 20 Klemmen/Spalte, beide Spalten identisch (Waegezelle A/B):
+  EXC+/-, SIG+/-, SEN+/-, RS485 D+/-, DQ.L+/DQ.M, DQ.0-3, DI.0-2, DI.M, L+, M.
+- Katalog-Eintraege WP521 ST (7MH4980-1AA01) + WP522 ST (7MH4980-2AA01).
+- 77 Tests (4 neue: SIWAREX-Pinout). Smoke: Pinout-Streifen visuell verifiziert.
+
+### AP5 (Teil 2, offen): 25mm-Template (6ES7592-2AX00) — vollstaendig analysiert
+Excel-Dump ausgewertet (2026-07-03) — 25mm ist strukturell ANDERS als 35mm:
+- **20 Module pro Bogen** (10 Spalten x 2 Baender; 35mm hat 10).
+- Modulbreite **17.36mm** (3 Excel-Spalten), Gesamtbreite 174.7mm.
+- Modulstruktur: **Adresse (colspan 2) + CPU-Name (rotiert)** — KEINE Net-Address-Spalte.
+- Adresse = **1 Zeile pro Kanal** (I 0.1, I 0.2 ...), 16 bzw. 32 Kanaele.
+- 5 Mappen nach Modultyp: 16_DI, 16_DQ, 16_DI_16_DQ, 32_DI, 32_DQ. Raender L25/R6/O14/U19.
+
+Warum offen: Die Renderer (PrintService.CreateMpPage, MpPreviewControl) sind fest auf
+das 35mm-4-Spalten-Modell (Col0-3: addr-L/addr-R/netaddr/cpu) verdrahtet und wuerden
+25mm falsch rendern. Voller Support braucht ein eigenes 25mm-Layout-/Spaltenmodell
+(2 Spalten statt 4) + 5 neue Varianten + AQ 2xU/I ST Katalog. MP25-Geometrie in
+ProductFamily.cs ist mit den vermessenen Werten + Warnkommentar dokumentiert.
+
+---
+
+## 2026-07-02 - Projekttag 4b (v3.0-Umbau: 10 Streifen-Positionen pro A4)
+
+### AP1: 10-Positionen-Architektur (User-Entscheidung nach Excel-Beleg)
+- **Der A4-Bogen hat jetzt 10 Streifen-Positionen** (Band 0 oben mit 25.7mm-Header,
+  Band 1 unten mit 20.6mm-Header, je 5 Spalten) — wie das Siemens-Excel-Template.
+  Vorher wurde nur das obere Band bedruckt (50% Bogen-Verschnitt).
+- ProductFamilyInfo: neues Feld ColumnsPerPage + BandOf()/ColumnOf();
+  EstimatedSeparatorHeight → EstimatedBand2HeaderHeight (war real der Band-2-Header)
+- PrintService/MpPreviewControl: Position aus Band+Spalte, Header-Hoehe je Band;
+  untere Position ist echtes Modul (leere Scaffolding-Logik entfernt)
+- Preview: Klick auf den Modul-Header selektiert das Modul (wichtig fuer Band 2)
+- NetAddress3/4 stillgelegt (Aera "1 Modul = 2 Baender"); nur noch v4-Deserialisierung
+- Persistenz v5: v4-MP-Seiten werden beim Laden von 5 auf 10 Module aufgefuellt
+- MP-Tab-Label: "Netzname (Block 2)" (Excel: unterer Net-Block = Net Name)
+- 60 Tests gruen (3 neue Migrationstests); Smoke-Test: Band-1+2-Module befuellt,
+  v5-Roundtrip und v4-Migration in laufender App verifiziert
+
+---
+
+## 2026-07-02 - Projekttag 4 (Phase 12 Feinvergleich + grosses Bugfix-Review)
+
+### Phase 12: Feinvergleich gegen Excel-Template + Datenblaetter
+- **DI 32/16: Klemmen 9/10 (bzw. 29/30) sind UNBELEGT** — App zeigte dort faelschlich "M".
+  Verifiziert am Blockdiagramm des Equipment Manuals (A5E03485935-AH); Layouts korrigiert.
+- PRINT-FORMATS.md: Klemmenbelegungstabelle DI32 korrigiert (K38=CH31, K39=2L+, K40=2M),
+  16er-Modultyp-Matrix ergaenzt (DI16 BA / DI16 HF / DQ16 ST unterscheiden sich!)
+- Alle 12 Excel-Mappen zellgenau gedumpt (COM): 230V-Merge-Strukturen exakt wie App,
+  Spalten-Ratios <0.1% Abweichung, vertikale Mappen identisch zu horizontalen (nur rotiert)
+- Excel-Fakten dokumentiert: Streifenbreite 33.97mm, Net-Spalte = Net Address (oben) +
+  Net Name (unten), PageSetup-Raender des Templates unbrauchbar
+
+### Bugfixes (Multi-Agent-Review, 23 bestaetigte Findings)
+- **KRITISCH: MP-Edits setzten IsDirty nie** — Schliessen ohne Speichern-Dialog = stiller
+  Datenverlust. Fix: ContentChanged-Callback durch Modul-/Zell-VMs (markiert dirty UND
+  refresht die MP-Preview live — behebt auch "Preview zeigt veraltete Daten").
+- **KRITISCH: Produktfamilien-Wechsel korrumpierte Raender** (Live-Apply-Regression aus
+  06d52ad): erster Margin-Setter schrieb die alten Familienraender zurueck. Fix: Guard.
+- **Culture-Bug: "20,5" wurde als 205mm geparst** (WPF-Bindings nutzten en-US) — Fix:
+  FrameworkElement.LanguageProperty auf OS-Culture; Felder zeigen jetzt Komma.
+- **Schriftgroesse = Punkt**: Druck interpretierte FontSize als DIP und druckte ~25%
+  kleiner als das Siemens-Template. Fix: pt->DIP (96/72) im Druck; SP-/MP-Preview auf
+  denselben pt-Faktor vereinheitlicht (MP-Preview nutzte fest 5px/Arial/normal).
+- **Einzeilige Formate**: Preview zeigte Line2, Druck liess sie weg. Fix: Preview blendet
+  Line2 formatabhaengig aus; Generator merged Adressen kanal-aufsteigend in Line1.
+- **GenerateDigital festes 8-Klemmen-Raster** (wie Analog): Adressen sitzen jetzt ueber
+  den richtigen Klemmen; max 2 Bytes pro Etikett, Auto-Advance um effektive Anzahl.
+- **MpModule.HasText ignorierte NetAddress2/3/4** — Modul wurde beim Druck uebersprungen,
+  obwohl die Preview Inhalt zeigte.
+- **MP-Druck/Preview-Abgleich**: Zellen-/Headertexte vertikal zentriert (Druck) bzw.
+  horizontal zentriert (Preview); rotierte Preview-Texte sassen um ihre eigene Groesse
+  versetzt (Border-Container wie im Druck); untere Bandposition zeigt keine
+  CPU/NetAddress-Duplikate mehr (Druck gab sie nie aus).
+- **MP-Kalibrierseite** nutzte anderes Geometriemodell als der Druck (~6mm Versatz) —
+  rechnet jetzt mit denselben festen Massen wie CreateMpPage.
+- **230V-Layouts spaltenweise**: sequenzielle Befuellung legt Byte 0 links, Byte 1 rechts
+  ab (vorher gerade Bits links / ungerade rechts vermischt).
+- **DoSave meldet Fehler**: Speicherfehler beim Schliessen brachen den Vorgang vorher
+  nicht ab (Datenverlust trotz "Ja, speichern") — jetzt bool-Rueckgabe + MessageBox.
+- **'Alle loeschen' im MP-Modus** loeschte nichts und desynchronisierte den Seitenindex —
+  eigener MP-Zweig.
+- **Test-Automation save-project** speicherte nur die sichtbare Seite — nutzt jetzt
+  BuildProject() (gemeinsame Serialisierung mit DoSave, alle Seiten).
+- **ListenLoop-Backoff**: Pipe-Fehler (z.B. zweite Instanz) erzeugten Busy-Spin mit
+  100% CPU + Log-Rotation-Flut — jetzt 1s Delay.
+- **PDF-Import**: ModuleTypePattern matchte reale Siemens-Bezeichnungen ("DI 8x24VDC ST")
+  nicht (trailing \b) — Import fand 0 Module.
+- **CSV-Import**: Encoding-Erkennung prueft jetzt die ganze Datei (strikte UTF-8-
+  Dekodierung mit cp1252-Fallback) statt nur der ersten Zeile — Umlaute blieben kaputt.
+- Input-Margin-Startwerte an LabelSettings-Defaults angeglichen (20.5/27.5).
+
+### Tests
+- 59 Tests (14 neu): GenerateDigital-Raster, GetEffectiveCount, MpModule.HasText
+- Smoke-Test via TestAutomation: Vertikal-einzeilig-Merge, MP-Familienwechsel-Raender,
+  Dirty-Tracking, Mehrseiten-Save verifiziert (Screenshots)
+
+### Offen (Review-Findings ohne abgeschlossene Verifikation, Session-Limit)
+- Format-/Familienwechsel verwirft befuellte Seiten ohne Rueckfrage
+- Multi-Selection ueberlebt Seitenwechsel unsichtbar (Ctrl+C kopiert alte Markierung)
+- Excel-Import ohne Kopfzeile nutzt feste Spalten A/B/C statt UsedRange
+- load-project (Automation) laedt SP-Labels/Settings nicht
+- RunOnUI-TaskCompletionSource haengt bei abgebrochener DispatcherOperation
+- Projekt-Laden ueberschreibt maschinenspezifische calibration.json
+- CSV-Separator-Erkennung zaehlt Zeichen in quoted Feldern mit
 
 ---
 

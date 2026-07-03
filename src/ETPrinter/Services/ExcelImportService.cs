@@ -20,9 +20,10 @@ public static class ExcelImportService
 
         int firstRow = usedRange.FirstRow().RowNumber();
         int lastRow = usedRange.LastRow().RowNumber();
+        int firstCol = usedRange.FirstColumn().ColumnNumber();
         int lastCol = usedRange.LastColumn().ColumnNumber();
 
-        var columnMap = DetectColumns(worksheet, firstRow, lastCol);
+        var columnMap = DetectColumns(worksheet, firstRow, firstCol, lastCol);
         int dataStartRow = columnMap.HasHeaders ? firstRow + 1 : firstRow;
 
         var cells = new List<LabelCell>();
@@ -48,13 +49,13 @@ public static class ExcelImportService
         return cells;
     }
 
-    private static ColumnMap DetectColumns(IXLWorksheet worksheet, int headerRow, int lastCol)
+    private static ColumnMap DetectColumns(IXLWorksheet worksheet, int headerRow, int firstCol, int lastCol)
     {
         int headerCol = -1;
         int line1Col = -1;
         int line2Col = -1;
 
-        for (int col = 1; col <= lastCol; col++)
+        for (int col = firstCol; col <= lastCol; col++)
         {
             var value = worksheet.Cell(headerRow, col).GetString().Trim().ToLowerInvariant();
 
@@ -70,7 +71,10 @@ public static class ExcelImportService
 
         if (!hasHeaders)
         {
-            return new ColumnMap(false, 1, 2, 3);
+            // Ohne Kopfzeile: die ersten 3 belegten Spalten ab firstCol als
+            // Header/Zeile1/Zeile2 — NICHT fix A/B/C, sonst verschieben sich
+            // Daten, die erst ab Spalte B beginnen, und die 3. Spalte geht verloren.
+            return new ColumnMap(false, firstCol, firstCol + 1, firstCol + 2);
         }
 
         return new ColumnMap(true, headerCol, line1Col > 0 ? line1Col : -1, line2Col > 0 ? line2Col : -1);

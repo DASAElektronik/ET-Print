@@ -52,15 +52,60 @@ public class AddressGeneratorTests
     }
 
     [Theory]
-    [InlineData(1, 4)]   // 1 byte  -> 4 odd bits in Line1
+    [InlineData(1, 4)]   // 1 byte  -> 4 odd bits in Line1 (+ 4 leere Slots)
     [InlineData(2, 8)]   // 2 bytes -> 8 odd bits
-    [InlineData(4, 16)]  // 4 bytes -> 16 odd bits
+    [InlineData(4, 8)]   // 4 bytes -> gekappt auf 2 Bytes (16 Klemmen pro Etikett)
     public void GenerateDigital_Line1ItemCount_MatchesByteCount(int byteCount, int expectedItems)
     {
         var label = AddressGenerator.GenerateDigital("X", "E", startByte: 0, byteCount: byteCount);
 
         var items = label.Line1.Split("  ", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal(expectedItems, items.Length);
+    }
+
+    // Festes 8-Klemmen-Raster (wie GenerateAnalog): Adressen muessen ueber den
+    // richtigen Klemmenpositionen sitzen, Restplaetze bleiben als leere Slots.
+    [Fact]
+    public void GenerateDigital_1Byte_Has8SlotsWithEmptyPadding()
+    {
+        var label = AddressGenerator.GenerateDigital("DI8", "E", startByte: 0, byteCount: 1);
+
+        var oben = label.Line1.Split("  ", StringSplitOptions.None);
+        var unten = label.Line2.Split("  ", StringSplitOptions.None);
+
+        Assert.Equal(8, oben.Length);
+        Assert.Equal(8, unten.Length);
+        Assert.Equal("E 0.1", oben[0]);
+        Assert.Equal("E 0.7", oben[3]);
+        Assert.Equal("", oben[4]);
+        Assert.Equal("", oben[7]);
+        Assert.Equal("E 0.0", unten[0]);
+        Assert.Equal("E 0.6", unten[3]);
+        Assert.Equal("", unten[4]);
+    }
+
+    [Fact]
+    public void GenerateDigital_2Bytes_SecondByteInSlots4To7()
+    {
+        var label = AddressGenerator.GenerateDigital("DI16", "E", startByte: 0, byteCount: 2);
+
+        var oben = label.Line1.Split("  ", StringSplitOptions.None);
+        var unten = label.Line2.Split("  ", StringSplitOptions.None);
+
+        Assert.Equal("E 1.1", oben[4]);
+        Assert.Equal("E 1.7", oben[7]);
+        Assert.Equal("E 1.0", unten[4]);
+        Assert.Equal("E 1.6", unten[7]);
+    }
+
+    [Theory]
+    [InlineData(ModuleType.DI, 1, 1)]
+    [InlineData(ModuleType.DI, 4, 2)]   // Digital: max 2 Bytes pro Etikett
+    [InlineData(ModuleType.AI, 8, 8)]
+    [InlineData(ModuleType.AO, 20, 16)] // Analog: max 16 Kanaele
+    public void GetEffectiveCount_CapsAtLabelCapacity(ModuleType type, int count, int expected)
+    {
+        Assert.Equal(expected, AddressGenerator.GetEffectiveCount(type, count));
     }
 
     // ---- GenerateAnalog -------------------------------------------------

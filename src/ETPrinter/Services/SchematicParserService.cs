@@ -11,8 +11,11 @@ public static class SchematicParserService
     // NonBacktracking ist inkompatibel mit Compiled, dafuer garantiert linear.
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
 
+    // Kein trailing \b: reale Typbezeichnungen wie "DI 8x24VDC ST" haben nach der
+    // Kanalzahl direkt Buchstaben ("x24VDC"), Ziffer->Buchstabe ist keine Wortgrenze.
+    // Nur Groups[1] (der Typ) wird ausgewertet.
     private static readonly Regex ModuleTypePattern = new(
-        @"\b(DI|DO|DQ|AI|AO|AQ)\s*\d*x?\s*\d+\b",
+        @"\b(DI|DO|DQ|AI|AO|AQ)\s*\d+",
         RegexOptions.IgnoreCase | RegexOptions.NonBacktracking,
         RegexTimeout);
 

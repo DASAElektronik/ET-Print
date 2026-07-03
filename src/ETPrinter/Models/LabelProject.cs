@@ -4,7 +4,7 @@ namespace ETPrinter.Models;
 
 public class LabelProject
 {
-    public int Version { get; set; } = 4;
+    public int Version { get; set; } = 5;
     public ProductFamily ProductFamily { get; set; } = ProductFamily.ET200SP;
     public LabelFormat Format { get; set; } = LabelFormat.HorizontalDouble;
     public LabelSettings Settings { get; set; } = new();

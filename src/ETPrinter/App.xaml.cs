@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Windows;
+using System.Windows.Markup;
 using ETPrinter.Services;
 using ETPrinter.ViewModels;
 
@@ -11,6 +13,14 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // WPF-Bindings parsen/formatieren sonst mit en-US statt der OS-Culture:
+        // auf de-DE-Systemen wurde die Komma-Eingabe "20,5" als 205 interpretiert
+        // (Komma = en-US-Tausendertrenner) — Raender und Kalibrierung liefen aus dem Blatt.
+        FrameworkElement.LanguageProperty.OverrideMetadata(
+            typeof(FrameworkElement),
+            new FrameworkPropertyMetadata(
+                XmlLanguage.GetLanguage(CultureInfo.CurrentCulture.IetfLanguageTag)));
 
         MainWindow = new MainWindow();
         MainWindow.Show();

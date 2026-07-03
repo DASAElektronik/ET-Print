@@ -25,26 +25,50 @@ public static class AddressGenerator
     /// <summary>
     /// Generiert Beschriftung fuer ein digitales Modul (DI/DO).
     /// ET200SP Klemmenanordnung: Oben = ungerade Bits, Unten = gerade Bits.
+    /// Festes Raster wie GenerateAnalog: 8 Klemmenplaetze pro Reihe (BaseUnit A0/A1),
+    /// Restplaetze bleiben leer, damit Adressen ueber den richtigen Klemmen sitzen.
+    /// Maximal 2 Bytes (16 Klemmen) pro Etikett — mehr passt physisch nicht.
     /// </summary>
     public static GeneratedLabel GenerateDigital(string moduleName, string prefix, int startByte, int byteCount)
     {
-        var oddBits = new List<string>();   // Zeile 1 (oben): .1, .3, .5, .7
-        var evenBits = new List<string>();  // Zeile 2 (unten): .0, .2, .4, .6
+        const int SlotsPerRow = 8;
+        const int MaxBytesPerLabel = 2;
 
-        for (int b = startByte; b < startByte + byteCount; b++)
+        var oben = new string[SlotsPerRow];
+        var unten = new string[SlotsPerRow];
+        for (int i = 0; i < SlotsPerRow; i++) { oben[i] = string.Empty; unten[i] = string.Empty; }
+
+        int maxBytes = Math.Min(byteCount, MaxBytesPerLabel);
+        for (int b = 0; b < maxBytes; b++)
         {
-            for (int bit = 0; bit < 8; bit += 2)
+            int byteNum = startByte + b;
+            for (int bit = 0; bit < 8; bit++)
             {
-                evenBits.Add($"{prefix} {b}.{bit}");
-                oddBits.Add($"{prefix} {b}.{bit + 1}");
+                int slotPos = b * 4 + bit / 2;  // Byte 0 -> Slots 0-3, Byte 1 -> Slots 4-7
+                string addressStr = $"{prefix} {byteNum}.{bit}";
+                if (bit % 2 == 0)
+                    unten[slotPos] = addressStr;
+                else
+                    oben[slotPos] = addressStr;
             }
         }
 
         return new GeneratedLabel(
             Header: moduleName,
-            Line1: string.Join("  ", oddBits),
-            Line2: string.Join("  ", evenBits)
+            Line1: string.Join("  ", oben),
+            Line2: string.Join("  ", unten)
         );
+    }
+
+    /// <summary>
+    /// Anzahl, die tatsaechlich auf EIN Etikett passt (Digital: 2 Bytes = 16 Klemmen,
+    /// Analog: 16 Kanaele). Fuer Auto-Advance, damit gekappte Adressen nicht
+    /// uebersprungen werden, sondern auf dem naechsten Etikett weitergehen.
+    /// </summary>
+    public static int GetEffectiveCount(ModuleType type, int count)
+    {
+        var info = ModuleTypes.First(m => m.Type == type);
+        return info.IsBitAddressed ? Math.Min(count, 2) : Math.Min(count, 16);
     }
 
     /// <summary>

@@ -65,6 +65,29 @@ public static class ProjectService
             // MpPages bleibt null fuer ET200SP-Projekte
         }
 
+        // v4 -> v5 migration: 10 Streifen-Positionen pro A4 (2 Baender x 5 Spalten).
+        // Alte MP-Seiten mit 5 Modulen werden auf ModulesPerPage aufgefuellt.
+        if (project.Version < 5)
+        {
+            if (project.MpPages is not null)
+            {
+                var familyInfo = ProductFamilyDefinitions.Get(project.ProductFamily);
+                foreach (var page in project.MpPages)
+                {
+                    while (page.Modules.Count < familyInfo.ModulesPerPage)
+                    {
+                        var module = new MpModule { ModuleIndex = page.Modules.Count };
+                        module.AddressCells = MpModuleLayoutFactory.CreateCells(module.Variant);
+                        page.Modules.Add(module);
+                    }
+                    // ModuleIndex konsistent zur Listenposition halten
+                    for (int i = 0; i < page.Modules.Count; i++)
+                        page.Modules[i].ModuleIndex = i;
+                }
+            }
+            project.Version = 5;
+        }
+
         // Ensure at least one page exists
         if (project.Pages.Count == 0)
         {

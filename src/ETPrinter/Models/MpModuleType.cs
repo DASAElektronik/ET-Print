@@ -6,8 +6,9 @@ public enum MpModuleVariant
     DI_DQ_16,       // 16 DI/DQ: 2 Bytes, Col 0+1 gemergt
     DI_230V_16,     // 16 DI 230V: 2 Zeilen pro Kanal-Paar
     DQ_230V_8,      // 8 DQ 230V: Gemischtes Pattern
-    AI_AQ_8,        // 8 AI/AQ: 4 Zeilen pro Analogkanal, 2 Spalten
-    AQ_4            // 4 AQ: 4 Zeilen pro Kanal, Col 0+1 gemergt
+    AI_AQ_8,        // 8 AI/AQ: 5 editierbare 4-Zeilen-Bloecke pro Spalte
+    AQ_4,           // 4 AQ: 5 gemergte 4-Zeilen-Bloecke
+    SIWAREX_WP52x   // SIWAREX Waegemodul: fester Pinout (Waegezelle + DI/DQ), 20 Klemmen/Spalte
 }
 
 /// <summary>
