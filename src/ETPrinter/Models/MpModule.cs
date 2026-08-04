@@ -1,3 +1,5 @@
+using ETPrinter.Services;
+
 namespace ETPrinter.Models;
 
 /// <summary>
@@ -13,6 +15,12 @@ public class MpModule
     // Konkretes Siemens-Modul aus MpModuleCatalog (Artikelnummer);
     // null = benutzerdefiniert, nur die Variante bestimmt die Belegung.
     public string? ArticleNumber { get; set; }
+
+    // Modultyp (DI/DO/AI/AO). Ohne Katalog-Artikel bestimmt er die generischen
+    // Struktur-Klemmen-Labels: Ausgabemodule haben Versorgung je Kanalgruppe,
+    // Eingabemodule nur am Gruppenende. Alte Projektdateien ohne das Feld
+    // deserialisieren zu DI — dem bisherigen Verhalten.
+    public ModuleType IoType { get; set; } = ModuleType.DI;
 
     // Header (oben im Streifen)
     public string HeaderText { get; set; } = string.Empty;
@@ -54,6 +62,7 @@ public class MpModule
     {
         Variant = Variant,
         ArticleNumber = ArticleNumber,
+        IoType = IoType,
         HeaderText = HeaderText,
         AddressCells = AddressCells.Select(c => c.Clone()).ToList(),
         NetAddress1 = NetAddress1,

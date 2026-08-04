@@ -152,7 +152,8 @@
   - [x] horizontal_16_DI_DQ (2026-07-02)
     - Merge-Struktur (A:B ueber alle 20 Zeilen) stimmt mit Excel ueberein
     - K9 "M" entfernt (bei DI16 BA/HF unbelegt); Belegungs-Matrix je Modultyp in PRINT-FORMATS.md
-    - Offen: Struktur-Labels Modultyp-abhaengig machen (DQ16 ST: K9/K10 = 1L+/1M)
+    - [x] Struktur-Labels Modultyp-abhaengig (2026-08-04): MpModule.IoType steuert die
+          generische Belegung (DO -> Versorgung je Kanalgruppe), Katalog gewinnt
   - [x] horizontal_16_DI_230V — Merge exakt wie Excel; geratene Labels entfernt (2026-07-03)
   - [x] horizontal_8_DQ_230V — DQ 8x230VAC/5A Relay verifiziert (A5E03485590-AD),
         Labels entfernt (Relais 24V-versorgt, Excel-Bloecke leer) (2026-07-03)
@@ -165,10 +166,11 @@
 - [x] 25mm-Template (6ES7592-2AX00) IMPLEMENTIERT (2026-07-03): 20 Module/Bogen,
       familienabhaengiges Spaltenmodell (Adresse+CPU, keine Net-Address), Varianten
       MP25_16/MP25_32, familiengefilterte Varianten/Katalog, GenCount-Generator. 96 Tests.
-- [ ] Offen: DQ 8x24VDC/2A HF, DI 16x230VAC BA Labels (35mm-Katalog-Eintraege)
-- [ ] Offen: AQ 2xU/I ST (25mm) Katalog-Eintrag; 25mm-Feinmasse per Stahllineal
+- [x] DQ 8x24VDC/2A HF + DI 16x230VAC BA Katalog-Eintraege (2026-08-04)
+- [x] AQ 2xU/I ST (25mm) Katalog-Eintrag (2026-08-04)
+- [ ] 25mm-Feinmasse per Stahllineal
 - [ ] Exakte Masse per Stahllineal (wenn Boegen geliefert)
-- [ ] 25mm-Template Variante
+- [x] 25mm-Template Variante (2026-07-03)
 
 ---
 
@@ -248,8 +250,23 @@
 - [x] Projekt-Laden ueberschreibt maschinenspezifische calibration.json (lokale hat Vorrang)
 - [x] CSV-Separator-Erkennung zaehlt Zeichen in quoted Feldern mit (quote-aware)
 
+## Phase 20: Katalog-Lueckenschluss + typabhaengige Struktur-Labels (2026-08-04) [DONE]
+- [x] DQ 8x24VDC/2A HF (6ES7522-1BF00-0AB0): nur K1-K8 Kanaele, K11-18 + K21-40
+      gesperrt -> Generator fuellt 1 Byte statt 4 (CreateLayout_DQ_8_2A)
+- [x] DI 16x230VAC BA (6ES7521-1FH00-0AA0): Kanaele auf ungeraden Klemmen, xN auf
+      K8/K18/K28/K38, Struktur-Bloecke verifiziert leer
+- [x] AQ 2xU/I ST (6ES7532-5NB00-0AB0): erster 25mm-Eintrag, MP25_16, modusabhaengig
+- [x] EntriesForFamily filtert ueber die Varianten-Familie statt hart [CustomEntry]
+- [x] MpModule.IoType: generische Struktur-Labels folgen dem Generator-Modultyp
+- [x] mp-state um article/ioType/editableCells/structureLabels erweitert;
+      set-module-article auf Artikel der aktiven Familie begrenzt
+- [x] 109 Tests (13 neu), Smoke-Test inkl. Persistenz-Roundtrip + Legacy-Datei
+
 ## Blockierte Aufgaben (warten auf Hardware)
 - [ ] Exakte Masse per Stahllineal (6ES7592-1AX00, -2AX00)
-- [ ] 25mm-Template Variante
 - [ ] Feinabstimmung aller 12 ET200MP-Varianten gegen physische Boegen
-- [ ] Klemmenbelegungen: DQ (alle), AI/AQ (restliche), SIWAREX Waegemodule
+
+## Offen (Komfort, keine neuen Belegungen noetig)
+- [ ] Katalog-Eintraege fuer DQ 16x24VDC/0.5A BA, AI 8xU/I HF, AI 8xU/I/R/RTD BA,
+      AI 8xU/I/RTD/TC ST, AQ 4xU/I ST — Analogmodule ohne feste Klemmenbelegung,
+      Nutzen ist nur die Auswahl per Modulnamen statt per Layout-Variante

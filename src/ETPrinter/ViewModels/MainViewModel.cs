@@ -308,11 +308,15 @@ public class MainViewModel : ViewModelBase
         {
             if (value is null || _selectedMpModule is null) return;
 
-            _selectedMpModule.ArticleNumber =
-                string.IsNullOrEmpty(value.ArticleNo) ? null : value.ArticleNo;
+            bool isCustom = string.IsNullOrEmpty(value.ArticleNo);
+
+            // Modultyp vor dem Artikel setzen — bei "Benutzerdefiniert" bestimmt er
+            // die generischen Struktur-Labels, die der Zellen-Neuaufbau liest.
+            _selectedMpModule.IoType = isCustom ? GenModuleType.Type : value.IoType;
+            _selectedMpModule.ArticleNumber = isCustom ? null : value.ArticleNo;
 
             // Generator-Modultyp am Katalogeintrag vorbelegen (DI/DO/AI/AO)
-            if (!string.IsNullOrEmpty(value.ArticleNo))
+            if (!isCustom)
             {
                 var typeInfo = AddressGenerator.ModuleTypes.FirstOrDefault(t => t.Type == value.IoType);
                 if (typeInfo is not null)
@@ -323,6 +327,16 @@ public class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(SelectedMpVariant));
             OnPropertyChanged(nameof(SelectedMpModuleInfo));
         }
+    }
+
+    /// <summary>Uebertraegt den Generator-Modultyp auf das ausgewaehlte MP-Modul.
+    /// Nur fuer benutzerdefinierte Module — bei Katalog-Artikeln kommt die
+    /// Klemmenbelegung aus dem Datenblatt und darf nicht ueberschrieben werden.</summary>
+    private void ApplyIoTypeToSelectedMpModule()
+    {
+        if (_selectedMpModule is null) return;
+        if (!string.IsNullOrEmpty(_selectedMpModule.ArticleNumber)) return;
+        _selectedMpModule.IoType = GenModuleType.Type;
     }
 
     public string SelectedMpModuleInfo
@@ -513,6 +527,7 @@ public class MainViewModel : ViewModelBase
             {
                 OnPropertyChanged(nameof(GenCountLabel));
                 OnPropertyChanged(nameof(GenTypicalCounts));
+                ApplyIoTypeToSelectedMpModule();
                 UpdateGeneratorPreview();
             }
         }
@@ -927,6 +942,11 @@ public class MainViewModel : ViewModelBase
         {
             // ET200MP: Adressen sequenziell pro Byte erzeugen und klemmengerecht verteilen
             SelectedMpModule.HeaderText = result.Header;
+
+            // Modultyp uebernehmen, BEVOR die Zellen gelesen werden: bei
+            // benutzerdefinierten Modulen aendert er die Struktur-Klemmen und
+            // damit die Menge der editierbaren Zellen.
+            ApplyIoTypeToSelectedMpModule();
 
             // Fuer MP: Anzahl Bytes/Kanaele automatisch aus Modulvariante ableiten
             var info = AddressGenerator.ModuleTypes.First(m => m.Type == GenModuleType.Type);

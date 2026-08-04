@@ -261,7 +261,18 @@ Die Struktur-Klemmen unterscheiden sich aber je Modultyp (verifiziert an den Equ
 | 20     | M                 | M                 | 2M  |
 
 Seit v3.0 uebernimmt der **Modul-Katalog** (MpModuleCatalog) die exakten Labels je
-konkretem Modul; ohne Katalog-Auswahl gilt die generische DI-16-HF-Belegung.
+konkretem Modul.
+
+**Ohne Katalog-Auswahl** richtet sich die Belegung nach dem Modultyp des Adress-
+Generators (`MpModule.IoType`, seit 2026-08-04):
+
+| Variante | Modultyp DI (und AI/AO) | Modultyp DO |
+|----------|------------------------|-------------|
+| DI_DQ_16 | K19/K20 = L+/M (wie DI 16 HF) | K9/K10 = 1L+/1M, K19/K20 = 2L+/2M (wie DQ 16 ST) |
+| DI_DQ_32 | K19/K20 = 1L+/1M, K39/K40 = 2L+/2M (wie DI 32 HF) | K9/K10 = 1L+/1M, K19/K20 = 2L+/2M, K29/K30 = 3L+/3M, K39/K40 = 4L+/4M (wie DQ 32 HF) |
+
+Alle anderen Varianten haben keine typabhaengigen Struktur-Labels. Ein gesetzter
+Katalog-Artikel gewinnt immer — dessen Belegung stammt aus dem Datenblatt.
 
 #### DQ 32x24VDC/0.5A HF (6ES7522-1BL01-0AB0) — verifiziert (109480716)
 
@@ -274,6 +285,39 @@ Anders als DI 32 sind hier K9/K10 und K19/K20 belegt (Potentialbruecken 9-29/10-
 | 10/30  | 1M    | 3M  |
 | 19/39  | 2L+   | 4L+ |
 | 20/40  | 2M    | 4M  |
+
+#### DQ 8x24VDC/2A HF (6ES7522-1BF00-0AB0) — verifiziert (59193089, Figure 3-1)
+
+Nutzt dieselbe 40-Klemmen-Frontbaugruppe wie die 32-Kanal-Module, belegt davon aber
+nur die ersten zehn Klemmen. Zwei Gruppen zu je vier Kanaelen:
+
+| Klemme | Belegung |
+|--------|----------|
+| 1-8    | CH0-CH7 (Gruppe 1 = CH0-3, Gruppe 2 = CH4-7) |
+| 9/10   | 1L+ / 1M (24 V DC) |
+| 11-18  | unbelegt |
+| 19/20  | 2L+ / 2M (24 V DC) |
+| 21-40  | unbelegt (komplette rechte Reihe) |
+
+Der Katalog-Eintrag sperrt die unbelegten Klemmen (`IsEditable=false`). Dadurch findet
+der Adress-Generator nur acht editierbare Zellen und fuellt genau **ein** Byte statt
+der vier des 32-Kanal-Rasters.
+
+#### DI 16x230VAC BA (6ES7521-1FH00-0AA0) — verifiziert (59193398, Figure 3-1)
+
+Vier Gruppen zu je vier Kanaelen. Die Kanaele liegen auf den **ungeraden** Klemmen,
+die gemeinsame AC-Versorgung xN jeweils auf der letzten Klemme der Gruppe:
+
+| Gruppe | Kanaele | Klemmen | xN |
+|--------|---------|---------|-----|
+| a oben | CH0-CH3 | 1, 3, 5, 7 | 8 |
+| a unten | CH4-CH7 | 11, 13, 15, 17 | 18 |
+| b oben | CH8-CH11 | 21, 23, 25, 27 | 28 |
+| b unten | CH12-CH15 | 31, 33, 35, 37 | 38 |
+
+K9/K10, K19/K20 (und K29/K30, K39/K40) sind unbelegt — das bestaetigt die leeren
+colspan-2-Bloecke des Excel-Templates. xN teilt sich mit dem letzten Kanal der Gruppe
+einen 2-Zeilen-Block, deshalb traegt die App dort **kein** Struktur-Label ein.
 
 #### 8x230VAC/5A ST Relay (6ES7522-5HF00-0AB0) — verifiziert (A5E03485590-AD)
 
@@ -290,6 +334,14 @@ Klemmen-Kanal-Zuordnung. Das Excel-Template bietet deshalb **5 generische 4-Zeil
 Bloecke pro Spalte** (kein hartkodiertes MANA). Der Generator verteilt GenCount Kanaele
 spaltenausgeglichen (AI 8: CH0-3 links, CH4-7 rechts), der 5. Block bleibt fuer MANA/
 Reserve frei.
+
+#### AQ 2xU/I ST (6ES7532-5NB00-0AB0, 25mm) — verifiziert (91688388, Figure 3-1/3-2)
+
+Gleiche Modusabhaengigkeit wie die 35mm-Analogmodule: Spannungsausgang 2-Draht belegt
+QV auf K1 und MANA auf K3, 4-Draht zusaetzlich S+/S- auf K5/K6, Stromausgang QI auf K1
+bzw. K5. Belegt sind nur K1-K7, die Versorgung liegt am Einspeiseelement (K41 = L+,
+K43 = M) und damit ausserhalb des Beschriftungsstreifens. Der Katalog-Eintrag laesst
+den Streifen deshalb komplett editierbar (Variante MP25_16, 20 Zeilen).
 
 **Kanalgruppen und Byte-Zuordnung:**
 - Gruppe a: CH0-CH7   = Byte 0 (E x.0 bis E x.7) — Klemmen 1-8 links
@@ -326,7 +378,7 @@ Jede Variante existiert horizontal (0 Grad) und vertikal (90 Grad) = 12 Formate.
 #### Digital Output (DQ) — 6ES7522
 | Modul | Artikel-Nr | Kanäle | Breite | Excel-Mappe |
 |---|---|---|---|---|
-| DQ 8x24VDC/2A HF | 6ES7522-1BF00-0AB0 | 8 | 35mm | horizontal/vertical_32_DI_DQ (*) |
+| DQ 8x24VDC/2A HF | 6ES7522-1BF00-0AB0 | 8 | 35mm | horizontal/vertical_32_DI_DQ (*) — Katalog sperrt K11-40 |
 | DQ 16x24VDC/0.5A ST | 6ES7522-1BH00-0AB0 | 16 | 35mm | horizontal/vertical_16_DI_DQ |
 | DQ 16x24VDC/0.5A BA | 6ES7522-1BH10-0AA0 | 16 | 35mm | horizontal/vertical_16_DI_DQ |
 | DQ 32x24VDC/0.5A HF | 6ES7522-1BL01-0AB0 | 32 | 35mm | horizontal/vertical_32_DI_DQ |
@@ -357,7 +409,9 @@ Jede Variante existiert horizontal (0 Grad) und vertikal (90 Grad) = 12 Formate.
 - DI 32x24VDC HF: https://cache.industry.siemens.com/dl/files/896/59192896/att_897449/v1/s71500_di_32x24vdc_hf_manual_en-US_en-US.pdf
 - DI 16x24VDC BA: https://support.industry.siemens.com/cs/attachments/83501190/s71500_di_16x24vdc_ba_manual_en-US_en-US.pdf
 - DQ 32x24VDC HF: https://cache.industry.siemens.com/dl/files/716/109480716/att_902641/v1/s71500_dq_32x24vdc_0_5a_hf_manual_en-US_en-US.pdf
-- DQ 8x24VDC/2A HF: https://support.industry.siemens.com/cs/attachments/59193089/s71500_dq_8x24vdc_2a_hf_manual_en-US_en-US.pdf
+- DQ 8x24VDC/2A HF: https://cache.industry.siemens.com/dl/files/089/59193089/att_902698/v1/s71500_dq_8x24vdc_2a_hf_manual_en-US_en-US.pdf
+- DI 16x230VAC BA: https://cache.industry.siemens.com/dl/files/398/59193398/att_897452/v1/s71500_di_16x230vac_ba_manual_en-US_en-US.pdf
+- AQ 2xU/I ST (25mm): https://cache.industry.siemens.com/dl/files/388/91688388/att_75101/v1/s71500_aq_2xu_i_st_manual_en-US_en-US.pdf
 - AI 8xU/I/RTD/TC ST: https://cache.industry.siemens.com/dl/files/205/59193205/att_112065/v1/s71500_ai_8xu_i_rtd_tc_st_manual_en-US_en-US.pdf
 - AQ 4xU/I ST: https://cache.industry.siemens.com/dl/files/850/59191850/att_63218/v1/s71500_aq_4xu_i_st_manual_en-US_en-US.pdf
 - SIWAREX WP521/522: https://support.industry.siemens.com/cs/attachments/109736583/Manual_SIWAREX_WP521_WP522_en_en-US.pdf

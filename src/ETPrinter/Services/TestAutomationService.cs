@@ -425,10 +425,13 @@ public class TestAutomationService : IDisposable
     private string SetModuleArticle(string articleNo)
     {
         if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewaehlt");
-        var entry = MpModuleCatalog.Find(articleNo);
+        // Nur Artikel der aktiven Familie — sonst bekaeme das Modul eine Variante,
+        // die die Familie gar nicht anbietet (25mm-Artikel in einer 35mm-Seite).
+        var available = _viewModel.AvailableMpArticles;
+        var entry = available.FirstOrDefault(e => e.ArticleNo == articleNo && e.ArticleNo != "");
         if (entry is null && !string.IsNullOrEmpty(articleNo) && articleNo != "custom")
-            return Error($"Unbekannter Artikel: {articleNo}. Verfuegbar: " +
-                string.Join(", ", MpModuleCatalog.Entries.Where(e => e.ArticleNo != "").Select(e => e.ArticleNo)));
+            return Error($"Unbekannter Artikel fuer diese Familie: {articleNo}. Verfuegbar: " +
+                string.Join(", ", available.Where(e => e.ArticleNo != "").Select(e => e.ArticleNo)));
         _viewModel.SelectedMpArticle = entry ?? MpModuleCatalog.CustomEntry;
         return Ok($"Modul-Artikel gesetzt: {(entry?.DisplayName ?? "Benutzerdefiniert")} (Variante {_viewModel.SelectedMpModule.Variant})");
     }
@@ -502,12 +505,20 @@ public class TestAutomationService : IDisposable
             moduleIndex = mod.ModuleIndex,
             column = mod.ModuleIndex,
             variant = mod.Variant.ToString(),
+            article = mod.ArticleNumber ?? "",
+            ioType = mod.IoType.ToString(),
             header = mod.HeaderText,
             netAddr1 = mod.NetAddress1,
             netAddr2 = mod.NetAddress2,
             cpuName = mod.CpuName,
             cellCount = mod.AddressCells.Count,
+            editableCells = mod.AddressCells.Count(c => c.IsEditable),
             filledCells = mod.AddressCells.Count(c => c.HasText),
+            // Struktur-Klemmen als "row:label" (nur beschriftete), z.B. "8:1L+"
+            structureLabels = mod.AddressCells
+                .Where(c => !c.IsEditable && !string.IsNullOrEmpty(c.Label))
+                .Select(c => $"{c.StartCol}/{c.StartRow}:{c.Label}")
+                .ToArray(),
             hasText = mod.HasText
         };
         return Ok(JsonSerializer.Serialize(state));

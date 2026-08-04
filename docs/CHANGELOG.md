@@ -2,13 +2,52 @@
 
 ## [Unreleased]
 ### Geplant
-- 8_AI_AQ / 4_AQ: Excel hat 5x 4-Zeilen-Bloecke pro Spalte, App rendert MANA+leer — Datenblatt pruefen
-- Struktur-Labels Modultyp-abhaengig machen (DQ16 ST: K9/K10 = 1L+/1M)
-- Weitere Modultypen: DQ, AI, AQ Klemmenbelegungen aus Datenblaettern
-- SIWAREX Waegemodule
 - Exakte Masse per Stahllineal (wenn Beschriftungsboegen geliefert)
-- Architekturfrage: Excel-Template hat 10 Streifen-Positionen pro A4 (2 Baender x 5 Spalten),
-  App bedruckt nur das obere Band (5 Module) — mit physischen Boegen klaeren
+- Feinabstimmung aller ET200MP-Varianten gegen die physischen Boegen
+- Restliche Katalog-Eintraege (Komfort, keine neuen Belegungen): DQ 16x24VDC/0.5A BA,
+  AI 8xU/I HF, AI 8xU/I/R/RTD BA, AI 8xU/I/RTD/TC ST, AQ 4xU/I ST
+
+---
+
+## 2026-08-04 - Projekttag 6 (Katalog-Lueckenschluss + typabhaengige Struktur-Labels)
+
+### Drei neue Katalog-Eintraege (datenblattverifiziert)
+- **DQ 8x24VDC/2A HF** (6ES7522-1BF00-0AB0, Manual 59193089): nutzt die
+  40-Klemmen-Frontbaugruppe, belegt aber nur K1-K8 (CH0-7) plus 1L+/1M auf K9/K10
+  und 2L+/2M auf K19/K20. K11-K18 und die komplette rechte Klemmenreihe sind
+  unbelegt und im Streifen **gesperrt** — dadurch fuellt der Adress-Generator
+  automatisch ein Byte statt der vier des 32-Kanal-Rasters (neues
+  `CreateLayout_DQ_8_2A`, gleiche Zellenzahl wie DI_DQ_32).
+- **DI 16x230VAC BA** (6ES7521-1FH00-0AA0, Manual 59193398): Kanaele auf den
+  ungeraden Klemmen, xN auf K8/K18/K28/K38, K9/K10 + K19/K20 unbelegt. Bestaetigt
+  die leeren Struktur-Bloecke des Excel-Templates — der frueher offene Vermerk
+  "Datenblatt noch nicht extrahiert" ist damit erledigt.
+- **AQ 2xU/I ST** (6ES7532-5NB00-0AB0, Manual 91688388): erster **25mm**-Eintrag.
+  Wie alle Analogmodule ohne feste Klemmen-Kanal-Zuordnung (Spannung 2-/4-Draht und
+  Strom belegen unterschiedliche Klemmen), belegt nur K1-K7, Versorgung am
+  Einspeiseelement K41/K43. Variante MP25_16, Streifen komplett editierbar.
+- `EntriesForFamily` filtert jetzt ueber die Variante des Eintrags statt die
+  25mm-Familie hart auf "Benutzerdefiniert" zu setzen.
+
+### Struktur-Labels haengen am Modultyp (generischer Fall)
+- Neu `MpModule.IoType` (DI/DO/AI/AO). Ohne Katalog-Artikel bestimmt der Modultyp
+  die Struktur-Klemmen: Eingabemodule fuehren die Versorgung nur am Gruppenende,
+  Ausgabemodule je Kanalgruppe. DI_DQ_16 als DO zeigt damit 1L+/1M + 2L+/2M
+  (wie DQ 16 ST), DI_DQ_32 als DO vier Versorgungsgruppen (wie DQ 32 HF).
+- Gesetzt bei Katalogwahl, bei Wechsel des Generator-Modultyps (Live-Update der
+  Vorschau) und beim Generieren. Ein Katalog-Artikel gewinnt immer.
+- Persistenz additiv: alte Projektdateien ohne das Feld laden als DI — exakt das
+  bisherige Verhalten (per Roundtrip mit entferntem Feld geprueft).
+
+### Automation + Tests
+- `mp-state` liefert zusaetzlich `article`, `ioType`, `editableCells` und die
+  gesetzten `structureLabels`; `set-module-article` akzeptiert nur noch Artikel der
+  aktiven Produktfamilie (sonst bekaeme ein 35mm-Streifen eine 25mm-Variante).
+- 109 Tests (13 neu: Katalog-Belegungen, Familienfilter, Typabhaengigkeit,
+  Zellenzahl-Invariante ueber alle Modultypen).
+- Smoke-Test: DQ8 fuellt 8 Adressen und sperrt den Rest, DI/DO-Wechsel schaltet die
+  Struktur-Labels live um, 25mm-Familie bietet nur den AQ-2-Eintrag, Speichern/Laden
+  erhaelt Artikel + Modultyp.
 
 ---
 

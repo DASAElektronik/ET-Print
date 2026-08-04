@@ -26,6 +26,9 @@ public class MpAddressCellViewModel : ViewModelBase
     public int ColSpan => _definition.ColSpan;
     public bool IsEditable => _definition.IsEditable;
 
+    /// <summary>Struktur-Label (M/L+/leer) — nur fuer nicht editierbare Zellen belegt.</summary>
+    public string Label => _definition.Label;
+
     public string Text
     {
         get => _cell.Text;
@@ -77,6 +80,21 @@ public class MpModuleViewModel : ViewModelBase
                 OnPropertyChanged(nameof(HasText));
                 NotifyContentChanged();
             }
+        }
+    }
+
+    /// <summary>Modultyp (DI/DO/AI/AO). Ohne Katalog-Artikel bestimmt er die
+    /// generischen Struktur-Klemmen-Labels — Wechsel baut die Zellen neu auf.</summary>
+    public ModuleType IoType
+    {
+        get => _module.IoType;
+        set
+        {
+            if (_module.IoType == value) return;
+            _module.IoType = value;
+            RebuildCellViewModels();
+            OnPropertyChanged();
+            NotifyContentChanged();
         }
     }
 
@@ -178,9 +196,10 @@ public class MpModuleViewModel : ViewModelBase
     /// <summary>Uebernimmt Inhalt eines anderen Moduls (fuer Paste). ModuleIndex bleibt.</summary>
     public void SetModule(MpModule source)
     {
-        // Artikel vor Variante setzen, damit der Zellen-Neuaufbau die
-        // Katalog-Belegung des Quellmoduls verwendet
+        // Artikel + Modultyp vor Variante setzen, damit der Zellen-Neuaufbau die
+        // Belegung des Quellmoduls verwendet
         _module.ArticleNumber = source.ArticleNumber;
+        _module.IoType = source.IoType;
         // Variante setzen ueber Property, damit AddressCells neu aufgebaut werden
         Variant = source.Variant;
         _module.HeaderText = source.HeaderText;
@@ -208,6 +227,7 @@ public class MpModuleViewModel : ViewModelBase
         OnPropertyChanged(nameof(PrintOpacity));
         OnPropertyChanged(nameof(HasText));
         OnPropertyChanged(nameof(ArticleNumber));
+        OnPropertyChanged(nameof(IoType));
         // AddressCell-Texte via RebuildCellViewModels neu durchreichen
         RebuildCellViewModels();
     }

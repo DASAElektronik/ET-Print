@@ -59,12 +59,33 @@ public static class MpModuleCatalog
         new("6ES7522-1BH00-0AB0", "DQ 16x24VDC/0.5A ST", ModuleType.DO, MpModuleVariant.DI_DQ_16,
             MpModuleLayoutFactory.CreateLayout_DI_DQ_16(k9: "1L+", k10: "1M", k19: "2L+", k20: "2M")),
 
+        // Verifiziert: Blockdiagramm Figure 3-1 (59193089). Nur K1-K8 sind Kanaele,
+        // K11-K18 und K21-K40 unbelegt -> eigenes Layout mit gesperrten Zellen.
+        new("6ES7522-1BF00-0AB0", "DQ 8x24VDC/2A HF", ModuleType.DO, MpModuleVariant.DI_DQ_32,
+            MpModuleLayoutFactory.CreateLayout_DQ_8_2A()),
+
+        // Verifiziert: Blockdiagramm Figure 3-1 (59193398). Kanaele auf den
+        // ungeraden Klemmen, xN auf K8/K18/K28/K38; K9/K10 + K19/K20 unbelegt.
+        // Alle Struktur-Bloecke bleiben leer (siehe CreateLayout_DI_230V_16).
+        new("6ES7521-1FH00-0AA0", "DI 16x230VAC BA", ModuleType.DI, MpModuleVariant.DI_230V_16,
+            MpModuleLayoutFactory.GetLayout(MpModuleVariant.DI_230V_16).AddressCells),
+
         // SIWAREX Waegemodule — fester Pinout (Variante liefert die Labels).
         // Verifiziert: Anschlussbelegung A5E36695151A (04/2016).
         new("7MH4980-1AA01", "SIWAREX WP521 ST (1 Kanal)", ModuleType.DI, MpModuleVariant.SIWAREX_WP52x,
             MpModuleLayoutFactory.GetLayout(MpModuleVariant.SIWAREX_WP52x).AddressCells),
         new("7MH4980-2AA01", "SIWAREX WP522 ST (2 Kanal)", ModuleType.DI, MpModuleVariant.SIWAREX_WP52x,
             MpModuleLayoutFactory.GetLayout(MpModuleVariant.SIWAREX_WP52x).AddressCells),
+
+        // === 25mm-Module ===
+        // Verifiziert: Blockdiagramme Figure 3-1/3-2 (91688388). Wie alle
+        // Analogmodule OHNE feste Klemmen-Kanal-Zuordnung: Spannungsausgang
+        // (2-/4-Draht) und Stromausgang belegen unterschiedliche Klemmen
+        // (QV/QI auf K1, MANA auf K3; bei 4-Draht zusaetzlich S+/S- auf K5/K6).
+        // Deshalb keine Struktur-Labels — der Streifen bleibt komplett editierbar.
+        // Belegt sind nur K1-K7, der 20-zeilige MP25_16-Streifen reicht dafuer.
+        new("6ES7532-5NB00-0AB0", "AQ 2xU/I ST", ModuleType.AO, MpModuleVariant.MP25_16,
+            MpModuleLayoutFactory.GetLayout(MpModuleVariant.MP25_16).AddressCells),
     ];
 
     public static MpCatalogEntry? Find(string? articleNo) =>
@@ -72,13 +93,13 @@ public static class MpModuleCatalog
             ? null
             : Entries.FirstOrDefault(e => e.ArticleNo == articleNo);
 
-    /// <summary>Katalog-Eintraege, die zur Familie passen. Fuer 25mm gibt es noch
-    /// keine verifizierten Eintraege -> nur "Benutzerdefiniert".</summary>
+    /// <summary>Katalog-Eintraege, die zur Familie passen — ueber die Variante des
+    /// Eintrags gefiltert (25mm-Varianten vs. 35mm). "Benutzerdefiniert" ist immer dabei.</summary>
     public static IReadOnlyList<MpCatalogEntry> EntriesForFamily(ProductFamily family)
     {
-        if (family == ProductFamily.S71500_ET200MP_25mm)
-            return [CustomEntry];
-        // 35mm: alle Eintraege (deren Varianten sind 35mm-Varianten)
-        return Entries;
+        bool is25 = family == ProductFamily.S71500_ET200MP_25mm;
+        return Entries
+            .Where(e => e == CustomEntry || MpModuleLayoutFactory.Is25mmVariant(e.Variant) == is25)
+            .ToList();
     }
 }

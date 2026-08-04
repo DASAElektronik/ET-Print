@@ -68,6 +68,8 @@ public class ClipboardAndCloneTests
         {
             ModuleIndex = 3,
             Variant = MpModuleVariant.DI_DQ_16,
+            ArticleNumber = "6ES7522-1BH00-0AB0",
+            IoType = ModuleType.DO,
             HeaderText = "Mod-A",
             AddressCells = [
                 new MpAddressCell { CellIndex = 0, Text = "E 0.0" },
@@ -82,6 +84,10 @@ public class ClipboardAndCloneTests
 
         Assert.Equal(0, clone.ModuleIndex); // ModuleIndex NICHT kopiert
         Assert.Equal(MpModuleVariant.DI_DQ_16, clone.Variant);
+        // Belegungsrelevante Felder muessen mit, sonst zeigt die Kopie andere
+        // Struktur-Klemmen als das Original
+        Assert.Equal("6ES7522-1BH00-0AB0", clone.ArticleNumber);
+        Assert.Equal(ModuleType.DO, clone.IoType);
         Assert.Equal("Mod-A", clone.HeaderText);
         Assert.Equal(2, clone.AddressCells.Count);
         Assert.Equal("E 0.0", clone.AddressCells[0].Text);

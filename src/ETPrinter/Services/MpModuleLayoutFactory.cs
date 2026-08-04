@@ -56,7 +56,7 @@ public static class MpModuleLayoutFactory
             .ToList();
     }
 
-    private static bool Is25mmVariant(MpModuleVariant v) =>
+    public static bool Is25mmVariant(MpModuleVariant v) =>
         v is MpModuleVariant.MP25_16 or MpModuleVariant.MP25_32;
 
     /// <summary>Standard-Variante fuer eine neu angelegte Modul-Seite der Familie.</summary>
@@ -79,14 +79,43 @@ public static class MpModuleLayoutFactory
     /// <summary>
     /// Liefert die Zellen-Definitionen fuer ein Modul: Katalog-Belegung (exakte
     /// Klemmen-Labels des konkreten Siemens-Moduls) wenn ArticleNumber gesetzt,
-    /// sonst die generische Varianten-Belegung. Zellenzahl ist je Variante identisch.
+    /// sonst die generische Varianten-Belegung zum Modultyp (DI/DO/AI/AO).
+    /// Zellenzahl ist je Variante identisch.
     /// </summary>
     public static MpCellDefinition[] GetDefinitions(MpModule module)
     {
         var entry = MpModuleCatalog.Find(module.ArticleNumber);
         if (entry is not null && entry.Variant == module.Variant)
             return entry.Cells;
-        return GetLayout(module.Variant).AddressCells;
+        return GetGenericDefinitions(module.Variant, module.IoType);
+    }
+
+    /// <summary>
+    /// Generische Belegung ohne Katalog-Artikel. Die Struktur-Klemmen der
+    /// 24V-Digitalvarianten haengen vom Modultyp ab: Eingabemodule fuehren die
+    /// Versorgung nur am Gruppenende (K19/K20 bzw. K39/K40), Ausgabemodule je
+    /// Kanalgruppe (zusaetzlich K9/K10 bzw. K29/K30). Vorbild sind die
+    /// verifizierten Katalog-Module DI/DQ 16 und DI/DQ 32 (siehe PRINT-FORMATS.md).
+    /// Alle anderen Varianten haben keine typabhaengigen Struktur-Labels.
+    /// </summary>
+    public static MpCellDefinition[] GetGenericDefinitions(MpModuleVariant variant, ModuleType ioType)
+    {
+        if (ioType != ModuleType.DO)
+            return GetLayout(variant).AddressCells;
+
+        return variant switch
+        {
+            // wie DQ 16x24VDC/0.5A ST (6ES7522-1BH00-0AB0)
+            MpModuleVariant.DI_DQ_16 => CreateLayout_DI_DQ_16(
+                k9: "1L+", k10: "1M", k19: "2L+", k20: "2M"),
+
+            // wie DQ 32x24VDC/0.5A HF (6ES7522-1BL01-0AB0)
+            MpModuleVariant.DI_DQ_32 => CreateLayout_DI_DQ_32(
+                k9: "1L+", k10: "1M", k19: "2L+", k20: "2M",
+                k29: "3L+", k30: "3M", k39: "4L+", k40: "4M"),
+
+            _ => GetLayout(variant).AddressCells
+        };
     }
 
     // =================================================================
@@ -130,6 +159,37 @@ public static class MpModuleLayoutFactory
     }
 
     // =================================================================
+    // DQ 8x24VDC/2A HF (6ES7522-1BF00-0AB0) — verifiziert am Blockdiagramm
+    // Figure 3-1 des Equipment Manuals (59193089): nur K1-K8 sind Kanaele
+    // (CH0-CH7), Versorgung 1L+/1M auf K9/K10 und 2L+/2M auf K19/K20.
+    // K11-K18 und die komplette rechte Klemmenreihe (K21-K40) sind UNBELEGT
+    // und daher nicht beschriftbar — dadurch fuellt der Adress-Generator
+    // genau ein Byte statt der vier des 32-Kanal-Rasters.
+    // Zellenreihenfolge identisch zu CreateLayout_DI_DQ_32 (Spalte 0 komplett,
+    // dann Spalte 1), damit Texte beim Variantenwechsel migrieren koennen.
+    // =================================================================
+    internal static MpCellDefinition[] CreateLayout_DQ_8_2A()
+    {
+        var cells = new List<MpCellDefinition>();
+
+        // Spalte 0: K1-K8 = CH0-CH7, K9/K10 + K19/K20 Versorgung, K11-K18 unbelegt
+        for (int i = 0; i < 8; i++)
+            cells.Add(new(Half: 0, StartRow: i, RowSpan: 1, StartCol: 0, ColSpan: 1, IsEditable: true));
+        cells.Add(new(Half: 0, StartRow: 8, RowSpan: 1, StartCol: 0, ColSpan: 1, IsEditable: false, Label: "1L+"));
+        cells.Add(new(Half: 0, StartRow: 9, RowSpan: 1, StartCol: 0, ColSpan: 1, IsEditable: false, Label: "1M"));
+        for (int i = 0; i < 8; i++)
+            cells.Add(new(Half: 0, StartRow: 10 + i, RowSpan: 1, StartCol: 0, ColSpan: 1, IsEditable: false));
+        cells.Add(new(Half: 0, StartRow: 18, RowSpan: 1, StartCol: 0, ColSpan: 1, IsEditable: false, Label: "2L+"));
+        cells.Add(new(Half: 0, StartRow: 19, RowSpan: 1, StartCol: 0, ColSpan: 1, IsEditable: false, Label: "2M"));
+
+        // Spalte 1: K21-K40 komplett unbelegt
+        for (int row = 0; row < RowsPerHalf; row++)
+            cells.Add(new(Half: 0, StartRow: row, RowSpan: 1, StartCol: 1, ColSpan: 1, IsEditable: false));
+
+        return cells.ToArray();
+    }
+
+    // =================================================================
     // DI/DQ 16x24VDC — 16 Kanaele, 2 Bytes
     // Col 0+1 gemergt (breite Spalte), 1 Zeile pro Kanal
     // =================================================================
@@ -159,9 +219,12 @@ public static class MpModuleLayoutFactory
     // =================================================================
     // DI 16x230VAC BA — 16 Kanaele, 2 Zeilen pro Kanal (Excel-Struktur).
     // Col0/Col1 je 8 Kanalbloecke; colspan-2-Bloecke (rows 8-9, 18-19) sind im
-    // Excel-Template LEER (kein M/L+-Label) — Verdrahtung 230VAC-modulspezifisch,
-    // Datenblatt noch nicht extrahiert, daher keine geratenen Labels.
-    // Verifiziert gegen Excel horizontal_16_DI_230V (2026-07-03).
+    // Excel-Template LEER — am Blockdiagramm (59193398, Figure 3-1) bestaetigt:
+    // K9/K10 und K19/K20 (bzw. K29/K30, K39/K40) sind tatsaechlich unbelegt.
+    // Die Kanaele liegen auf den ungeraden Klemmen (K1=CH0, K3=CH1, K5=CH2,
+    // K7=CH3), die gemeinsame AC-Versorgung xN auf K8 bzw. K18 — beide teilen
+    // sich mit dem letzten Kanal einen 2-Zeilen-Block, daher kein Struktur-Label.
+    // Verifiziert gegen Excel horizontal_16_DI_230V (2026-07-03) + Manual (2026-08-04).
     // =================================================================
     private static MpCellDefinition[] CreateLayout_DI_230V_16()
     {
