@@ -39,7 +39,7 @@ public class CsvImportServiceTests
     {
         var cp1252 = CodePagesEncodingProvider.Instance.GetEncoding(1252)!;
         var path = WriteTemp(
-            "Kopfzeile;Zeile1;Zeile2\nStoermelder;Störung Lüfter;E0.1\n",
+            "Kopfzeile;Zeile1;Zeile2\nStörmelder;Störung Lüfter;E0.1\n",
             cp1252);
         try
         {

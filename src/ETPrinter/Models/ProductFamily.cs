@@ -39,8 +39,8 @@ public record ProductFamilyInfo(
     /// <summary>True wenn Module eine Net-Address-Spalte haben (35mm: ja, 25mm: nein).</summary>
     public bool HasNetAddressColumn => Col2Ratio > 0.0001;
 
-    /// <summary>Anzeigetext "2 Baender x 5 Spalten".</summary>
-    public string BandsPerPageText => $"{ModulesPerPage / ColumnsPerPage} Baender x {ColumnsPerPage} Spalten";
+    /// <summary>Anzeigetext "2 Bänder x 5 Spalten".</summary>
+    public string BandsPerPageText => $"{ModulesPerPage / ColumnsPerPage} Bänder x {ColumnsPerPage} Spalten";
 }
 
 public static class ProductFamilyDefinitions

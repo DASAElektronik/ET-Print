@@ -69,7 +69,7 @@ public sealed class MpEditorViewModel : ViewModelBase
                 _selectedModule.IsSelected = false;
 
             // Die ausgewaehlte Zelle gehoert zum ALTEN Modul — ohne Reset schrieben
-            // "Ausgewaehlte Adresszelle" und "Uebertragen" nach Auto-Advance oder
+            // "Ausgewählte Adresszelle" und "Übertragen" nach Auto-Advance oder
             // Header-Klick unsichtbar ins vorherige Modul.
             SelectedCell = null;
 
@@ -172,7 +172,7 @@ public sealed class MpEditorViewModel : ViewModelBase
     {
         get
         {
-            if (_selectedModule is null) return "Kein Modul ausgewaehlt";
+            if (_selectedModule is null) return "Kein Modul ausgewählt";
             var familyInfo = ProductFamilyDefinitions.Get(_family);
             int band = familyInfo.BandOf(_selectedModule.ModuleIndex);
             int col = familyInfo.ColumnOf(_selectedModule.ModuleIndex);

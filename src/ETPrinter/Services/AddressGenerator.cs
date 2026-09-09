@@ -138,7 +138,7 @@ public static class AddressGenerator
     public static string GetCountLabel(ModuleType type) => type switch
     {
         ModuleType.DI or ModuleType.DO => "Anzahl Bytes:",
-        ModuleType.AI or ModuleType.AO => "Anzahl Kanaele:",
+        ModuleType.AI or ModuleType.AO => "Anzahl Kanäle:",
         _ => "Anzahl:"
     };
 

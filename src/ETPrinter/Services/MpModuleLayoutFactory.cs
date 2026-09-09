@@ -37,7 +37,7 @@ public static class MpModuleLayoutFactory
         [MpModuleVariant.AQ_4] = new(MpModuleVariant.AQ_4, "4 Analog (breit)",
             CreateLayout_AQ_4()),
 
-        [MpModuleVariant.SIWAREX_WP52x] = new(MpModuleVariant.SIWAREX_WP52x, "SIWAREX WP52x (Waegemodul)",
+        [MpModuleVariant.SIWAREX_WP52x] = new(MpModuleVariant.SIWAREX_WP52x, "SIWAREX WP52x (Wägemodul)",
             CreateLayout_SIWAREX()),
 
         [MpModuleVariant.MP25_16] = new(MpModuleVariant.MP25_16, "25mm 16 Kanal (1 Spalte)",

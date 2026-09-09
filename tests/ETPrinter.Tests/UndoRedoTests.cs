@@ -106,13 +106,13 @@ public class UndoRedoTests
             Assert.Equal("E 0.0", vm.Labels[3].Line1);
             Assert.True(vm.IsDirty);
             Assert.True(vm.UndoCommand.CanExecute(null));
-            Assert.Equal("Uebertragen", vm.History.NextUndoLabel);
+            Assert.Equal("Übertragen", vm.History.NextUndoLabel);
 
             vm.UndoCommand.Execute(null);
             Assert.False(vm.Labels[3].HasText);
             Assert.False(vm.IsDirty);                 // zurueck auf dem sauberen Stand
             Assert.Same(vm.Labels[3], vm.SelectedLabel);
-            Assert.StartsWith("Rueckgaengig: Uebertragen", vm.StatusMessage);
+            Assert.StartsWith("Rückgängig: Übertragen", vm.StatusMessage);
 
             vm.RedoCommand.Execute(null);
             Assert.Equal("E 0.0", vm.Labels[3].Line1);
@@ -209,7 +209,7 @@ public class UndoRedoTests
             Assert.Equal(2, vm.PageCount);
             Assert.Equal(1, vm.CurrentPageIndex);
             Assert.Equal("b", vm.Labels[0].Line1);
-            Assert.Equal(1, vm.SelectedLabel!.Index);  // Cursor wie vor "Alle loeschen"
+            Assert.Equal(1, vm.SelectedLabel!.Index);  // Cursor wie vor "Alle löschen"
             vm.PrevPageCommand.Execute(null);
             Assert.Equal("a", vm.Labels[0].Line1);
         });

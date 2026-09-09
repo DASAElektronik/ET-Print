@@ -61,7 +61,7 @@ public partial class App : Application
 
         OfferRecovery(viewModel);
 
-        // Projektdatei als Startargument (Doppelklick auf .etprint, "Oeffnen mit")
+        // Projektdatei als Startargument (Doppelklick auf .etprint, "Öffnen mit")
         var projectArg = e.Args.FirstOrDefault(a =>
             string.Equals(Path.GetExtension(a), ".etprint", StringComparison.OrdinalIgnoreCase));
         if (projectArg is not null)

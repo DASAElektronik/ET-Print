@@ -1,6 +1,6 @@
 # ET-Printer – Produktdokumentation
 
-Stand: 2026-09-09, Version 3.1.1 (Abschluss laut `ABSCHLUSSPLAN.md`).
+Stand: 2026-09-09, Version 3.1.2 (Abschluss laut `ABSCHLUSSPLAN.md`).
 
 ## Vision
 

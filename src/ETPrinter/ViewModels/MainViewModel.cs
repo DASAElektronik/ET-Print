@@ -52,7 +52,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
     /// <summary>Undo/Redo-Verlauf (Snapshots des Projektzustands, AP9c). Tippen in
     /// Modulzellen und Randfeldern wird zu einem Schritt zusammengefasst.</summary>
     internal UndoHistory<EditorState> History { get; } =
-        new(coalesceKeys: ["Modulinhalt", "Seitenraender", "Kopfzeilen-Schrift", "Schrift"]);
+        new(coalesceKeys: ["Modulinhalt", "Seitenränder", "Kopfzeilen-Schrift", "Schrift"]);
     private bool _undoSuspended;
     private int _batchDepth;
     private string? _batchLabel;
@@ -111,12 +111,12 @@ public class MainViewModel : ViewModelBase, IImportTarget
         AvailableFonts = new ObservableCollection<string> { "Arial" };
         LoadFontsInBackground();
 
-        ApplyCommand = new RelayCommand(Undoable(ApplyToLabel, "Uebertragen"), () => SelectedLabel is not null || SelectedMpModule is not null);
+        ApplyCommand = new RelayCommand(Undoable(ApplyToLabel, "Übertragen"), () => SelectedLabel is not null || SelectedMpModule is not null);
         GenerateAndApplyCommand = new RelayCommand(Undoable(GenerateAndApply, "Generieren"), () => SelectedLabel is not null || SelectedMpModule is not null);
         GeneratePreviewCommand = new RelayCommand(Generator.UpdatePreview);
-        ClearAllCommand = new RelayCommand(Undoable(ClearAllLabels, "Alle loeschen"));
+        ClearAllCommand = new RelayCommand(Undoable(ClearAllLabels, "Alle löschen"));
         ClearSelectedCommand = new RelayCommand(Undoable(ClearSelected, "Auswahl leeren"), () => HasSelection && !TextBoxHasFocus());
-        ResetSettingsCommand = new RelayCommand(Undoable(ResetSettings, "Seite zuruecksetzen"));
+        ResetSettingsCommand = new RelayCommand(Undoable(ResetSettings, "Seite zurücksetzen"));
         ApplyFontToAllCommand = new RelayCommand(Undoable(ApplyFontToAll, "Schrift auf alle"));
         UndoCommand = new RelayCommand(Undo, () => History.CanUndo && !TextBoxHasFocus());
         RedoCommand = new RelayCommand(Redo, () => History.CanRedo && !TextBoxHasFocus());
@@ -134,7 +134,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         // Page navigation commands
         NextPageCommand = new RelayCommand(NextPage, () => CurrentPageIndex < PageCount - 1);
         PrevPageCommand = new RelayCommand(PrevPage, () => CurrentPageIndex > 0);
-        AddPageCommand = new RelayCommand(Undoable(AddPage, "Seite hinzufuegen"));
+        AddPageCommand = new RelayCommand(Undoable(AddPage, "Seite hinzufügen"));
         RemovePageCommand = new RelayCommand(Undoable(RemovePage, "Seite entfernen"), () => PageCount > 1);
 
         // Import commands — CSV/Excel liefern Etikettenzeilen (Header/Zeile1/Zeile2),
@@ -152,7 +152,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
 
         // Copy / Paste
         CopyCommand = new RelayCommand(CopySelection, CanCopy);
-        PasteCommand = new RelayCommand(Undoable(PasteFromClipboard, "Einfuegen"), CanPaste);
+        PasteCommand = new RelayCommand(Undoable(PasteFromClipboard, "Einfügen"), CanPaste);
 
         LoadCalibration();
         InitializeLabels();
@@ -295,7 +295,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         var step = History.Undo();
         if (step is null) return;
         RestoreState(step.Value.State);
-        StatusMessage = $"Rueckgaengig: {step.Value.Label}";
+        StatusMessage = $"Rückgängig: {step.Value.Label}";
     }
 
     internal void Redo()
@@ -358,7 +358,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         if (_suppressContentLossConfirm || !HasAnyContent()) return true;
         return _dialogs.Confirm(
             "Beim Wechsel von Druckformat oder Produktfamilie werden alle\n" +
-            "befuellten Etiketten/Module verworfen.\n\nFortfahren?",
+            "befüllten Etiketten/Module verworfen.\n\nFortfahren?",
             "Format wechseln");
     }
 
@@ -544,7 +544,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
 
     public string SelectedLabelInfo => SelectedLabel is not null
         ? $"Etikett {SelectedLabel.DisplayPosition} von {Labels.Count} (Seite {CurrentPageIndex + 1})"
-        : "Kein Etikett ausgewaehlt";
+        : "Kein Etikett ausgewählt";
 
     /// <summary>"Bearbeite:"-Zeile, familienbewusst (MP: Modul statt Etikett).</summary>
     public string EditTargetInfo => _selectedFormat.IsModuleBased ? MpEditor.SelectionInfo : SelectedLabelInfo;
@@ -963,7 +963,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             _spDoc.AddPage(CreateEmptyPage(_selectedFormat.LabelsPerPage));
         NavigateToPage(PageCount - 1);
         MarkChanged();
-        StatusMessage = $"Seite {PageCount} hinzugefuegt";
+        StatusMessage = $"Seite {PageCount} hinzugefügt";
     }
 
     private void RemovePage()
@@ -972,7 +972,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             ? MpModules.Any(m => m.HasPrintableContent)
             : Labels.Any(l => l.HasText);
         if (pageHasContent && !ConfirmDestructive(
-                $"Seite {CurrentPageIndex + 1} enthaelt befuellte Etiketten/Module.\n\nSeite wirklich entfernen?",
+                $"Seite {CurrentPageIndex + 1} enthält befüllte Etiketten/Module.\n\nSeite wirklich entfernen?",
                 "Seite entfernen"))
             return;
 
@@ -1035,7 +1035,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
 
             // Zum naechsten Modul springen (analog AdvanceToNextLabel bei ET200SP).
             // Adressen werden NICHT automatisch neu generiert — User muss Variante
-            // und Start-Byte pruefen und erneut "Generieren + Uebertragen" druecken.
+            // und Start-Byte pruefen und erneut "Generieren + Übertragen" druecken.
             AdvanceToNextMpModule();
             StatusMessage = status; // nach dem Advance, sonst ueberschreibt der Setter die Meldung
         }
@@ -1352,8 +1352,8 @@ public class MainViewModel : ViewModelBase, IImportTarget
             pasted++;
         }
         StatusMessage = pasted < source.Count
-            ? $"{pasted} von {source.Count} Etikett(en) eingefuegt ab Position {startIndex + 1} (Seitenende erreicht)"
-            : $"{pasted} Etikett(en) eingefuegt ab Position {startIndex + 1}";
+            ? $"{pasted} von {source.Count} Etikett(en) eingefügt ab Position {startIndex + 1} (Seitenende erreicht)"
+            : $"{pasted} Etikett(en) eingefügt ab Position {startIndex + 1}";
     }
 
     private void PasteModules()
@@ -1373,8 +1373,8 @@ public class MainViewModel : ViewModelBase, IImportTarget
             pasted++;
         }
         StatusMessage = pasted < source.Count
-            ? $"{pasted} von {source.Count} Modul(en) eingefuegt ab Position {startIndex + 1} (Seitenende erreicht)"
-            : $"{pasted} Modul(e) eingefuegt ab Position {startIndex + 1}";
+            ? $"{pasted} von {source.Count} Modul(en) eingefügt ab Position {startIndex + 1} (Seitenende erreicht)"
+            : $"{pasted} Modul(e) eingefügt ab Position {startIndex + 1}";
     }
 
     /// <summary>Rueckfrage vor destruktiven Aktionen (Alle loeschen, Seite entfernen).
@@ -1388,8 +1388,8 @@ public class MainViewModel : ViewModelBase, IImportTarget
     private void ClearAllLabels()
     {
         if (HasAnyContent() && !ConfirmDestructive(
-                "Alle Etiketten bzw. Module auf ALLEN Seiten werden geloescht.\n\nFortfahren?",
-                "Alle loeschen"))
+                "Alle Etiketten bzw. Module auf ALLEN Seiten werden gelöscht.\n\nFortfahren?",
+                "Alle löschen"))
             return;
 
         // Alle Seiten auf eine leere Seite zuruecksetzen (SP wie MP)
@@ -1402,7 +1402,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         }
         NotifyMpPreviewChanged();
         MarkChanged();
-        StatusMessage = _selectedFormat.IsModuleBased ? "Alle Module geloescht" : "Alle Etiketten geloescht";
+        StatusMessage = _selectedFormat.IsModuleBased ? "Alle Module gelöscht" : "Alle Etiketten gelöscht";
     }
 
     // === Live-Preview Apply-Helfer (aus Input-Settern aufgerufen) ===
@@ -1441,7 +1441,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         OnPropertyChanged(nameof(Settings));
         NotifyPreviewGeometry();
         NotifyMpPreviewChanged();
-        MarkChanged("Seitenraender");
+        MarkChanged("Seitenränder");
     }
 
     private void ResetSettings()
@@ -1454,7 +1454,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         OnPropertyChanged(nameof(HeaderPreviewFontWeight));
         NotifyMpPreviewChanged();
         MarkChanged();
-        StatusMessage = "Einstellungen zurueckgesetzt";
+        StatusMessage = "Einstellungen zurückgesetzt";
     }
 
     private void UpdateHeader()
@@ -1463,14 +1463,14 @@ public class MainViewModel : ViewModelBase, IImportTarget
         {
             SelectedMpModule.HeaderText = Generator.ModuleName;
             MarkChanged();
-            StatusMessage = $"Kopfzeile von Modul {SelectedMpModule.ModuleIndex + 1} geaendert";
+            StatusMessage = $"Kopfzeile von Modul {SelectedMpModule.ModuleIndex + 1} geändert";
             return;
         }
         if (SelectedLabel is null) return;
         SelectedLabel.Header = Generator.ModuleName;
         InputHeader = Generator.ModuleName;
         MarkChanged();
-        StatusMessage = $"Kopfzeile von Etikett {SelectedLabel.DisplayPosition} geaendert";
+        StatusMessage = $"Kopfzeile von Etikett {SelectedLabel.DisplayPosition} geändert";
     }
 
     private void ApplyFontToLabel(LabelViewModel label)
@@ -1747,7 +1747,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             {
                 StatusMessage = "Nichts zu drucken";
                 _dialogs.ShowInfo(
-                    "Es gibt keine befuellten, druckaktiven Etiketten bzw. Module.\n" +
+                    "Es gibt keine befüllten, druckaktiven Etiketten bzw. Module.\n" +
                     "Leere Seiten werden nicht gedruckt.", "Drucken");
                 return;
             }
@@ -1761,7 +1761,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             SaveCalibration();
             int skipped = requestedPages - document.Pages.Count;
             StatusMessage = skipped > 0
-                ? $"Druckauftrag gesendet ({document.Pages.Count} von {requestedPages} Seiten, {skipped} leere uebersprungen)"
+                ? $"Druckauftrag gesendet ({document.Pages.Count} von {requestedPages} Seiten, {skipped} leere übersprungen)"
                 : $"Druckauftrag gesendet ({document.Pages.Count} Seiten)";
         }
         catch (Exception ex)
@@ -1942,7 +1942,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
     private void SelectFilledForPrint()
     {
         SetPrintFlagForAll(l => l.HasText, m => m.HasPrintableContent);
-        StatusMessage = IsModuleBased ? "Nur befuellte Module zum Drucken aktiviert" : "Nur befuellte Etiketten zum Drucken aktiviert";
+        StatusMessage = IsModuleBased ? "Nur befüllte Module zum Drucken aktiviert" : "Nur befüllte Etiketten zum Drucken aktiviert";
     }
 
     private void TogglePrint()

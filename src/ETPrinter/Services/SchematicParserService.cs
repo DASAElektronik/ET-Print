@@ -81,7 +81,7 @@ public static class SchematicParserService
         }
         catch (Exception ex)
         {
-            result.Warnings.Add($"PDF konnte nicht geoeffnet werden: {ex.Message}");
+            result.Warnings.Add($"PDF konnte nicht geöffnet werden: {ex.Message}");
         }
 
         return result;

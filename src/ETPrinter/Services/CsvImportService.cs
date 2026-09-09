@@ -88,7 +88,7 @@ public static class CsvImportService
     }
 
     /// <summary>Trenner aus der ersten Zeile: Zeichen AUSSERHALB von Anfuehrungszeichen
-    /// zaehlen — sonst kippen Kommas in quoted Feldern ("Stoerung, Luefter") die Erkennung.</summary>
+    /// zaehlen — sonst kippen Kommas in quoted Feldern ("Störung, Lüfter") die Erkennung.</summary>
     public static char DetectSeparator(string text)
     {
         int semicolons = 0, commas = 0, tabs = 0;

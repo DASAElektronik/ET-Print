@@ -128,7 +128,7 @@ public sealed class ProjectSession : ViewModelBase
     public void Open()
     {
         if (!ConfirmDiscardChanges()) return;
-        var path = _dialogs.OpenFile(ProjectFileFilter, "Projekt oeffnen");
+        var path = _dialogs.OpenFile(ProjectFileFilter, "Projekt öffnen");
         if (path is not null)
             DoOpen(path);
     }
@@ -212,8 +212,8 @@ public sealed class ProjectSession : ViewModelBase
         if (!_isDirty) return true;
 
         return _dialogs.ConfirmSave(
-            "Es gibt ungespeicherte Aenderungen.\nMoechten Sie diese speichern?",
-            "Ungespeicherte Aenderungen") switch
+            "Es gibt ungespeicherte Änderungen.\nMöchten Sie diese speichern?",
+            "Ungespeicherte Änderungen") switch
         {
             SaveDecision.Save => DoSaveAndConfirm(),
             SaveDecision.Discard => true,

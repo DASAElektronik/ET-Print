@@ -62,7 +62,7 @@ public sealed class ImportCoordinator
 
             if (cells.Count == 0)
             {
-                Status($"{kind}-Datei enthaelt keine Daten");
+                Status($"{kind}-Datei enthält keine Daten");
                 return;
             }
             _target.PopulateLabels(cells);
@@ -94,7 +94,7 @@ public sealed class ImportCoordinator
             var selectedModules = importVm.GetSelectedModules();
             if (selectedModules.Count == 0)
             {
-                Status("Keine Module ausgewaehlt");
+                Status("Keine Module ausgewählt");
                 return;
             }
             PopulateFromParsedModules(selectedModules);

@@ -125,50 +125,50 @@ public class TestAutomationService : IDisposable
         ["render-calibration"] = new("render-calibration <ordner>", "Kalibrierseite ohne Dialog als PNG rendern", (s, a) => s.RenderCalibration(a)),
         ["zoom"] = new("zoom <faktor>", "Vorschau-Zoom 0.3-5.0", (s, a) => s.SetZoom(a)),
         ["maximize"] = new("maximize", "Fenster maximieren", (s, _) => s.MaximizeWindow()),
-        ["resize"] = new("resize <b>x<h>", "Fenstergroesse setzen", (s, a) => s.ResizeWindow(a)),
-        ["select-family"] = new("select-family <name>", "Produktfamilie waehlen", (s, a) => s.SelectFamily(a)),
-        ["select-format"] = new("select-format <name>", "Druckformat waehlen", (s, a) => s.SelectFormat(a)),
+        ["resize"] = new("resize <b>x<h>", "Fenstergröße setzen", (s, a) => s.ResizeWindow(a)),
+        ["select-family"] = new("select-family <name>", "Produktfamilie wählen", (s, a) => s.SelectFamily(a)),
+        ["select-format"] = new("select-format <name>", "Druckformat wählen", (s, a) => s.SelectFormat(a)),
         ["select-label"] = new("select-label <index>", "ET200SP: Etikett per Index (0-basiert)", (s, a) => s.SelectLabel(a)),
         ["set-text"] = new("set-text <header|z1|z2>", "ET200SP: Text des Etiketts setzen", (s, a) => s.SetText(a)),
         ["generate"] = new("generate <name> <typ> <byte> <n>", "ET200SP: Adressen direkt ins Etikett", (s, a) => s.Generate(a)),
-        ["apply"] = new("apply", "Uebertragen-Button (Manuell-Tab)", (s, _) => s.Apply()),
+        ["apply"] = new("apply", "Übertragen-Button (Manuell-Tab)", (s, _) => s.Apply()),
         ["set-input"] = new("set-input <header|z1|z2>", "Manuell-Tab Eingabefelder setzen", (s, a) => s.SetInput(a)),
-        ["next-page"] = new("next-page", "Naechste Seite", (s, _) => s.NavPage("next")),
+        ["next-page"] = new("next-page", "Nächste Seite", (s, _) => s.NavPage("next")),
         ["prev-page"] = new("prev-page", "Vorherige Seite", (s, _) => s.NavPage("prev")),
-        ["add-page"] = new("add-page", "Seite hinzufuegen", (s, _) => s.NavPage("add")),
+        ["add-page"] = new("add-page", "Seite hinzufügen", (s, _) => s.NavPage("add")),
         ["remove-page"] = new("remove-page", "Aktuelle Seite entfernen", (s, _) => s.NavPage("remove")),
-        ["clear-all"] = new("clear-all", "Alle Etiketten/Module loeschen", (s, _) => s.ClearAll()),
-        ["new-project"] = new("new-project", "Neues Projekt (ohne Rueckfrage)", (s, _) => s.NewProject()),
+        ["clear-all"] = new("clear-all", "Alle Etiketten/Module löschen", (s, _) => s.ClearAll()),
+        ["new-project"] = new("new-project", "Neues Projekt (ohne Rückfrage)", (s, _) => s.NewProject()),
         ["select-module"] = new("select-module <index>", "ET200MP: Modul per Index", (s, a) => s.SelectModule(a)),
         ["set-module-header"] = new("set-module-header <text>", "ET200MP: Header setzen", (s, a) => s.SetModuleHeader(a)),
         ["set-module-net"] = new("set-module-net <n1|n2>", "ET200MP: Netzadresse setzen", (s, a) => s.SetModuleNet(a)),
         ["set-module-cpu"] = new("set-module-cpu <text>", "ET200MP: CPU-Name setzen", (s, a) => s.SetModuleCpu(a)),
-        ["select-cell"] = new("select-cell <index>", "ET200MP: Adresszelle waehlen", (s, a) => s.SelectMpCell(a)),
+        ["select-cell"] = new("select-cell <index>", "ET200MP: Adresszelle wählen", (s, a) => s.SelectMpCell(a)),
         ["set-cell-text"] = new("set-cell-text <text>", "ET200MP: Zellentext setzen", (s, a) => s.SetMpCellText(a)),
         ["set-module-variant"] = new("set-module-variant <name>", "ET200MP: Layout-Variante", (s, a) => s.SetModuleVariant(a)),
         ["set-module-article"] = new("set-module-article <artnr>", "ET200MP: Katalog-Artikel (leer/custom = benutzerdefiniert)", (s, a) => s.SetModuleArticle(a)),
         ["list-variants"] = new("list-variants", "Alle Modulvarianten (JSON)", (s, _) => s.ListVariants()),
-        ["mp-state"] = new("mp-state", "Ausgewaehltes Modul (JSON)", (s, _) => s.GetMpState()),
+        ["mp-state"] = new("mp-state", "Ausgewähltes Modul (JSON)", (s, _) => s.GetMpState()),
         ["set-generator"] = new("set-generator <name> <typ> <byte> <n>", "Generator-Felder setzen", (s, a) => s.SetGenerator(a)),
-        ["set-font"] = new("set-font <groesse> <fett 0/1> <kursiv 0/1> [schriftart]", "Schrift-Eingabefelder setzen (Live-Apply)", (s, a) => s.SetFont(a)),
+        ["set-font"] = new("set-font <größe> <fett 0/1> <kursiv 0/1> [schriftart]", "Schrift-Eingabefelder setzen (Live-Apply)", (s, a) => s.SetFont(a)),
         ["set-margin"] = new("set-margin <oben|links|unten|rechts> <mm>", "Seitenrand setzen (Wertebereich 0-60)", (s, a) => s.SetMargin(a)),
         ["set-calibration"] = new("set-calibration <x> <y>", "Kalibrier-Versatz setzen (+/-10 mm)", (s, a) => s.SetCalibration(a)),
-        ["clear-selected"] = new("clear-selected", "Ausgewaehltes Etikett/Modul leeren", (s, _) => s.ClearSelected()),
+        ["clear-selected"] = new("clear-selected", "Ausgewähltes Etikett/Modul leeren", (s, _) => s.ClearSelected()),
         ["apply-font-all"] = new("apply-font-all", "Schrift-Eingabefelder auf alle Etiketten/Module", (s, _) => s.ApplyFontAll()),
-        ["open-file"] = new("open-file <pfad.etprint>", "Projekt wie per Drag&Drop oeffnen (ohne Rueckfrage)", (s, a) => s.OpenFileLikeDrop(a)),
-        ["import-file"] = new("import-file <pfad.csv|.xlsx>", "CSV/Excel ohne Dialog importieren (ab ausgewaehltem Etikett)", (s, a) => s.ImportFile(a)),
+        ["open-file"] = new("open-file <pfad.etprint>", "Projekt wie per Drag&Drop öffnen (ohne Rückfrage)", (s, a) => s.OpenFileLikeDrop(a)),
+        ["import-file"] = new("import-file <pfad.csv|.xlsx>", "CSV/Excel ohne Dialog importieren (ab ausgewähltem Etikett)", (s, a) => s.ImportFile(a)),
         ["import-lines"] = new("import-lines <pfad.txt>", "Textzeilen wie ein Schaltplan-PDF parsen und importieren (SP: Etiketten, MP: Module)", (s, a) => s.ImportLines(a)),
-        ["toggle-print"] = new("toggle-print", "Druckflag des ausgewaehlten Etiketts/Moduls umschalten", (s, _) => s.TogglePrint()),
+        ["toggle-print"] = new("toggle-print", "Druckflag des ausgewählten Etiketts/Moduls umschalten", (s, _) => s.TogglePrint()),
         ["print-state"] = new("print-state", "Druckentscheidung: Seiten im Dokument + druckbare Etiketten/Module je Seite (JSON)", (s, _) => s.GetPrintState()),
-        ["trigger-generate"] = new("trigger-generate", "Generieren + Uebertragen", (s, _) => s.TriggerGenerate()),
+        ["trigger-generate"] = new("trigger-generate", "Generieren + Übertragen", (s, _) => s.TriggerGenerate()),
         ["save-project"] = new("save-project <pfad.etprint>", "Projekt speichern", (s, a) => s.SaveProject(a)),
         ["load-project"] = new("load-project <pfad.etprint>", "Projekt laden", (s, a) => s.LoadProject(a)),
         ["list-families"] = new("list-families", "Produktfamilien (JSON)", (s, _) => s.ListFamilies()),
         ["list-formats"] = new("list-formats", "Formate der Familie (JSON)", (s, _) => s.ListFormats()),
-        ["undo"] = new("undo", "Rueckgaengig (wie Ctrl+Z); liefert Verlaufszustand (JSON)", (s, _) => s.Undo()),
+        ["undo"] = new("undo", "Rückgängig (wie Ctrl+Z); liefert Verlaufszustand (JSON)", (s, _) => s.Undo()),
         ["redo"] = new("redo", "Wiederholen (wie Ctrl+Y); liefert Verlaufszustand (JSON)", (s, _) => s.Redo()),
         ["history-state"] = new("history-state", "Undo/Redo-Verlauf (JSON)", (s, _) => s.HistoryState()),
-        ["quit"] = new("quit", "App beenden (verwirft Aenderungen)", (s, _) => s.Quit()),
+        ["quit"] = new("quit", "App beenden (verwirft Änderungen)", (s, _) => s.Quit()),
     };
 
     private Task<string> RunOnUI(Func<string> action)
@@ -265,7 +265,7 @@ public class TestAutomationService : IDisposable
     private string SelectFamily(string familyName)
     {
         if (!Enum.TryParse<ProductFamily>(familyName, true, out var family))
-            return Error($"Unbekannte Familie: {familyName}. Gueltig: {string.Join(", ", Enum.GetNames<ProductFamily>())}");
+            return Error($"Unbekannte Familie: {familyName}. Gültig: {string.Join(", ", Enum.GetNames<ProductFamily>())}");
 
         // Automation ist absichtlich — keine modale Inhaltsverlust-Rueckfrage
         // (wuerde headless haengen).
@@ -283,7 +283,7 @@ public class TestAutomationService : IDisposable
                               || f.DisplayName.Contains(formatArg, StringComparison.OrdinalIgnoreCase));
 
         if (match == null)
-            return Error($"Format nicht gefunden: {formatArg}. Verfuegbar: {string.Join(", ", _viewModel.AvailableFormats.Select(f => f.Format.ToString()))}");
+            return Error($"Format nicht gefunden: {formatArg}. Verfügbar: {string.Join(", ", _viewModel.AvailableFormats.Select(f => f.Format.ToString()))}");
 
         _viewModel.SuppressContentLossConfirm = true;
         try { _viewModel.SelectedFormat = match; }
@@ -294,10 +294,10 @@ public class TestAutomationService : IDisposable
     private string SelectLabel(string indexStr)
     {
         if (!int.TryParse(indexStr, out int index) || index < 0 || index >= _viewModel.Labels.Count)
-            return Error($"Ungueltiger Index: {indexStr}. Gueltig: 0-{_viewModel.Labels.Count - 1}");
+            return Error($"Ungültiger Index: {indexStr}. Gültig: 0-{_viewModel.Labels.Count - 1}");
 
         _viewModel.SelectLabel(_viewModel.Labels[index]);
-        return Ok($"Label {index} ausgewaehlt");
+        return Ok($"Label {index} ausgewählt");
     }
 
     private string SetText(string arg)
@@ -305,7 +305,7 @@ public class TestAutomationService : IDisposable
         // Format: "header|line1|line2" oder "line1|line2" oder "line1"
         var parts = arg.Split('|');
         if (_viewModel.SelectedLabel == null)
-            return Error("Kein Label ausgewaehlt");
+            return Error("Kein Label ausgewählt");
 
         if (parts.Length >= 3)
         {
@@ -338,9 +338,9 @@ public class TestAutomationService : IDisposable
             return Error($"Modultyp nicht gefunden: {parts[1]}");
 
         if (!int.TryParse(parts[2], out int startByte))
-            return Error($"Ungueltiger Start-Byte: {parts[2]}");
+            return Error($"Ungültiger Start-Byte: {parts[2]}");
         if (!int.TryParse(parts[3], out int count))
-            return Error($"Ungueltige Anzahl: {parts[3]}");
+            return Error($"Ungültige Anzahl: {parts[3]}");
 
         var result = AddressGenerator.Generate(parts[0], moduleType.Type, startByte, count);
         if (_viewModel.SelectedLabel != null)
@@ -355,7 +355,7 @@ public class TestAutomationService : IDisposable
     private string Apply()
     {
         if (!_viewModel.ApplyCommand.CanExecute(null))
-            return Error("Kein Label/Modul ausgewaehlt");
+            return Error("Kein Label/Modul ausgewählt");
         _viewModel.ApplyCommand.Execute(null);
         return Ok(_viewModel.StatusMessage);
     }
@@ -386,7 +386,7 @@ public class TestAutomationService : IDisposable
     {
         var parts = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length < 3 || !int.TryParse(parts[0], out int size))
-            return Error("Format: set-font <groesse> <fett 0/1> <kursiv 0/1> [schriftart]");
+            return Error("Format: set-font <größe> <fett 0/1> <kursiv 0/1> [schriftart]");
         _viewModel.Panel.FontSize = size;
         _viewModel.Panel.IsBold = parts[1] == "1";
         _viewModel.Panel.IsItalic = parts[2] == "1";
@@ -463,7 +463,7 @@ public class TestAutomationService : IDisposable
         _viewModel.SuppressContentLossConfirm = true;
         try { _viewModel.ClearAllCommand.Execute(null); }
         finally { _viewModel.SuppressContentLossConfirm = false; }
-        return Ok("Alle Etiketten geloescht");
+        return Ok("Alle Etiketten gelöscht");
     }
 
     private string SetMargin(string arg)
@@ -550,7 +550,7 @@ public class TestAutomationService : IDisposable
 
     private string Undo()
     {
-        if (!_viewModel.History.CanUndo) return Error("Nichts rueckgaengig zu machen");
+        if (!_viewModel.History.CanUndo) return Error("Nichts rückgängig zu machen");
         _viewModel.Undo();
         return HistoryState();
     }
@@ -613,7 +613,7 @@ public class TestAutomationService : IDisposable
 
     private static string GetHelp()
     {
-        var sb = new System.Text.StringBuilder("Verfuegbare Befehle:\n");
+        var sb = new System.Text.StringBuilder("Verfügbare Befehle:\n");
         sb.Append("ping".PadRight(40)).Append("- Verbindungstest\n");
         foreach (var (_, info) in Commands.OrderBy(kv => kv.Key, StringComparer.Ordinal))
             sb.Append(info.Usage.PadRight(40)).Append("- ").Append(info.Description).Append('\n');
@@ -626,21 +626,21 @@ public class TestAutomationService : IDisposable
     private string SelectModule(string indexStr)
     {
         if (!int.TryParse(indexStr, out int index) || index < 0 || index >= _viewModel.MpModules.Count)
-            return Error($"Ungueltiger Modul-Index: {indexStr}. Gueltig: 0-{_viewModel.MpModules.Count - 1}");
+            return Error($"Ungültiger Modul-Index: {indexStr}. Gültig: 0-{_viewModel.MpModules.Count - 1}");
         _viewModel.SelectedMpModule = _viewModel.MpModules[index];
         var info = ProductFamilyDefinitions.Get(_viewModel.SelectedFormat.Family);
-        return Ok($"Modul {index} ausgewaehlt (Spalte {info.ColumnOf(index) + 1}, Band {info.BandOf(index) + 1})");
+        return Ok($"Modul {index} ausgewählt (Spalte {info.ColumnOf(index) + 1}, Band {info.BandOf(index) + 1})");
     }
 
     private string SetModuleArticle(string articleNo)
     {
-        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewaehlt");
+        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewählt");
         // Nur Artikel der aktiven Familie — sonst bekaeme das Modul eine Variante,
         // die die Familie gar nicht anbietet (25mm-Artikel in einer 35mm-Seite).
         var available = _viewModel.MpEditor.AvailableArticles;
         var entry = available.FirstOrDefault(e => e.ArticleNo == articleNo && e.ArticleNo != "");
         if (entry is null && !string.IsNullOrEmpty(articleNo) && articleNo != "custom")
-            return Error($"Unbekannter Artikel fuer diese Familie: {articleNo}. Verfuegbar: " +
+            return Error($"Unbekannter Artikel für diese Familie: {articleNo}. Verfügbar: " +
                 string.Join(", ", available.Where(e => e.ArticleNo != "").Select(e => e.ArticleNo)));
         _viewModel.MpEditor.SelectedArticle = entry ?? MpModuleCatalog.CustomEntry;
         return Ok($"Modul-Artikel gesetzt: {(entry?.DisplayName ?? "Benutzerdefiniert")} (Variante {_viewModel.SelectedMpModule.Variant})");
@@ -648,14 +648,14 @@ public class TestAutomationService : IDisposable
 
     private string SetModuleHeader(string text)
     {
-        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewaehlt");
+        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewählt");
         _viewModel.SelectedMpModule.HeaderText = text;
         return Ok($"Modul-Header gesetzt: {text}");
     }
 
     private string SetModuleNet(string arg)
     {
-        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewaehlt");
+        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewählt");
         var parts = arg.Split('|', 2);
         _viewModel.SelectedMpModule.NetAddress1 = parts[0];
         if (parts.Length > 1) _viewModel.SelectedMpModule.NetAddress2 = parts[1];
@@ -664,23 +664,23 @@ public class TestAutomationService : IDisposable
 
     private string SetModuleCpu(string text)
     {
-        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewaehlt");
+        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewählt");
         _viewModel.SelectedMpModule.CpuName = text;
         return Ok($"CPU-Name gesetzt: {text}");
     }
 
     private string SelectMpCell(string indexStr)
     {
-        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewaehlt");
+        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewählt");
         if (!int.TryParse(indexStr, out int index) || index < 0 || index >= _viewModel.SelectedMpModule.AddressCells.Count)
-            return Error($"Ungueltiger Zellen-Index: {indexStr}. Gueltig: 0-{_viewModel.SelectedMpModule.AddressCells.Count - 1}");
+            return Error($"Ungültiger Zellen-Index: {indexStr}. Gültig: 0-{_viewModel.SelectedMpModule.AddressCells.Count - 1}");
         _viewModel.SelectedMpCell = _viewModel.SelectedMpModule.AddressCells[index];
-        return Ok($"Zelle {index} ausgewaehlt");
+        return Ok($"Zelle {index} ausgewählt");
     }
 
     private string SetMpCellText(string text)
     {
-        if (_viewModel.SelectedMpCell == null) return Error("Keine Zelle ausgewaehlt");
+        if (_viewModel.SelectedMpCell == null) return Error("Keine Zelle ausgewählt");
         if (!_viewModel.SelectedMpCell.IsEditable) return Error("Zelle ist nicht editierbar (Struktur-Zelle)");
         _viewModel.SelectedMpCell.Text = text;
         return Ok($"Zellentext gesetzt: {text}");
@@ -688,9 +688,9 @@ public class TestAutomationService : IDisposable
 
     private string SetModuleVariant(string variantStr)
     {
-        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewaehlt");
+        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewählt");
         if (!Enum.TryParse<MpModuleVariant>(variantStr, true, out var variant))
-            return Error($"Unbekannte Variante: {variantStr}. Gueltig: {string.Join(", ", Enum.GetNames<MpModuleVariant>())}");
+            return Error($"Unbekannte Variante: {variantStr}. Gültig: {string.Join(", ", Enum.GetNames<MpModuleVariant>())}");
         _viewModel.SelectedMpModule.Variant = variant;
         return Ok($"Variante gewechselt zu {variant} ({_viewModel.SelectedMpModule.AddressCells.Count} Zellen)");
     }
@@ -708,7 +708,7 @@ public class TestAutomationService : IDisposable
 
     private string GetMpState()
     {
-        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewaehlt");
+        if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewählt");
         var mod = _viewModel.SelectedMpModule;
         var state = new
         {
@@ -749,7 +749,7 @@ public class TestAutomationService : IDisposable
     {
         if (!double.TryParse(arg, System.Globalization.NumberStyles.Any,
             System.Globalization.CultureInfo.InvariantCulture, out double zoom) || zoom < 0.3 || zoom > 5.0)
-            return Error($"Ungueltiger Zoom: {arg}. Gueltig: 0.3-5.0");
+            return Error($"Ungültiger Zoom: {arg}. Gültig: 0.3-5.0");
         _viewModel.Zoom = zoom;
         return Ok($"Zoom: {zoom}");
     }
@@ -766,9 +766,9 @@ public class TestAutomationService : IDisposable
         if (parts.Length != 2
             || !double.TryParse(parts[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out double w)
             || !double.TryParse(parts[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out double h))
-            return Error("Format: resize <breite>x<hoehe> (z.B. 1920x1080)");
+            return Error("Format: resize <breite>x<höhe> (z.B. 1920x1080)");
         if (double.IsNaN(w) || double.IsNaN(h) || w < 400 || h < 300 || w > 10000 || h > 10000)
-            return Error("Ungueltige Dimensionen (400..10000 x 300..10000)");
+            return Error("Ungültige Dimensionen (400..10000 x 300..10000)");
         _mainWindow.WindowState = WindowState.Normal;
         _mainWindow.Width = w;
         _mainWindow.Height = h;
@@ -783,7 +783,7 @@ public class TestAutomationService : IDisposable
         try { fullPath = Path.GetFullPath(path); }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            return $"Ungueltiger Pfad: {ex.Message}";
+            return $"Ungültiger Pfad: {ex.Message}";
         }
         if (!string.Equals(Path.GetExtension(fullPath), ".etprint", StringComparison.OrdinalIgnoreCase))
             return "Nur .etprint-Dateien erlaubt";
@@ -817,7 +817,7 @@ public class TestAutomationService : IDisposable
     private string TriggerGenerate()
     {
         if (!_viewModel.GenerateAndApplyCommand.CanExecute(null))
-            return Error("GenerateAndApply nicht verfuegbar (kein Label/Modul ausgewaehlt?)");
+            return Error("GenerateAndApply nicht verfügbar (kein Label/Modul ausgewählt?)");
         _viewModel.GenerateAndApplyCommand.Execute(null);
         return Ok(_viewModel.StatusMessage);
     }

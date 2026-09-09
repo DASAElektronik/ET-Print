@@ -13,9 +13,9 @@ public class ImportRobustnessTests
     [Fact]
     public void Csv_QuotedNewline_StaysInField()
     {
-        var cells = CsvImportService.Parse("Kopfzeile;Zeile1;Zeile2\r\n\"Stoerung\r\nLuefter\";E 0.1;E 0.2\r\nB;E 1.1;E 1.2\r\n");
+        var cells = CsvImportService.Parse("Kopfzeile;Zeile1;Zeile2\r\n\"Störung\r\nLüfter\";E 0.1;E 0.2\r\nB;E 1.1;E 1.2\r\n");
         Assert.Equal(2, cells.Count);
-        Assert.Equal("Stoerung\r\nLuefter", cells[0].Header);
+        Assert.Equal("Störung\r\nLüfter", cells[0].Header);
         Assert.Equal("E 0.1", cells[0].Line1);
         Assert.Equal("B", cells[1].Header);
     }

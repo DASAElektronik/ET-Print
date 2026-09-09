@@ -33,7 +33,7 @@ public class MpModule
     public string NetAddress2 { get; set; } = string.Empty;
 
     // Obsolet seit 10-Positionen-Architektur (v5): stammten aus der Aera
-    // "1 Modul = 2 Baender". Nur noch fuer die Deserialisierung von v4-Dateien;
+    // "1 Modul = 2 Bänder". Nur noch fuer die Deserialisierung von v4-Dateien;
     // werden weder angezeigt noch gedruckt noch kopiert.
     public string NetAddress3 { get; set; } = string.Empty;
     public string NetAddress4 { get; set; } = string.Empty;

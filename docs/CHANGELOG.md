@@ -9,6 +9,13 @@
 
 ## 2026-09-09 - Projekttag 7 (Abschluss v3.1, siehe docs/ABSCHLUSSPLAN.md)
 
+### v3.1.2: Umlaute in der Oberflaeche
+- Alle sichtbaren Texte (Menue, Toolbar, Panels, Dialoge, Statusmeldungen, Katalog-/Familien-
+  namen, Fehlermeldungen) verwenden echte Umlaute und ß statt ae/oe/ue/ss
+  (z. B. "Öffnen", "Rückgängig", "Einfügen", "Seite (gilt für alle Etiketten)").
+  Quellen sind UTF-8; `tools/smoke.ps1` mit UTF-8-BOM, damit PowerShell 5.1 die
+  Vergleichstexte korrekt liest. Tests/Smoke auf die neuen Texte nachgezogen.
+
 ### v3.1.1: AP9b-AP9d (MainViewModel-Zerlegung, Undo/Redo, inkrementelle MP-Vorschau)
 
 **AP9b - MainViewModel zerlegt (2714 -> 1818 Zeilen), sechs Schnitte + IDialogService**

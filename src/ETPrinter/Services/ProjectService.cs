@@ -61,11 +61,11 @@ public static class ProjectService
         var info = new FileInfo(filePath);
         if (info.Length > MaxProjectFileBytes)
             throw new InvalidDataException(
-                $"Projektdatei zu gross ({info.Length / (1024 * 1024)} MB, max {MaxProjectFileBytes / (1024 * 1024)} MB).");
+                $"Projektdatei zu groß ({info.Length / (1024 * 1024)} MB, max {MaxProjectFileBytes / (1024 * 1024)} MB).");
 
         var json = File.ReadAllText(filePath);
         var project = JsonSerializer.Deserialize<LabelProject>(json, JsonOptions)
-            ?? throw new InvalidDataException("Ungueltige Projektdatei.");
+            ?? throw new InvalidDataException("Ungültige Projektdatei.");
 
         // Handeditierte/fremd erzeugte Dateien: "Pages": null oder "Settings": null
         // fuehrten zu einer nichtssagenden NullReferenceException.

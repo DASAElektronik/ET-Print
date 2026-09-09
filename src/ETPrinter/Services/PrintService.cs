@@ -406,12 +406,12 @@ public static class PrintService
         {
             Text = $"ET-Printer Kalibrierung\n\n" +
                    $"Format: {format.DisplayName}\n" +
-                   $"Raender: L={settings.MarginLeft:0.0} O={settings.MarginTop:0.0} " +
+                   $"Ränder: L={settings.MarginLeft:0.0} O={settings.MarginTop:0.0} " +
                    $"R={settings.MarginRight:0.0} U={settings.MarginBottom:0.0} mm\n" +
                    $"Kalibrierung: X={calOffsetX:+0.0;-0.0;0.0} Y={calOffsetY:+0.0;-0.0;0.0} mm\n\n" +
                    $"Auf Normalpapier drucken, mit Siemens-Blatt\n" +
                    $"uebereinanderlegen und gegen Licht halten.\n" +
-                   $"Fadenkreuze muessen auf die perforierten\n" +
+                   $"Fadenkreuze müssen auf die perforierten\n" +
                    $"Ecken des Etikettenbogens treffen.",
             FontFamily = DefaultFont,
             FontSize = 10,

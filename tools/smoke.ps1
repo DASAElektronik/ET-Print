@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-  Smoke-Test gegen die veroeffentlichte ET-Printer.exe ueber die Test-Automation-Pipe.
+  Smoke-Test gegen die veroeffentlichte ET-Printer.exe über die Test-Automation-Pipe.
 
 .DESCRIPTION
   Startet die EXE mit --test-automation, faehrt die Szenarien SP / MP / 25mm /
@@ -94,7 +94,7 @@ try {
     Invoke-Cmd "select-format HorizontalDouble" | Out-Null
     Invoke-Cmd "select-label 0" | Out-Null
     Invoke-Cmd "set-text Zeile A|Zeile B" | Out-Null
-    Assert-Eq 1 (Get-State).filledLabels "Vor Neu: 1 Etikett befuellt"
+    Assert-Eq 1 (Get-State).filledLabels "Vor Neu: 1 Etikett befüllt"
     Invoke-Cmd "new-project" | Out-Null
     $s = Get-State
     Assert-Eq 0 $s.filledLabels "Nach Neu (gleiches Format): 0 Etiketten"
@@ -115,7 +115,7 @@ try {
     Invoke-Cmd "apply" | Out-Null
     $s = Get-State
     Assert-Eq "ET200SP" $s.productFamily "SP Familie"
-    Assert-Eq 3 $s.filledLabels "SP befuellte Etiketten"
+    Assert-Eq 3 $s.filledLabels "SP befüllte Etiketten"
     # AP2: clear-all headless, dann Inhalt wiederherstellen
     Invoke-Cmd "clear-all" | Out-Null
     Assert-Eq 0 (Get-State).filledLabels "SP clear-all leert alles"
@@ -154,7 +154,7 @@ try {
     Invoke-Cmd "select-module 0" | Out-Null
     $m = Get-MpState
     Assert-Eq "6ES7521-1BL00-0AB0" $m.article "MP Modul 0 Artikel"
-    Assert-Eq 32 $m.filledCells "MP Modul 0 befuellte Zellen"
+    Assert-Eq 32 $m.filledCells "MP Modul 0 befüllte Zellen"
     Invoke-Cmd "select-module 6" | Out-Null
     Invoke-Cmd "set-module-variant SIWAREX_WP52x" | Out-Null
     $m6 = Get-MpState
@@ -169,24 +169,24 @@ try {
     # AP1 1.2: SIWAREX (nur feste Labels) zaehlt als druckbar -> 3 Module auf Seite 1
     $ps = Invoke-Cmd "print-state" | ConvertFrom-Json
     Assert-Eq 3 $ps.printablePerPage[0] "MP druckbare Module (DI32 + SIWAREX + DQ16)"
-    # AP1 1.3: Variantenwechsel loescht nicht passenden Artikel
+    # AP1 1.3: Variantenwechsel löscht nicht passenden Artikel
     Invoke-Cmd "select-module 7" | Out-Null
     Assert-Eq "6ES7522-1BH00-0AB0" (Get-MpState).article "Modul 7 Artikel vor Variantenwechsel"
     Invoke-Cmd "set-module-variant DI_DQ_32" | Out-Null
-    Assert-Eq "" (Get-MpState).article "Modul 7 Artikel nach Variantenwechsel geloescht"
+    Assert-Eq "" (Get-MpState).article "Modul 7 Artikel nach Variantenwechsel gelöscht"
     Invoke-Cmd "set-module-article 6ES7522-1BH00-0AB0" | Out-Null
     Assert-Eq "DI_DQ_16" (Get-MpState).variant "Modul 7 Variante folgt Artikel"
     # AP1 1.8: Zellauswahl folgt Modulwechsel
     Invoke-Cmd "select-module 0" | Out-Null
     Invoke-Cmd "select-cell 0" | Out-Null
-    Assert-Eq 0 (Get-MpState).selectedCell "Zelle 0 in Modul 0 gewaehlt"
+    Assert-Eq 0 (Get-MpState).selectedCell "Zelle 0 in Modul 0 gewählt"
     Invoke-Cmd "select-module 1" | Out-Null
     Assert-True ($null -eq (Get-MpState).selectedCell) "Zellauswahl nach Modulwechsel leer"
     # AP1 1.9: Schrift wirkt auf MP-Modul
     Invoke-Cmd "select-module 0" | Out-Null
     Invoke-Cmd "set-font 9 1 1" | Out-Null
     $m = Get-MpState
-    Assert-Eq 9 $m.fontSize "MP Modul 0 Schriftgroesse 9"
+    Assert-Eq 9 $m.fontSize "MP Modul 0 Schriftgröße 9"
     Assert-True ($m.isBold -and $m.isItalic) "MP Modul 0 fett + kursiv"
     Invoke-Cmd "set-font 7 0 0" | Out-Null
     # AP2 2.5: Druckflag im MP-Modus
@@ -197,9 +197,9 @@ try {
     Assert-Eq 2 $ps.printablePerPage[0] "MP druckbare Module nach Ausschluss"
     Invoke-Cmd "toggle-print" | Out-Null
     Assert-Eq 3 ((Invoke-Cmd "print-state" | ConvertFrom-Json).printablePerPage[0]) "MP druckbare Module nach Wiederaufnahme"
-    # AP2 2.3: remove-page / clear-all laufen headless ohne Rueckfrage
+    # AP2 2.3: remove-page / clear-all laufen headless ohne Rückfrage
     Invoke-Cmd "add-page" | Out-Null
-    Assert-Eq 2 (Get-State).pageCount "MP Seite hinzugefuegt"
+    Assert-Eq 2 (Get-State).pageCount "MP Seite hinzugefügt"
     Invoke-Cmd "remove-page" | Out-Null
     Assert-Eq 1 (Get-State).pageCount "MP Seite entfernt"
     Invoke-Cmd "screenshot $OutDir\mp_preview.png" | Out-Null
@@ -221,7 +221,7 @@ try {
     Invoke-Cmd "trigger-generate" | Out-Null
     Invoke-Cmd "select-module 0" | Out-Null
     $m = Get-MpState
-    Assert-Eq 16 $m.filledCells "25mm Modul 0 befuellte Zellen"
+    Assert-Eq 16 $m.filledCells "25mm Modul 0 befüllte Zellen"
     Invoke-Cmd "select-module 1" | Out-Null
     Invoke-Cmd "set-module-variant MP25_32" | Out-Null
     Invoke-Cmd "set-generator M32 DI 20 4" | Out-Null
@@ -257,19 +257,19 @@ try {
     Invoke-Cmd "select-format HorizontalDoubleHeader" | Out-Null
     $csv = "$OutDir\import.csv"
     # UTF-16 LE mit BOM (Excel "Unicode Text"), Tab-getrennt, Zeilenumbruch im Feld
-    [System.IO.File]::WriteAllText($csv, "Kopfzeile`tZeile1`tZeile2`r`n`"Stoerung`r`nLuefter`"`tE 0.0`tE 0.1`r`nM2`tE 1.0`tE 1.1`r`nÜbertemperatur`tE 2.0`t`r`n", [System.Text.Encoding]::Unicode)
+    [System.IO.File]::WriteAllText($csv, "Kopfzeile`tZeile1`tZeile2`r`n`"Störung`r`nLüfter`"`tE 0.0`tE 0.1`r`nM2`tE 1.0`tE 1.1`r`nÜbertemperatur`tE 2.0`t`r`n", [System.Text.Encoding]::Unicode)
     Invoke-Cmd "select-label 0" | Out-Null
     $r = Invoke-Cmd "import-file $csv" | ConvertFrom-Json
     Assert-Eq 3 $r.imported "CSV (UTF-16, Tab, Multiline) importiert"
-    Assert-Eq 3 (Get-State).filledLabels "CSV Etiketten befuellt"
+    Assert-Eq 3 (Get-State).filledLabels "CSV Etiketten befüllt"
     $txt = "$OutDir\plan.txt"
     Set-Content -Path $txt -Value @("=A1+S1-K3 DI 32x24VDC HF", "E 4.0 E 4.1 E 4.2 E 4.3 E 4.4 E 4.5 E 4.6 E 4.7", "E 5.0 E 5.1 E 5.2 E 5.3 E 5.4 E 5.5 E 5.6 E 5.7", "E 6.0 E 6.1 E 6.2 E 6.3 E 6.4 E 6.5 E 6.6 E 6.7", "E 7.0 E 7.1 E 7.2 E 7.3 E 7.4 E 7.5 E 7.6 E 7.7", "+K2 AI 4", "IW 100 IW 102 IW 104 IW 106") -Encoding UTF8
     Invoke-Cmd "select-label 10" | Out-Null
     $r = Invoke-Cmd "import-lines $txt" | ConvertFrom-Json
     Assert-Eq 2 $r.modules "Schaltplan-Text: 2 Module erkannt"
     # 32-Kanal-Modul -> 2 Etiketten, AI 4 -> 1 Etikett => 3 + 3 (CSV) = 6
-    Assert-Eq 6 (Get-State).filledLabels "SP Etiketten nach Schaltplan-Import (32 Kanaele = 2 Etiketten)"
-    # MP-Modus: Schaltplan-Import fuellt Module
+    Assert-Eq 6 (Get-State).filledLabels "SP Etiketten nach Schaltplan-Import (32 Kanäle = 2 Etiketten)"
+    # MP-Modus: Schaltplan-Import füllt Module
     Invoke-Cmd "new-project" | Out-Null
     Invoke-Cmd "select-family S71500_ET200MP" | Out-Null
     Invoke-Cmd "select-module 2" | Out-Null
@@ -290,7 +290,7 @@ try {
     Assert-True (-not (Get-State).isDirty -eq $false) "MP Import markiert dirty"
 
     # --- Szenario 3c: Komfort/UX (AP5) ------------------------------------------
-    Write-Host "`n[3c] Komfort: Wertebereiche, Tab, Leeren, Schrift auf alle, Drop-Oeffnen" -ForegroundColor Yellow
+    Write-Host "`n[3c] Komfort: Wertebereiche, Tab, Leeren, Schrift auf alle, Drop-Öffnen" -ForegroundColor Yellow
     Invoke-Cmd "new-project" | Out-Null
     $s = Get-State
     Assert-Eq 0 $s.inputTabIndex "SP: Generator-Tab aktiv"
@@ -299,7 +299,7 @@ try {
     Assert-Eq 60 $m.top "Rand oben auf 60 begrenzt"
     Assert-True ($m.status -like "*begrenzt*") "Statusmeldung zur Begrenzung"
     $m = Invoke-Cmd "set-margin oben 20.5" | ConvertFrom-Json
-    Assert-Eq 20.5 $m.top "Rand oben zurueck auf 20,5"
+    Assert-Eq 20.5 $m.top "Rand oben zurück auf 20,5"
     $c = Invoke-Cmd "set-calibration 25 -25" | ConvertFrom-Json
     Assert-Eq 10 $c.x "Kalibrierung X auf +10 begrenzt"
     Assert-Eq -10 $c.y "Kalibrierung Y auf -10 begrenzt"
@@ -355,29 +355,29 @@ try {
     Write-Host "`n[5] Undo/Redo" -ForegroundColor Yellow
     Invoke-Cmd "new-project" | Out-Null
     $h = Invoke-Cmd "history-state" | ConvertFrom-Json
-    Assert-True (-not $h.canUndo) "Nach Neu: nichts rueckgaengig"
+    Assert-True (-not $h.canUndo) "Nach Neu: nichts rückgängig"
     Invoke-Cmd "select-label 0" | Out-Null
     Invoke-Cmd "set-input Kopf|Zeile 1|Zeile 2" | Out-Null
     Invoke-Cmd "apply" | Out-Null
     Invoke-Cmd "select-label 1" | Out-Null
     Invoke-Cmd "set-generator M1 DI 0 2" | Out-Null
     Invoke-Cmd "trigger-generate" | Out-Null
-    Assert-Eq 2 (Get-State).filledLabels "Zwei Etiketten befuellt"
+    Assert-Eq 2 (Get-State).filledLabels "Zwei Etiketten befüllt"
     $h = Invoke-Cmd "undo" | ConvertFrom-Json
     Assert-Eq "Generieren" $h.nextRedo "Undo 1 = Generieren"
-    Assert-Eq 1 (Get-State).filledLabels "Undo: Generieren zurueckgenommen"
+    Assert-Eq 1 (Get-State).filledLabels "Undo: Generieren zurückgenommen"
     $h = Invoke-Cmd "undo" | ConvertFrom-Json
-    Assert-Eq 0 (Get-State).filledLabels "Undo: Uebertragen zurueckgenommen"
-    Assert-True (-not $h.isDirty) "Zurueck auf dem sauberen Stand: nicht dirty"
+    Assert-Eq 0 (Get-State).filledLabels "Undo: Übertragen zurückgenommen"
+    Assert-True (-not $h.isDirty) "Zurück auf dem sauberen Stand: nicht dirty"
     Assert-True (-not $h.canUndo) "Undo-Stapel leer"
     $h = Invoke-Cmd "redo" | ConvertFrom-Json
-    Assert-Eq 1 (Get-State).filledLabels "Redo: Uebertragen wiederholt"
+    Assert-Eq 1 (Get-State).filledLabels "Redo: Übertragen wiederholt"
     Assert-True $h.isDirty "Nach Redo wieder dirty"
     Invoke-Cmd "redo" | Out-Null
     Assert-Eq 2 (Get-State).filledLabels "Redo: Generieren wiederholt"
     Invoke-Cmd "add-page" | Out-Null
     Invoke-Cmd "undo" | Out-Null
-    Assert-Eq 1 (Get-State).pageCount "Undo: Seite hinzufuegen"
+    Assert-Eq 1 (Get-State).pageCount "Undo: Seite hinzufügen"
     # MP: Tippen im Header wird zusammengefasst, Familienwechsel ist ein Schritt
     Invoke-Cmd "select-family S71500_ET200MP" | Out-Null
     Invoke-Cmd "select-module 0" | Out-Null
@@ -387,7 +387,7 @@ try {
     Assert-Eq "Modulinhalt" $h.nextRedo "Undo = Modulinhalt (Tippen zusammengefasst)"
     Assert-Eq "" (Get-MpState).header "Undo: Header leer"
     Invoke-Cmd "undo" | Out-Null
-    Assert-Eq "ET200SP" (Get-State).productFamily "Undo: Familienwechsel zurueck zu SP"
+    Assert-Eq "ET200SP" (Get-State).productFamily "Undo: Familienwechsel zurück zu SP"
     Assert-Eq 2 (Get-State).filledLabels "Undo: SP-Inhalt wieder da"
     Invoke-Cmd "redo" | Out-Null
     Assert-Eq "S71500_ET200MP" (Get-State).productFamily "Redo: wieder MP"

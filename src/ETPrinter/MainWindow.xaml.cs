@@ -165,7 +165,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Rechtsklick selektiert das Etikett, damit "Einfuegen"/"Druck umschalten"
+    /// <summary>Rechtsklick selektiert das Etikett, damit "Einfügen"/"Druck umschalten"
     /// im Kontextmenue das angeklickte Etikett treffen, nicht das zuvor markierte.</summary>
     private void Label_RightClick(object sender, MouseButtonEventArgs e)
     {
@@ -194,9 +194,9 @@ public partial class MainWindow : Window
         string versionText = version is null ? "" : $"v{version.Major}.{version.Minor}.{version.Build}";
         MessageBox.Show(
             $"ET-Printer {versionText}\n\n" +
-            "Beschriftungsstreifen fuer Siemens ET 200SP und\n" +
+            "Beschriftungsstreifen für Siemens ET 200SP und\n" +
             "S7-1500 / ET 200MP (35 mm und 25 mm) auf A4 drucken.\n\n" +
-            "Etikettenboegen: 6ES7193-6LA10-0AA0 (ET 200SP),\n" +
+            "Etikettenbögen: 6ES7193-6LA10-0AA0 (ET 200SP),\n" +
             "6ES7592-1AX00-0AA0 (35 mm), 6ES7592-2AX00-0AA0 (25 mm)\n\n" +
             "Basierend auf den Siemens Excel-Templates\n" +
             "(Beitrags-IDs 81524595 und 83681795)\n\n" +
