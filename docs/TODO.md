@@ -272,7 +272,8 @@
 - [x] AP6 Doku-Konsolidierung: ARCHITECTURE/FEATURES/PRODUCT neu, README, PRINT-FORMATS bereinigt, Version 3.1.0
 - [x] AP7 Release v3.1.0 (Icon, NuGet, Publish, register-etprint.ps1, GitHub-Release mit EXE, Smoke 82/82)
 - [x] AP8 25mm-BA-Module datenblattverifiziert, 14 Katalog-Eintraege, MP25-Layouts mit Struktur (Stahllineal bleibt offen)
-- [ ] AP9 Katalog-Rest [x] (4 Analogmodule, 18 Eintraege), MainViewModel-Zerlegung [ ], Undo/Redo [ ], inkrementelles Rendering [ ]
+- [x] AP9 Katalog-Rest (4 Analogmodule, 18 Eintraege), MainViewModel-Zerlegung (6 Schnitte + IDialogService, 2714 -> 1818 Zeilen),
+      Undo/Redo (Memento, Ctrl+Z/Y), inkrementelles MP-Rendering (Ebene je Modul) - v3.1.1, 284 Tests, Smoke 98/98
 
 ## Abschlusskriterien v3.1 (ABSCHLUSSPLAN)
 1. Kein bekannter Bug mit falschem/fehlendem Druck oder stillem Datenverlust (AP1/AP2)

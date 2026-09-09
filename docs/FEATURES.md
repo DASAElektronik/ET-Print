@@ -26,7 +26,7 @@ zeigt nur die Formate der gewählten Familie.
 ## F02: Hauptfenster und Workflow
 
 Zwei Spalten mit GridSplitter: links Eingabe, rechts A4-Vorschau. Menü (Datei, Bearbeiten,
-Hilfe), Toolbar (Neu, Öffnen, Speichern, Kopieren, Einfügen, Drucken), Statusleiste
+Hilfe), Toolbar (Neu, Öffnen, Speichern, Rückgängig, Wiederholen, Kopieren, Einfügen, Drucken), Statusleiste
 (Meldung, „Etikett 3 / 100“ bzw. „Modul 2 / 10“, „Seite 1 / 2“, Format, Bogen-Artikelnummer).
 Der Fenstertitel zeigt Dateiname bzw. Format und `*` bei ungespeicherten Änderungen.
 
@@ -282,6 +282,7 @@ liegen, Splitter 200–800 px).
 | Ctrl+Shift+S | Speichern unter |
 | Ctrl+P, F5 | Drucken |
 | Ctrl+C / Ctrl+V | Etiketten/Module kopieren / einfügen (nicht im Textfeld) |
+| Ctrl+Z / Ctrl+Y | Rückgängig / Wiederholen (nicht im Textfeld, dort Text-Undo) |
 | Ctrl+Bild ab / Ctrl+Bild auf | Nächste / vorherige Seite |
 | Ctrl+0 | Ganze Seite anzeigen |
 | Entf | Ausgewähltes Etikett/Modul leeren (nicht im Textfeld) |
@@ -324,10 +325,12 @@ Befehl per Zeile, Antwort als JSON. Client: `test-send.ps1 "<befehl>"`.
 | `set-module-header`, `set-module-net <n1\|n2>`, `set-module-cpu` | MP-Texte |
 | `set-module-variant <name>`, `set-module-article <artnr>` | MP-Layout / Katalog |
 | `select-cell <index>`, `set-cell-text <text>` | MP-Adresszelle |
+| `undo`, `redo`, `history-state` | Rückgängig / Wiederholen; Verlaufszustand (canUndo, canRedo, nextUndo, isDirty) |
 | `quit` | App beenden (verwirft Änderungen) |
 
 `tools/smoke.ps1 -Name <Name>` startet `publish/ET-Printer.exe`, fährt SP/MP/25 mm/
-Import/UX/Roundtrip durch und legt Screenshots und Druck-PNGs unter `test_results/<Name>/` ab.
+Import/UX/Roundtrip/Undo-Redo durch und legt Screenshots und Druck-PNGs unter
+`test_results/<Name>/` ab (98 Prüfungen).
 
 ## F19: Logging
 
@@ -338,6 +341,20 @@ bei 1 MB nach `log.old.txt`. Der Pfad steht im Info-Dialog und in Fehlermeldunge
 
 Hilfe → Info: Version aus der Assembly, unterstützte Familien, Bogen-Artikelnummern,
 Siemens-Beitrags-IDs (81524595, 83681795) und Logpfad.
+
+## F21: Rückgängig / Wiederholen
+
+- Ctrl+Z / Ctrl+Y, Toolbar „Rueckgaengig“ / „Wiederholen“, Menü Bearbeiten. Im Textfeld
+  gilt das Text-Undo der TextBox.
+- Jede Änderung am Projekt ist ein Schritt: Übertragen, Generieren (inkl. Auto-Advance),
+  Kopfzeile, Auswahl leeren, Alle löschen, Einfügen, Seite hinzufügen/entfernen, Druckauswahl,
+  Schrift auf alle, Seite zurücksetzen, Import, Siemens-Modul/Variante, Format-/Familienwechsel.
+- Tippen in Modulzellen/Header/Netzadresse, Ziffern in den Randfeldern und Schriftänderungen
+  am ausgewählten Element werden innerhalb von 1,5 s zu einem Schritt zusammengefasst.
+- Wiederhergestellt werden Inhalt, Einstellungen, Seiten und der Cursor (Seite + Auswahl).
+  Der Status zeigt „Rueckgaengig: <Schritt>“ bzw. „Wiederholen: <Schritt>“.
+- Zurück auf dem gespeicherten Stand gilt das Projekt wieder als unverändert; Laden und
+  „Neu“ beginnen den Verlauf neu. Kapazität 100 Schritte.
 
 ## Standardwerte
 

@@ -37,6 +37,7 @@ dotnet publish src/ETPrinter/ETPrinter.csproj -c Release -p:PublishProfile=win-x
 6. Schrift je Etikett/Modul (Schriftart, 4–10 pt, fett, kursiv) wirkt sofort; „Auf alle anwenden“ überträgt sie.
 7. Bei Bedarf importieren: Datei → Importieren → CSV / Excel (nur SP) / PDF-Schaltplan (SP und MP).
 8. Weitere Seiten mit „+ Seite“; Etiketten kopieren mit Strg+Klick/Shift+Klick, Strg+C, Strg+V.
+   Jede Änderung lässt sich mit Strg+Z zurücknehmen und mit Strg+Y wiederholen.
 9. Projekt speichern (Ctrl+S) als `.etprint`.
 10. Drucken (Ctrl+P): Drucker auf „Keine Skalierung / Originalgröße“, A4 Hochformat.
     Leere Seiten werden übersprungen, abgewählte Etiketten/Module nicht gedruckt.
@@ -85,7 +86,7 @@ dotnet test ET-Printer.sln
 
 - Publish (siehe oben) nach `publish/`.
 - Smoke-Test gegen die veröffentlichte EXE (startet die App mit Test-Automation, fährt
-  SP/MP/25 mm/Import/Roundtrip durch, rendert Druckseiten als PNG):
+  SP/MP/25 mm/Import/Roundtrip/Undo-Redo durch, rendert Druckseiten als PNG):
 
 ```
 .\tools\smoke.ps1 -Name AP5

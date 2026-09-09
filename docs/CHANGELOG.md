@@ -4,12 +4,52 @@
 ### Geplant
 - Exakte Masse per Stahllineal (wenn Beschriftungsboegen geliefert)
 - Feinabstimmung aller ET200MP-Varianten gegen die physischen Boegen
-- Restliche Katalog-Eintraege (Komfort, keine neuen Belegungen): DQ 16x24VDC/0.5A BA,
-  AI 8xU/I HF, AI 8xU/I/R/RTD BA, AI 8xU/I/RTD/TC ST, AQ 4xU/I ST
 
 ---
 
 ## 2026-09-09 - Projekttag 7 (Abschluss v3.1, siehe docs/ABSCHLUSSPLAN.md)
+
+### v3.1.1: AP9b-AP9d (MainViewModel-Zerlegung, Undo/Redo, inkrementelle MP-Vorschau)
+
+**AP9b - MainViewModel zerlegt (2714 -> 1818 Zeilen), sechs Schnitte + IDialogService**
+- `Services/DialogService.cs`: `IDialogService` (Confirm, ConfirmSave, ShowInfo/Error,
+  OpenFile, SaveFile, ShowPdfImport) mit `WpfDialogService` und `SilentDialogService`;
+  keine MessageBox/Win32-Dialoge mehr in der ViewModel-Logik, Tests laufen stumm.
+- `AddressGeneratorViewModel` (`Generator.*`): Generator-Felder, Vorschau, Auto-Advance.
+- `SettingsPanelViewModel` (`Panel.*`): Schrift/Kopfzeile/Raender mit Live-Apply,
+  Wertebereiche, `SuspendLiveApply`.
+- `PageDocument<T>`: alle Seiten + sichtbare Seite (`Visible`), Show/AddPage/RemovePage/
+  EnsurePage; `Labels`/`MpModules` sind die sichtbaren Seiten der beiden Dokumente.
+- `ProjectSession` (`Session.*`): Dateipfad, Dirty, Zuletzt geoeffnet, Neu/Oeffnen/
+  Speichern/Speichern unter mit Rueckfragen; das Haupt-ViewModel liefert nur
+  Snapshot (`BuildProject`) und Restore (`ApplyLoadedProject`).
+- `MpEditorViewModel` (`MpEditor.*`): Modul-/Zellauswahl, Variante, Katalog-Artikel,
+  Generator-Vorbelegung, `SelectionInfo`, Zell-Neuaufloesung nach Rebuild.
+- `ImportCoordinator` (`Import.*`): CSV/Excel/PDF-Ablaeufe (Dialog, Hintergrund-Parser,
+  Wartecursor), dialogfreie Einstiege fuer die Test-Automation, statische Zuordnungsregeln
+  (MapParsedModuleType, SuggestVariant, ParsedModuleUnits, BuildImportCells); das
+  Haupt-ViewModel ist nur noch `IImportTarget`. `AddressGenerator.MergeAddressLines`.
+- XAML/Test-Automation/Tests auf `Generator.*`, `Panel.*`, `MpEditor.*`, `Import.*` umgestellt;
+  `Sta.RunAsync` (STA + Dispatcher-Frame) fuer async Import-Tests.
+
+**AP9c - Undo/Redo**
+- `UndoHistory<T>` (Memento-Verlauf, Kapazitaet 100, Zusammenfassen gleichartiger
+  Aenderungen im 1,5-s-Fenster: Tippen in Modulzellen, Ziffern in Randfeldern, Schrift).
+  `EditorState` = tiefe Projektkopie + Seite + Auswahl.
+- `MainViewModel.MarkChanged()` ersetzt alle `IsDirty = true`; `BeginChange()`-Batches
+  machen Commands, Import, Artikel-/Variantenwahl zu je einem Schritt; Format-/Familien-
+  wechsel eines leeren Projekts ist rueckgaengig machbar, ohne dirty zu werden.
+- Rueckkehr auf den gespeicherten Stand loescht das Dirty-Flag; Laden/Neu beginnen den
+  Verlauf neu; Cursor (Seite/Auswahl) wird mit wiederhergestellt.
+- Ctrl+Z / Ctrl+Y, Toolbar-Buttons, Menue Bearbeiten; Test-Automation `undo`, `redo`,
+  `history-state`; Smoke-Szenario [5].
+
+**AP9d - Inkrementelles Rendern der MP-Vorschau**
+- `MpPreviewControl`: eine Canvas-Ebene je Modul; Modul-/Zell-`PropertyChanged` und
+  Zell-Neuaufbau zeichnen nur die betroffene Ebene (Tippen, Auswahl, Druckflag, Variante).
+  Vollaufbau nur bei Seitenwechsel, Familie/Format, Raendern/Kopfzeilen-Schrift,
+  `MpPreviewRefreshToken`. Modul-lokale Aenderungen stossen keinen Vollaufbau mehr an.
+- Tests: 284 (DecompositionTests, UndoRedoTests, MpPreviewTests); Smoke 98/98; Version 3.1.1.
 
 ### AP7: Release v3.1.0
 - App-Icon `Assets/ETPrinter.ico` (generiert: Beschriftungsstreifen in DASA-Blau, 16-256 px).
@@ -815,6 +855,12 @@ Offen bleibt nur: AQ 2xU/I ST (25mm) als Katalog-Eintrag + Feinmasse per Stahlli
 - [x] SheetGeometry (Preview = Druck), Import-Robustheit, Komfort/UX
 - [x] Doku konsolidiert, README, Release-EXE, GitHub-Release
 
+### v3.1.1 - AP8/AP9 [DONE] (2026-09-09)
+- [x] 25mm-BA-Module datenblattverifiziert, Katalog 18 Eintraege
+- [x] MainViewModel zerlegt (6 Sub-Objekte + IDialogService)
+- [x] Undo/Redo (Ctrl+Z/Ctrl+Y), inkrementelle MP-Vorschau
+- [x] 284 Tests, Smoke 98/98
+
 ---
 
 ## Projekt-Meilensteine
@@ -837,3 +883,4 @@ Offen bleibt nur: AQ 2xU/I ST (25mm) als Katalog-Eintrag + Feinmasse per Stahlli
 | 2026-07-03 | Projekttag 5: Modul-Katalog, Datenblatt-Verifikation, 25mm-Template, 96 Tests |
 | 2026-08-04 | Projekttag 6: Katalog-Lueckenschluss, typabhaengige Struktur-Labels, 109 Tests |
 | 2026-09-09 | Projekttag 7: Vollreview + Abschlussplan AP0-AP9, v3.1 (210+ Tests, Smoke 74/74) |
+| 2026-09-09 | Projekttag 7 (Forts.): AP8/AP9 - 25mm-Katalog, MainViewModel-Zerlegung, Undo/Redo, inkrementelle MP-Vorschau, v3.1.1 (284 Tests, Smoke 98/98) |

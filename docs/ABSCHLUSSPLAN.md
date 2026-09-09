@@ -222,6 +222,9 @@ im Druck (ca. 2 % Abweichung).
 
 ## AP9 – Erweiterungen (vollständig umsetzen, Entscheidung 2026-09-09)
 
+**Stand 2026-09-09: alle vier Punkte umgesetzt (AP9a Katalog-Rest, AP9b Zerlegung, AP9c Undo/Redo,
+AP9d inkrementelle Vorschau), Version 3.1.1 – Details in CHANGELOG.md.**
+
 | Aufgabe | Nutzen | Aufwand |
 |---------|--------|---------|
 | Katalog-Rest: DQ 16 BA, AI 8 HF/BA/ST, AQ 4 ST | Auswahl per Modulname statt Variante | S |

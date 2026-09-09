@@ -1,6 +1,6 @@
 # ET-Printer – Technische Architektur
 
-Stand: 2026-09-09 (v3.1). Beschreibt den tatsächlichen Code unter `src/ETPrinter`
+Stand: 2026-09-09 (v3.1.1). Beschreibt den tatsächlichen Code unter `src/ETPrinter`
 und `tests/ETPrinter.Tests`. Historie in `CHANGELOG.md`, Geometrie-Herleitung in
 `PRINT-FORMATS.md`, Features in `FEATURES.md`.
 
@@ -69,7 +69,14 @@ Beschriftung/
 │   ├── ViewModels/
 │   │   ├── ViewModelBase.cs           # INotifyPropertyChanged + SetProperty
 │   │   ├── RelayCommand.cs            # RelayCommand und RelayCommand<T>
-│   │   ├── MainViewModel.cs           # Gesamte Anwendungslogik (Seiten, Generator, Import, Druck, Persistenz)
+│   │   ├── MainViewModel.cs           # Koordination: Familie/Format, Auswahl, Seiten, Generator-Anwendung, Druck, Undo-Hooks
+│   │   ├── AddressGeneratorViewModel.cs # Tab "Adress-Generator" (Generator.*): Felder, Vorschau, Auto-Advance
+│   │   ├── SettingsPanelViewModel.cs  # Panels "Seite"/"Schrift" (Panel.*): Live-Apply, Wertebereiche
+│   │   ├── MpEditorViewModel.cs       # Tab "MP Modul" (MpEditor.*): Modul-/Zellauswahl, Variante, Katalog-Artikel
+│   │   ├── ProjectSession.cs          # Datei, Dirty, Zuletzt geöffnet, Neu/Öffnen/Speichern (Session.*)
+│   │   ├── ImportCoordinator.cs       # CSV/Excel/PDF-Abläufe (Import.*), IImportTarget, Zuordnungsregeln
+│   │   ├── PageDocument.cs            # Seiten + sichtbare Seite je Modus (PageDocument<T>)
+│   │   ├── UndoHistory.cs             # Undo/Redo-Verlauf (Memento), EditorState
 │   │   ├── LabelViewModel.cs          # SP-Etikett: Slots, Display-Strings, Auswahl/Markierung
 │   │   ├── MpModuleViewModel.cs       # MP-Modul + MpAddressCellViewModel, Zell-Neuaufbau, ContentChanged
 │   │   └── PdfImportViewModel.cs      # Modulauswahl im PDF-Import-Dialog
@@ -81,6 +88,7 @@ Beschriftung/
 │   │   ├── MpModuleLayoutFactory.cs   # Zellen-Layouts je Variante, generische Struktur-Labels
 │   │   ├── MpModuleCatalog.cs         # 18 konkrete Siemens-Module mit Datenblatt-Belegung (35 mm + 25 mm)
 │   │   ├── ProjectService.cs          # .etprint laden/speichern, Migration v1–v5, WriteAtomic, Recent
+│   │   ├── DialogService.cs           # IDialogService: WpfDialogService (MessageBox/Win32/PDF-Dialog), SilentDialogService
 │   │   ├── CalibrationService.cs      # calibration.json (maschinenspezifisch)
 │   │   ├── UiStateService.cs          # ui.json (Fenster, Zoom, Splitter) + Plausibilisierung
 │   │   ├── ClipboardService.cs        # App-interner Copy-Puffer (Etiketten ODER Module)
@@ -91,7 +99,7 @@ Beschriftung/
 │   │   └── Log.cs                     # Datei-Logger mit Rotation
 │   ├── Controls/
 │   │   ├── MpPreviewControl.xaml      # Canvas
-│   │   └── MpPreviewControl.xaml.cs   # Entprellte MP-Vorschau, Klick-Selektion
+│   │   └── MpPreviewControl.xaml.cs   # MP-Vorschau: eine Canvas-Ebene je Modul, inkrementell + entprellt, Klick-Selektion
 │   ├── Views/
 │   │   ├── PdfImportDialog.xaml       # DataGrid mit Modulauswahl + Warnungen
 │   │   └── PdfImportDialog.xaml.cs
@@ -129,13 +137,13 @@ MainWindow.xaml  (DataContext = MainViewModel)
 │   ├── GroupBox "Bearbeite: …"           EditTargetInfo, LayoutInfo
 │   ├── GroupBox Produktfamilie / Druckformat
 │   ├── TabControl (IsEnabled = HasSelection, SelectedIndex = InputTabIndex)
-│   │   ├── Tab 0 "Adress-Generator"      Modulname, Modultyp, Start-Byte, Anzahl, Vorschau
+│   │   ├── Tab 0 "Adress-Generator"      Generator.*: Modulname, Modultyp, Start-Byte, Anzahl, Vorschau
 │   │   ├── Tab 1 "Manuell"               nur SP (Kopfzeile, Zeile 1, Zeile 2); im MP-Modus ausgeblendet
-│   │   └── Tab 2 "MP Modul"              Siemens-Modul (Katalog), Variante, Header, Netzadresse,
+│   │   └── Tab 2 "MP Modul"              MpEditor.*: Siemens-Modul (Katalog), Variante, Header, Netzadresse,
 │   │                                     Netzname, CPU-Name, "Modul drucken", Adresszelle
-│   ├── GroupBox "Seite (gilt für alle Etiketten)"
+│   ├── GroupBox "Seite (gilt für alle Etiketten)"   Panel.*
 │   │       Kopfzeilen-Schrift, Ränder, Kalibrierung + Testseite, Blanko A4, Seite zurücksetzen
-│   ├── GroupBox "Schrift: <Auswahl>"     Schriftart/Größe/fett/kursiv (Live-Apply), "Auf alle anwenden"
+│   ├── GroupBox "Schrift: <Auswahl>"     Panel.*: Schriftart/Größe/fett/kursiv (Live-Apply), "Auf alle anwenden"
 │   └── Buttons "Auswahl leeren" / "Alle löschen"
 └── RECHTS (PreviewHost)
     ├── Zoom-Slider 0,3–4 + "Ganze Seite", Seitennavigation (◀ ▶ + Seite − Seite)
@@ -147,11 +155,17 @@ MainWindow.xaml  (DataContext = MainViewModel)
     │       │       vertikal:   Line1Parts / EffectiveLine2Parts als rotierte Slots
     │       └── Zeilennummern 20..1 im rechten Seitenrand
     └── MpScrollViewer  (sichtbar wenn IsModuleBased)
-        └── A4-Border → MpPreviewControl (Canvas, DispatcherTimer 40 ms Debounce)
+        └── A4-Border → MpPreviewControl (Canvas, eine Ebene je Modul, DispatcherTimer 40 ms Debounce)
 
 View (XAML) ──bindet──> MainViewModel ──nutzt──> Models
-                              │
-                              └──> Services (SheetGeometry, PrintService, ProjectService, Importe, …)
+                         ├── Generator  (AddressGeneratorViewModel)   Tab "Adress-Generator"
+                         ├── Panel      (SettingsPanelViewModel)      Panels "Seite" / "Schrift"
+                         ├── MpEditor   (MpEditorViewModel)           Tab "MP Modul"
+                         ├── Session    (ProjectSession)              Datei, Dirty, Recent, Neu/Öffnen/Speichern
+                         ├── Import     (ImportCoordinator)           CSV/Excel/PDF-Abläufe
+                         ├── History    (UndoHistory<EditorState>)    Undo/Redo
+                         ├── _spDoc/_mpDoc (PageDocument<T>)          alle Seiten + sichtbare Seite
+                         └──> Services (SheetGeometry, PrintService, ProjectService, IDialogService, Importe, …)
 ```
 
 Zwei Vorschau-Pfade, ein Druckpfad:
@@ -161,11 +175,14 @@ Zwei Vorschau-Pfade, ein Druckpfad:
   Rasterränder (`PreviewMargin`), Kopfspaltenbreite (`SpHeaderPreviewWidth`) und
   Zeilennummern-Versatz (`RowNumbersMargin`) kommen aus dem ViewModel; `ColumnDefinition`
   und `RowDefinition` hängen nicht im Visual Tree und werden über den `BindingProxy` gebunden.
-- **ET 200MP**: `MpPreviewControl` zeichnet Rechtecke und Textblöcke manuell auf einen Canvas.
-  Es hört auf `MpModules.CollectionChanged` sowie auf `SelectedMpModule`, `SelectedMpCell`,
-  `MpPreviewRefreshToken` und `IsModuleBased`; jede Änderung startet den 40-ms-Timer neu
-  (Bulk-Neuaufbau statt eines pro Tastendruck). `FlushRender` erzwingt den Aufbau für Screenshots.
-  Beim DataContext-Wechsel werden alte Handler abgemeldet.
+- **ET 200MP**: `MpPreviewControl` zeichnet Rechtecke und Textblöcke manuell auf einen Canvas,
+  je Modul in eine eigene Canvas-Ebene. Es abonniert jedes sichtbare Modul (`PropertyChanged`,
+  `AddressCells.CollectionChanged`) und dessen Zellen und zeichnet bei Änderungen nur die
+  betroffene Ebene neu (Tippen, Zell-/Modulauswahl, Druckflag, Variante). Ein Vollaufbau
+  läuft nur bei `MpModules.CollectionChanged` (Seitenwechsel), `MpPreviewRefreshToken`
+  (Familie/Format, Ränder, Kopfzeilen-Schrift, Druckauswahl für alle) und `IsModuleBased`.
+  Beides ist über einen 40-ms-`DispatcherTimer` gebündelt; `FlushRender` erzwingt den Aufbau
+  für Screenshots. Beim DataContext-Wechsel werden alle Handler abgemeldet.
 - **Druck**: `PrintService` baut aus denselben ViewModels ein `FixedDocument`; die Vorschau
   zeigt das unverschobene Raster, der Druck addiert den Kalibrier-Versatz.
 
@@ -282,8 +299,41 @@ daraus generiert. Handler laufen über `RunOnUI` auf dem Dispatcher (mit Abbruch
 beim Shutdown). Pipe-Fehler lösen 1 s Backoff aus. Im Automation-Modus werden modale
 Rückfragen (`SuppressContentLossConfirm`) und Import-Infoboxen unterdrückt.
 Clients: `test-send.ps1` (Einzelbefehl) und `tools/smoke.ps1` (Szenarien SP/MP/25mm/
-Import/UX/Roundtrip, Screenshots + Druck-PNGs unter `test_results/<Name>/`, Exit-Code 1
-bei Fehlern).
+Import/UX/Roundtrip/Undo-Redo, Screenshots + Druck-PNGs unter `test_results/<Name>/`,
+Exit-Code 1 bei Fehlern).
+
+### Zerlegung des Haupt-ViewModels (AP9b)
+`MainViewModel` ist Koordinator und hält nur noch Familie/Format, Auswahl, Seiten und die
+Anwendung des Generators auf Etiketten/Module. Sechs Teile sind eigenständige, einzeln
+testbare Objekte, die das Hauptfenster als Unter-Bindungen anspricht:
+
+| Objekt | Bindung | Aufgabe |
+|--------|---------|---------|
+| `AddressGeneratorViewModel` | `Generator.*` | Felder, Vorschau, Auto-Advance, `Generate()` |
+| `SettingsPanelViewModel` | `Panel.*` | Schrift/Kopfzeile/Ränder mit Live-Apply, Wertebereiche, `SuspendLiveApply` |
+| `MpEditorViewModel` | `MpEditor.*` | Modul-/Zellauswahl, Variante, Katalog-Artikel, Generator-Vorbelegung |
+| `ProjectSession` | `Session.*` | Dateipfad, `IsDirty`, Recent-Liste, Neu/Öffnen/Speichern mit Rückfragen |
+| `ImportCoordinator` | `Import.*` | CSV/Excel/PDF-Abläufe; das Haupt-ViewModel ist `IImportTarget` |
+| `PageDocument<T>` | `Labels` / `MpModules` = `Visible` | alle Seiten + sichtbare Seite, Navigation |
+
+Alle Dialoge laufen über `IDialogService` (`WpfDialogService` produktiv, `SilentDialogService`
+in Tests und Test-Automation). Die Teile melden Statusmeldungen und Änderungen per Events
+(`StatusRequested`, `FontChanged`, `MarginsChanged`, `PropertyChanged`) an den Koordinator;
+`SelectedMpModule`/`SelectedMpCell` bleiben als Weiterleitung auf `MpEditor` erhalten, damit
+Vorschau, Test-Automation und Tests unverändert darauf zugreifen.
+
+### Undo/Redo (AP9c)
+`UndoHistory<EditorState>` arbeitet nach dem Memento-Prinzip: jede Änderung meldet über
+`MainViewModel.MarkChanged(label)` den **neuen** Zustand (`Capture()` = tiefe Kopie von
+`BuildProject()` + Seite + Auswahl); der vorherige wandert auf den Undo-Stapel.
+`BeginChange(label)` fasst alle Meldungen bis zum Dispose zu einem Schritt zusammen –
+Commands sind damit ein Schritt (auch „Generieren“ mit 32 Zellschreibungen), ebenso Import
+und Artikel-/Variantenwahl. Direkte Bindungen (Tippen in Modulzellen, Randfelder, Schrift)
+werden über Schlüssel innerhalb von 1,5 s zusammengefasst. Wiederherstellen läuft über
+`ApplyProjectState` (der Ladepfad ohne Datei-/Dirty-Verwaltung) mit unterdrückter
+Aufzeichnung; die Rückkehr auf den gespeicherten Snapshot setzt `IsDirty` zurück. Laden
+und „Neu“ beginnen den Verlauf neu, Format-/Familienwechsel eines leeren Projekts wird
+aufgezeichnet, ohne das Projekt als geändert zu markieren.
 
 ## Geometrie
 
@@ -344,7 +394,15 @@ bei Fehlern).
    ein fremdes Projekt darf den eigenen Druckversatz nicht verstellen.
 10. **Test-Automation nur auf Anforderung** – Named Pipe startet nur mit Flag/ENV, um die
     Angriffsfläche in Produktion klein zu halten; Regex-Parser mit `NonBacktracking` + Timeout.
-11. **Entprellte MP-Vorschau** – DispatcherTimer statt Neuaufbau pro Tastendruck
-    (1000–1700 Canvas-Elemente).
+11. **Inkrementelle, entprellte MP-Vorschau** (AP9d) – eine Canvas-Ebene je Modul; Modul-
+    und Zell-Ereignisse zeichnen nur die betroffene Ebene, der DispatcherTimer bündelt.
+    Ein Vollaufbau (1000–1700 Elemente) bleibt Seitenwechsel und Geometrieänderungen vorbehalten.
 12. **Kein automatisches Seitenanlegen im MP-Modus** – Varianten und Start-Bytes werden
     je Modul geprüft; SP legt nach dem letzten Etikett automatisch eine Seite an.
+13. **Koordinator + Teil-ViewModels statt Gott-Klasse** (AP9b) – Generator, Panel, MP-Editor,
+    Session, Import und Seitendokument sind eigenständig testbar; Dialoge nur über
+    `IDialogService`, damit Logik ohne Fenster läuft.
+14. **Undo als Snapshot des Projektzustands** (AP9c) – kein Command-Pattern je Aktion:
+    `BuildProject`/`ApplyProjectState` existieren ohnehin für Speichern/Laden, damit ist jede
+    Änderung automatisch rückgängig machbar; Batches und Zeitfenster halten die Schritte
+    benutzergerecht.
