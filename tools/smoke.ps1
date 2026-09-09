@@ -232,6 +232,44 @@ try {
     $mp25File = "$OutDir\mp25.etprint"
     Invoke-Cmd "save-project $mp25File" | Out-Null
 
+    # --- Szenario 3b: Importe (AP4) -------------------------------------------
+    Write-Host "`n[3b] Importe CSV / Schaltplan-Text" -ForegroundColor Yellow
+    Invoke-Cmd "new-project" | Out-Null
+    Invoke-Cmd "select-format HorizontalDoubleHeader" | Out-Null
+    $csv = "$OutDir\import.csv"
+    # UTF-16 LE mit BOM (Excel "Unicode Text"), Tab-getrennt, Zeilenumbruch im Feld
+    [System.IO.File]::WriteAllText($csv, "Kopfzeile`tZeile1`tZeile2`r`n`"Stoerung`r`nLuefter`"`tE 0.0`tE 0.1`r`nM2`tE 1.0`tE 1.1`r`nÜbertemperatur`tE 2.0`t`r`n", [System.Text.Encoding]::Unicode)
+    Invoke-Cmd "select-label 0" | Out-Null
+    $r = Invoke-Cmd "import-file $csv" | ConvertFrom-Json
+    Assert-Eq 3 $r.imported "CSV (UTF-16, Tab, Multiline) importiert"
+    Assert-Eq 3 (Get-State).filledLabels "CSV Etiketten befuellt"
+    $txt = "$OutDir\plan.txt"
+    Set-Content -Path $txt -Value @("=A1+S1-K3 DI 32x24VDC HF", "E 4.0 E 4.1 E 4.2 E 4.3 E 4.4 E 4.5 E 4.6 E 4.7", "E 5.0 E 5.1 E 5.2 E 5.3 E 5.4 E 5.5 E 5.6 E 5.7", "E 6.0 E 6.1 E 6.2 E 6.3 E 6.4 E 6.5 E 6.6 E 6.7", "E 7.0 E 7.1 E 7.2 E 7.3 E 7.4 E 7.5 E 7.6 E 7.7", "+K2 AI 4", "IW 100 IW 102 IW 104 IW 106") -Encoding UTF8
+    Invoke-Cmd "select-label 10" | Out-Null
+    $r = Invoke-Cmd "import-lines $txt" | ConvertFrom-Json
+    Assert-Eq 2 $r.modules "Schaltplan-Text: 2 Module erkannt"
+    # 32-Kanal-Modul -> 2 Etiketten, AI 4 -> 1 Etikett => 3 + 3 (CSV) = 6
+    Assert-Eq 6 (Get-State).filledLabels "SP Etiketten nach Schaltplan-Import (32 Kanaele = 2 Etiketten)"
+    # MP-Modus: Schaltplan-Import fuellt Module
+    Invoke-Cmd "new-project" | Out-Null
+    Invoke-Cmd "select-family S71500_ET200MP" | Out-Null
+    Invoke-Cmd "select-module 2" | Out-Null
+    $r = Invoke-Cmd "import-lines $txt" | ConvertFrom-Json
+    Assert-Eq 2 $r.modules "MP Schaltplan-Import: 2 Module"
+    Invoke-Cmd "select-module 2" | Out-Null
+    $m = Get-MpState
+    Assert-Eq "=A1" $m.header "MP Modul 2 Header aus Schaltplan"
+    Assert-Eq "DI_DQ_32" $m.variant "MP Modul 2: Variante folgt Kanalzahl (32)"
+    Assert-Eq 32 $m.filledCells "MP Modul 2: 32 Adressen"
+    Assert-Eq "E 4.0" $m.cellTexts[0] "MP Modul 2 beginnt bei Byte 4"
+    Invoke-Cmd "select-module 3" | Out-Null
+    $m = Get-MpState
+    Assert-Eq "+K2" $m.header "MP Modul 3 Header"
+    Assert-Eq "AI" $m.ioType "MP Modul 3 Modultyp AI"
+    Assert-Eq "AI_AQ_8" $m.variant "MP Modul 3 Analog-Variante"
+    Assert-Eq 4 $m.filledCells "MP Modul 3: 4 Analogkanaele"
+    Assert-True (-not (Get-State).isDirty -eq $false) "MP Import markiert dirty"
+
     # --- Szenario 4: Persistenz-Roundtrip -----------------------------------
     Write-Host "`n[4] Persistenz-Roundtrip" -ForegroundColor Yellow
     Invoke-Cmd "new-project" | Out-Null

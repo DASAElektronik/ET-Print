@@ -2133,110 +2133,90 @@ public class MainViewModel : ViewModelBase
 
     // === Import Methods ===
 
-    private void ImportCsv()
+    private void ImportCsv() => ImportCellsAsync("CSV-Dateien|*.csv|Alle Dateien|*.*",
+        "CSV-Datei importieren", "CSV", CsvImportService.Import);
+
+    private void ImportExcel() => ImportCellsAsync("Excel-Dateien|*.xlsx|Alle Dateien|*.*",
+        "Excel-Datei importieren", "Excel", ExcelImportService.Import);
+
+    /// <summary>Gemeinsamer CSV-/Excel-Import: Datei waehlen, Parser im Hintergrund
+    /// (Wartecursor statt eingefrorener UI), Ergebnis auf dem UI-Thread uebernehmen.</summary>
+    private async void ImportCellsAsync(string filter, string title, string kind, Func<string, List<LabelCell>> parser)
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog
+        var dlg = new Microsoft.Win32.OpenFileDialog { Filter = filter, Title = title };
+        if (dlg.ShowDialog() != true) return;
+
+        try
         {
-            Filter = "CSV-Dateien|*.csv|Alle Dateien|*.*",
-            Title = "CSV-Datei importieren"
-        };
-        if (dlg.ShowDialog() == true)
+            List<LabelCell> cells;
+            using (new WaitCursorScope())
+                cells = await Task.Run(() => parser(dlg.FileName));
+
+            if (cells.Count == 0)
+            {
+                StatusMessage = $"{kind}-Datei enthaelt keine Daten";
+                return;
+            }
+            PopulateFromImportedCells(cells);
+            StatusMessage = $"{cells.Count} Etiketten aus {kind} importiert";
+        }
+        catch (Exception ex)
         {
-            try
-            {
-                var cells = CsvImportService.Import(dlg.FileName);
-                if (cells.Count == 0)
-                {
-                    StatusMessage = "CSV-Datei enthaelt keine Daten";
-                    return;
-                }
-                PopulateFromImportedCells(cells);
-                StatusMessage = $"{cells.Count} Etiketten aus CSV importiert";
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"CSV-Importfehler: {ex.Message}";
-                MessageBox.Show(
-                    $"Fehler beim CSV-Import:\n{ex.Message}",
-                    "Importfehler",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            }
+            Log.Error($"{kind}-Import", ex);
+            StatusMessage = $"{kind}-Importfehler: {ex.Message}";
+            MessageBox.Show($"Fehler beim {kind}-Import:\n{ex.Message}", "Importfehler",
+                MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    private void ImportExcel()
-    {
-        var dlg = new Microsoft.Win32.OpenFileDialog
-        {
-            Filter = "Excel-Dateien|*.xlsx|Alle Dateien|*.*",
-            Title = "Excel-Datei importieren"
-        };
-        if (dlg.ShowDialog() == true)
-        {
-            try
-            {
-                var cells = ExcelImportService.Import(dlg.FileName);
-                if (cells.Count == 0)
-                {
-                    StatusMessage = "Excel-Datei enthaelt keine Daten";
-                    return;
-                }
-                PopulateFromImportedCells(cells);
-                StatusMessage = $"{cells.Count} Etiketten aus Excel importiert";
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"Excel-Importfehler: {ex.Message}";
-                MessageBox.Show(
-                    $"Fehler beim Excel-Import:\n{ex.Message}",
-                    "Importfehler",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            }
-        }
-    }
-
-    private void ImportSchematic()
+    private async void ImportSchematic()
     {
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
             Filter = "PDF-Dateien|*.pdf|Alle Dateien|*.*",
             Title = "PDF-Schaltplan importieren"
         };
-        if (dlg.ShowDialog() == true)
+        if (dlg.ShowDialog() != true) return;
+
+        try
         {
-            try
+            SchematicParseResult result;
+            using (new WaitCursorScope())
+                result = await Task.Run(() => SchematicParserService.Parse(dlg.FileName));
+
+            var importVm = new PdfImportViewModel();
+            importVm.LoadFromResult(result);
+            var dialog = new PdfImportDialog(importVm)
             {
-                var result = SchematicParserService.Parse(dlg.FileName);
-                var importVm = new PdfImportViewModel();
-                importVm.LoadFromResult(result);
-                var dialog = new PdfImportDialog(importVm)
+                Owner = Application.Current.MainWindow
+            };
+            if (dialog.ShowDialog() == true)
+            {
+                var selectedModules = importVm.GetSelectedModules();
+                if (selectedModules.Count == 0)
                 {
-                    Owner = Application.Current.MainWindow
-                };
-                if (dialog.ShowDialog() == true)
-                {
-                    var selectedModules = importVm.GetSelectedModules();
-                    if (selectedModules.Count == 0)
-                    {
-                        StatusMessage = "Keine Module ausgewaehlt";
-                        return;
-                    }
-                    PopulateFromParsedModules(selectedModules);
-                    StatusMessage = $"{selectedModules.Count} Module aus Schaltplan importiert";
+                    StatusMessage = "Keine Module ausgewaehlt";
+                    return;
                 }
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"PDF-Importfehler: {ex.Message}";
-                MessageBox.Show(
-                    $"Fehler beim PDF-Import:\n{ex.Message}",
-                    "Importfehler",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                PopulateFromParsedModules(selectedModules);
+                StatusMessage = $"{selectedModules.Count} Module aus Schaltplan importiert";
             }
         }
+        catch (Exception ex)
+        {
+            Log.Error("PDF-Import", ex);
+            StatusMessage = $"PDF-Importfehler: {ex.Message}";
+            MessageBox.Show($"Fehler beim PDF-Import:\n{ex.Message}", "Importfehler",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Wartecursor fuer die Dauer einer Hintergrundoperation.</summary>
+    private sealed class WaitCursorScope : IDisposable
+    {
+        private readonly Cursor? _previous = Mouse.OverrideCursor;
+        public WaitCursorScope() => Mouse.OverrideCursor = Cursors.Wait;
+        public void Dispose() => Mouse.OverrideCursor = _previous;
     }
 
     private void PopulateFromImportedCells(List<LabelCell> cells)
@@ -2282,12 +2262,23 @@ public class MainViewModel : ViewModelBase
         NotifyPageProperties();
         IsDirty = true;
 
-        MessageBox.Show(
-            $"{cells.Count} Etiketten importiert.\n" +
-            $"Verteilt auf {_allPages.Count} Seite(n).",
-            "Import abgeschlossen",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        if (!_suppressContentLossConfirm) // Automation: keine modale Box
+            MessageBox.Show(
+                $"{cells.Count} Etiketten importiert.\n" +
+                $"Verteilt auf {_allPages.Count} Seite(n).",
+                "Import abgeschlossen",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+    }
+
+    /// <summary>Test-Automation: CSV/Excel-Datei ohne Dialog importieren.</summary>
+    internal int ImportCellsFromFile(string path)
+    {
+        var cells = string.Equals(Path.GetExtension(path), ".xlsx", StringComparison.OrdinalIgnoreCase)
+            ? ExcelImportService.Import(path)
+            : CsvImportService.Import(path);
+        if (cells.Count > 0) PopulateFromImportedCells(cells);
+        return cells.Count;
     }
 
     internal static ModuleType? MapParsedModuleType(string moduleType) => moduleType.ToUpperInvariant() switch
@@ -2298,6 +2289,21 @@ public class MainViewModel : ViewModelBase
         "AO" => ModuleType.AO,
         _ => null
     };
+
+    /// <summary>Layout-Variante fuer ein importiertes Modul ohne Katalog-Artikel:
+    /// digital bis 16 Kanaele = 1 Spalte, darueber 2 Spalten; analog = Analogblock.</summary>
+    internal static MpModuleVariant SuggestVariant(ProductFamily family, ModuleType type, int channelCount)
+    {
+        bool is25 = family == ProductFamily.S71500_ET200MP_25mm;
+        var info = AddressGenerator.ModuleTypes.First(m => m.Type == type);
+        if (info.IsBitAddressed)
+        {
+            if (is25) return channelCount > 16 ? MpModuleVariant.MP25_32 : MpModuleVariant.MP25_16;
+            return channelCount > 16 ? MpModuleVariant.DI_DQ_32 : MpModuleVariant.DI_DQ_16;
+        }
+        if (is25) return MpModuleVariant.MP25_16;
+        return channelCount <= 4 && type == ModuleType.AO ? MpModuleVariant.AQ_4 : MpModuleVariant.AI_AQ_8;
+    }
 
     /// <summary>Anzahl der Generator-Einheiten eines geparsten Moduls: Bytes bei
     /// digital (aufgerundet), Kanaele bei analog. Mindestens 1.</summary>
@@ -2394,7 +2400,12 @@ public class MainViewModel : ViewModelBase
             if (type is not null)
             {
                 if (string.IsNullOrEmpty(target.ArticleNumber))
+                {
+                    // Benutzerdefiniertes Modul: Layout-Variante zur Kanalzahl waehlen
+                    // (32 Kanaele passen nicht in einen 16-Kanal-Streifen)
+                    target.Variant = SuggestVariant(_selectedFormat.Family, type.Value, parsed.ChannelCount);
                     target.IoType = type.Value;
+                }
                 FillMpModuleAddresses(target, type.Value, parsed.StartByte,
                     ParsedModuleUnits(type.Value, parsed.ChannelCount));
             }
@@ -2416,9 +2427,19 @@ public class MainViewModel : ViewModelBase
         NotifyMpPreviewChanged();
         IsDirty = true;
 
-        MessageBox.Show(
-            $"{imported} Module importiert.\nVerteilt auf {_allMpPages.Count} Seite(n).",
-            "Import abgeschlossen", MessageBoxButton.OK, MessageBoxImage.Information);
+        if (!_suppressContentLossConfirm)
+            MessageBox.Show(
+                $"{imported} Module importiert.\nVerteilt auf {_allMpPages.Count} Seite(n).",
+                "Import abgeschlossen", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    /// <summary>Test-Automation: geparste Module (Textzeilen eines Schaltplans) ohne
+    /// Dialog importieren — SP: Etiketten, MP: Module.</summary>
+    internal int ImportParsedLines(IEnumerable<string> lines)
+    {
+        var modules = SchematicParserService.ParseLines(lines);
+        if (modules.Count > 0) PopulateFromParsedModules(modules);
+        return modules.Count;
     }
 
     // === Selective Print Methods ===

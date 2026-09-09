@@ -151,6 +151,8 @@ public class TestAutomationService : IDisposable
         ["mp-state"] = new("mp-state", "Ausgewaehltes Modul (JSON)", (s, _) => s.GetMpState()),
         ["set-generator"] = new("set-generator <name> <typ> <byte> <n>", "Generator-Felder setzen", (s, a) => s.SetGenerator(a)),
         ["set-font"] = new("set-font <groesse> <fett 0/1> <kursiv 0/1> [schriftart]", "Schrift-Eingabefelder setzen (Live-Apply)", (s, a) => s.SetFont(a)),
+        ["import-file"] = new("import-file <pfad.csv|.xlsx>", "CSV/Excel ohne Dialog importieren (ab ausgewaehltem Etikett)", (s, a) => s.ImportFile(a)),
+        ["import-lines"] = new("import-lines <pfad.txt>", "Textzeilen wie ein Schaltplan-PDF parsen und importieren (SP: Etiketten, MP: Module)", (s, a) => s.ImportLines(a)),
         ["toggle-print"] = new("toggle-print", "Druckflag des ausgewaehlten Etiketts/Moduls umschalten", (s, _) => s.TogglePrint()),
         ["print-state"] = new("print-state", "Druckentscheidung: Seiten im Dokument + druckbare Etiketten/Module je Seite (JSON)", (s, _) => s.GetPrintState()),
         ["trigger-generate"] = new("trigger-generate", "Generieren + Uebertragen", (s, _) => s.TriggerGenerate()),
@@ -451,6 +453,32 @@ public class TestAutomationService : IDisposable
         try { _viewModel.ClearAllCommand.Execute(null); }
         finally { _viewModel.SuppressContentLossConfirm = false; }
         return Ok("Alle Etiketten geloescht");
+    }
+
+    private string ImportFile(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return Error($"Datei nicht gefunden: {path}");
+        _viewModel.SuppressContentLossConfirm = true;
+        try
+        {
+            int n = _viewModel.ImportCellsFromFile(path);
+            return Ok(JsonSerializer.Serialize(new { imported = n }));
+        }
+        catch (Exception ex) { return Error($"Importfehler: {ex.Message}"); }
+        finally { _viewModel.SuppressContentLossConfirm = false; }
+    }
+
+    private string ImportLines(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return Error($"Datei nicht gefunden: {path}");
+        _viewModel.SuppressContentLossConfirm = true;
+        try
+        {
+            int n = _viewModel.ImportParsedLines(File.ReadAllLines(path));
+            return Ok(JsonSerializer.Serialize(new { modules = n }));
+        }
+        catch (Exception ex) { return Error($"Importfehler: {ex.Message}"); }
+        finally { _viewModel.SuppressContentLossConfirm = false; }
     }
 
     private string TogglePrint()

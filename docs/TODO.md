@@ -267,7 +267,7 @@
 - [x] AP1 Kritische Bugs (12, + 2.6/2.10/2.20 vorgezogen; 133 Tests, Smoke 41/41)
 - [x] AP2 Mittlere Bugs (20 + 2.21 Shrink-to-fit; 150 Tests, Smoke 48/48). Offen aus AP2: toter GetCellSize-MP-Zweig -> AP3
 - [x] AP3 SheetGeometry fuer Druck/Vorschau/Kalibrierung, Migrations- + Roundtrip-Tests (173 Tests, Smoke 48/48)
-- [ ] AP4 Import-Robustheit
+- [x] AP4 Import-Robustheit CSV/Excel/PDF + async + Auto-Variante (197 Tests, Smoke 62/62)
 - [ ] AP5 Komfort/UX
 - [ ] AP6 Doku-Konsolidierung + Version
 - [ ] AP7 Release v3.1

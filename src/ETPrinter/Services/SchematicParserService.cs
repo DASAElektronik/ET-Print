@@ -5,27 +5,35 @@ using UglyToad.PdfPig.Content;
 
 namespace ETPrinter.Services;
 
+/// <summary>
+/// Erkennt Module und SPS-Adressen in Schaltplan-PDFs (EPLAN/WSCAD-Export).
+/// Zeilenweise: eine Zeile mit Modultyp (DI/DO/DQ/AI/AO/AQ + Kanalzahl) und BMK
+/// (+/=...) eroeffnet ein Modul, alle folgenden Adressen gehoeren dazu.
+/// Deutsche (E/A/EW/AW) und englische (I/Q/IW/QW) Mnemonics werden erkannt.
+/// </summary>
 public static class SchematicParserService
 {
     // NonBacktracking + Timeout schuetzen gegen pathologische PDF-Inhalte.
-    // NonBacktracking ist inkompatibel mit Compiled, dafuer garantiert linear.
+    // NonBacktracking ist inkompatibel mit Compiled und mit Lookarounds — die
+    // Wortgrenze vor dem Mnemonic ist deshalb als Capture-Gruppe modelliert.
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
 
     // Kein trailing \b: reale Typbezeichnungen wie "DI 8x24VDC ST" haben nach der
     // Kanalzahl direkt Buchstaben ("x24VDC"), Ziffer->Buchstabe ist keine Wortgrenze.
-    // Nur Groups[1] (der Typ) wird ausgewertet.
     private static readonly Regex ModuleTypePattern = new(
-        @"\b(DI|DO|DQ|AI|AO|AQ)\s*\d+",
+        @"(^|[^A-Za-z0-9])(DI|DO|DQ|AI|AO|AQ)\s*\d+",
         RegexOptions.IgnoreCase | RegexOptions.NonBacktracking,
         RegexTimeout);
 
+    // Gruppe 2 = Adresse. Vor dem Mnemonic darf kein Buchstabe/keine Ziffer stehen:
+    // "SIZE 1.5", "TYPE 2.0" oder "NEW 12" lieferten frueher Phantomadressen.
     private static readonly Regex DigitalAddressPattern = new(
-        @"[EA]\s*\d+\.\d+",
+        @"(^|[^A-Za-z0-9])([EAIQ]\s*\d+\.\d)",
         RegexOptions.NonBacktracking,
         RegexTimeout);
 
     private static readonly Regex AnalogAddressPattern = new(
-        @"[EA]W\s*\d+",
+        @"(^|[^A-Za-z0-9])([EAIQ]W\s*\d+)",
         RegexOptions.NonBacktracking,
         RegexTimeout);
 
@@ -57,9 +65,8 @@ public static class SchematicParserService
                 {
                     var page = document.GetPage(pageIndex);
                     var textBlocks = ExtractTextBlocks(page);
-                    var lines = GroupIntoLines(textBlocks);
-                    var modules = ExtractModulesFromLines(lines, pageIndex);
-                    result.Modules.AddRange(modules);
+                    var lines = GroupIntoLines(textBlocks).Select(l => l.GetFullText());
+                    result.Modules.AddRange(ParseLines(lines));
                 }
                 catch (Exception ex)
                 {
@@ -78,6 +85,42 @@ public static class SchematicParserService
         }
 
         return result;
+    }
+
+    /// <summary>Kern des Parsers auf Textzeilen (testbar ohne PDF).</summary>
+    public static List<ParsedModule> ParseLines(IEnumerable<string> lines)
+    {
+        var modules = new List<ParsedModule>();
+        ParsedModule? currentModule = null;
+
+        foreach (var lineText in lines)
+        {
+            var typeMatch = ModuleTypePattern.Match(lineText);
+            var bmkMatch = ModuleBmkPattern.Match(lineText);
+
+            if (typeMatch.Success && bmkMatch.Success)
+            {
+                if (currentModule != null)
+                    modules.Add(currentModule);
+
+                currentModule = new ParsedModule
+                {
+                    ModuleName = bmkMatch.Value,
+                    ModuleType = NormalizeModuleType(typeMatch.Groups[2].Value)
+                };
+            }
+
+            if (currentModule != null)
+                ExtractAddresses(lineText, currentModule);
+        }
+
+        if (currentModule != null)
+            modules.Add(currentModule);
+
+        foreach (var module in modules)
+            FinalizeModule(module);
+
+        return modules;
     }
 
     private static List<TextBlock> ExtractTextBlocks(Page page)
@@ -125,91 +168,52 @@ public static class SchematicParserService
         return lines;
     }
 
-    private static List<ParsedModule> ExtractModulesFromLines(List<TextLine> lines, int pageNumber)
-    {
-        var modules = new List<ParsedModule>();
-        ParsedModule? currentModule = null;
-
-        foreach (var line in lines)
-        {
-            var lineText = line.GetFullText();
-
-            var typeMatch = ModuleTypePattern.Match(lineText);
-            var bmkMatch = ModuleBmkPattern.Match(lineText);
-
-            if (typeMatch.Success && bmkMatch.Success)
-            {
-                if (currentModule != null)
-                    modules.Add(currentModule);
-
-                currentModule = new ParsedModule
-                {
-                    ModuleName = bmkMatch.Value,
-                    ModuleType = NormalizeModuleType(typeMatch.Groups[1].Value)
-                };
-            }
-
-            if (currentModule != null)
-            {
-                ExtractAddresses(lineText, currentModule);
-            }
-        }
-
-        if (currentModule != null)
-            modules.Add(currentModule);
-
-        foreach (var module in modules)
-        {
-            FinalizeModule(module);
-        }
-
-        return modules;
-    }
-
     private static void ExtractAddresses(string lineText, ParsedModule module)
     {
-        var digitalMatches = DigitalAddressPattern.Matches(lineText);
-        foreach (Match match in digitalMatches)
-        {
-            var address = match.Value.Replace(" ", "");
-            if (!module.Channels.Any(c => c.Address == address))
-            {
-                module.Channels.Add(new ParsedChannel
-                {
-                    ChannelNumber = module.Channels.Count,
-                    Address = address
-                });
-            }
-        }
+        foreach (Match match in DigitalAddressPattern.Matches(lineText))
+            AddChannel(module, NormalizeAddress(match.Groups[2].Value));
 
-        var analogMatches = AnalogAddressPattern.Matches(lineText);
-        foreach (Match match in analogMatches)
+        foreach (Match match in AnalogAddressPattern.Matches(lineText))
+            AddChannel(module, NormalizeAddress(match.Groups[2].Value));
+    }
+
+    private static void AddChannel(ParsedModule module, string address)
+    {
+        if (module.Channels.Any(c => c.Address == address)) return;
+        module.Channels.Add(new ParsedChannel
         {
-            var address = match.Value.Replace(" ", "");
-            if (!module.Channels.Any(c => c.Address == address))
-            {
-                module.Channels.Add(new ParsedChannel
-                {
-                    ChannelNumber = module.Channels.Count,
-                    Address = address
-                });
-            }
-        }
+            ChannelNumber = module.Channels.Count,
+            Address = address
+        });
+    }
+
+    /// <summary>Leerzeichen entfernen, englische Mnemonics (I/Q/IW/QW) auf die
+    /// deutschen (E/A/EW/AW) abbilden — die App beschriftet einheitlich deutsch.</summary>
+    internal static string NormalizeAddress(string raw)
+    {
+        var a = raw.Replace(" ", "").ToUpperInvariant();
+        if (a.StartsWith("IW")) return "EW" + a[2..];
+        if (a.StartsWith("QW")) return "AW" + a[2..];
+        if (a.StartsWith('I')) return "E" + a[1..];
+        if (a.StartsWith('Q')) return "A" + a[1..];
+        return a;
     }
 
     private static void FinalizeModule(ParsedModule module)
     {
         module.ChannelCount = module.Channels.Count;
 
-        if (module.Channels.Count > 0)
+        // Start-Byte = KLEINSTE Byte-Adresse (nicht die zuerst gelesene): bei
+        // Spaltenlayouts oder mehrbytigen Modulen kam sonst Byte 1 statt 0 heraus.
+        int? min = null;
+        foreach (var ch in module.Channels)
         {
-            var firstAddress = module.Channels[0].Address;
-            var byteMatch = StartBytePattern.Match(firstAddress);
-            if (byteMatch.Success && int.TryParse(byteMatch.Value, out int startByte))
-            {
-                module.StartByte = startByte;
-            }
+            var byteMatch = StartBytePattern.Match(ch.Address);
+            if (byteMatch.Success && int.TryParse(byteMatch.Value, out int b))
+                min = min is null ? b : Math.Min(min.Value, b);
         }
+        if (min is not null)
+            module.StartByte = min.Value;
     }
 
     private static string NormalizeModuleType(string raw)
