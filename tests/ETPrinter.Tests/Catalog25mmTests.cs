@@ -207,9 +207,9 @@ public class Catalog25mmTests
             var vm = new MainViewModel { SuppressContentLossConfirm = true };
             vm.SelectedProductFamilyInfo = ProductFamilyDefinitions.Get(ProductFamily.S71500_ET200MP_25mm);
             vm.SelectedMpModule = vm.MpModules[0];
-            vm.SelectedMpArticle = MpModuleCatalog.Find("6ES7521-1BL10-0AA0"); // DI 32 BA
+            vm.MpEditor.SelectedArticle = MpModuleCatalog.Find("6ES7521-1BL10-0AA0"); // DI 32 BA
             Assert.Equal(4, vm.Generator.Count);
-            vm.SelectedMpArticle = MpModuleCatalog.Find("6ES7523-1BL00-0AA0"); // DI16/DQ16
+            vm.MpEditor.SelectedArticle = MpModuleCatalog.Find("6ES7523-1BL00-0AA0"); // DI16/DQ16
             Assert.Equal(2, vm.Generator.Count);
         });
     }

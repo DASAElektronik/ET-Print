@@ -263,6 +263,6 @@ public class ImportRobustnessTests
     [InlineData(ETPrinter.Models.ProductFamily.S71500_ET200MP_25mm, ETPrinter.Services.ModuleType.AI, 8, ETPrinter.Models.MpModuleVariant.MP25_16)]
     public void SuggestVariant_MatchesChannelCount(ETPrinter.Models.ProductFamily family, ETPrinter.Services.ModuleType type, int channels, ETPrinter.Models.MpModuleVariant expected)
     {
-        Assert.Equal(expected, ETPrinter.ViewModels.MainViewModel.SuggestVariant(family, type, channels));
+        Assert.Equal(expected, ETPrinter.ViewModels.ImportCoordinator.SuggestVariant(family, type, channels));
     }
 }

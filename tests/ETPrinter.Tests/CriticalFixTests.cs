@@ -139,7 +139,7 @@ public class CriticalFixTests
     [Fact]
     public void BuildImportCells_32ChannelDigital_SplitsIntoTwoLabels()
     {
-        var cells = MainViewModel.BuildImportCells("DI32", ModuleType.DI, 0, 32, [], isDoubleLine: true);
+        var cells = ImportCoordinator.BuildImportCells("DI32", ModuleType.DI, 0, 32, [], isDoubleLine: true);
 
         Assert.Equal(2, cells.Count);
         Assert.Contains("E 0.1", cells[0].Line1);
@@ -152,7 +152,7 @@ public class CriticalFixTests
     [Fact]
     public void BuildImportCells_SingleLineFormat_MergesLine2IntoLine1()
     {
-        var cells = MainViewModel.BuildImportCells("DI8", ModuleType.DI, 4, 8, [], isDoubleLine: false);
+        var cells = ImportCoordinator.BuildImportCells("DI8", ModuleType.DI, 4, 8, [], isDoubleLine: false);
 
         Assert.Single(cells);
         Assert.Equal(string.Empty, cells[0].Line2);
@@ -162,7 +162,7 @@ public class CriticalFixTests
     [Fact]
     public void BuildImportCells_Analog20Channels_SplitsAt16()
     {
-        var cells = MainViewModel.BuildImportCells("AI", ModuleType.AI, 100, 20, [], isDoubleLine: true);
+        var cells = ImportCoordinator.BuildImportCells("AI", ModuleType.AI, 100, 20, [], isDoubleLine: true);
         Assert.Equal(2, cells.Count);
         Assert.Contains("EW 100", cells[0].Line2);
         Assert.Contains("EW 132", cells[1].Line2); // Kanal 16 = 100 + 16*2
@@ -319,7 +319,7 @@ public class CriticalFixTests
         Sta.Run(() =>
         {
             var vm = NewVm();
-            Assert.Contains(vm.AvailableMpVariants, v => v.Variant == MpModuleVariant.DI_DQ_16);
+            Assert.Contains(vm.MpEditor.AvailableVariants, v => v.Variant == MpModuleVariant.DI_DQ_16);
 
             var project = new LabelProject
             {
@@ -329,9 +329,9 @@ public class CriticalFixTests
             };
             vm.ApplyLoadedProject(project, null);
 
-            Assert.All(vm.AvailableMpVariants, v => Assert.True(MpModuleLayoutFactory.Is25mmVariant(v.Variant)));
-            Assert.Contains(vm.AvailableMpArticles, e => e.ArticleNo == "6ES7532-5NB00-0AB0");
-            Assert.DoesNotContain(vm.AvailableMpArticles, e => e.ArticleNo == "6ES7521-1BL00-0AB0");
+            Assert.All(vm.MpEditor.AvailableVariants, v => Assert.True(MpModuleLayoutFactory.Is25mmVariant(v.Variant)));
+            Assert.Contains(vm.MpEditor.AvailableArticles, e => e.ArticleNo == "6ES7532-5NB00-0AB0");
+            Assert.DoesNotContain(vm.MpEditor.AvailableArticles, e => e.ArticleNo == "6ES7521-1BL00-0AB0");
             Assert.Equal(20, vm.MpModules.Count);
         });
     }

@@ -26,6 +26,9 @@ public interface IDialogService
 
     /// <summary>Datei-speichern-Dialog; null bei Abbruch.</summary>
     string? SaveFile(string filter, string defaultExt, string defaultFileName);
+
+    /// <summary>Modul-Auswahl nach dem PDF-Import; true = Uebernehmen.</summary>
+    bool ShowPdfImport(ETPrinter.ViewModels.PdfImportViewModel importVm);
 }
 
 /// <summary>Produktive Implementierung ueber WPF-MessageBox und Microsoft.Win32-Dialoge.</summary>
@@ -64,6 +67,12 @@ public sealed class WpfDialogService : IDialogService
         };
         return dlg.ShowDialog() == true ? dlg.FileName : null;
     }
+
+    public bool ShowPdfImport(ETPrinter.ViewModels.PdfImportViewModel importVm)
+    {
+        var dialog = new ETPrinter.Views.PdfImportDialog(importVm) { Owner = Application.Current?.MainWindow };
+        return dialog.ShowDialog() == true;
+    }
 }
 
 /// <summary>
@@ -77,6 +86,7 @@ public sealed class SilentDialogService : IDialogService
     public SaveDecision SaveAnswer { get; set; } = SaveDecision.Discard;
     public string? NextOpenFile { get; set; }
     public string? NextSaveFile { get; set; }
+    public bool PdfImportAnswer { get; set; } = true;
     public List<string> Messages { get; } = [];
 
     public bool Confirm(string message, string title) { Messages.Add($"[Confirm] {title}: {message}"); return ConfirmAnswer; }
@@ -85,4 +95,5 @@ public sealed class SilentDialogService : IDialogService
     public void ShowError(string message, string title) => Messages.Add($"[Error] {title}: {message}");
     public string? OpenFile(string filter, string title) => NextOpenFile;
     public string? SaveFile(string filter, string defaultExt, string defaultFileName) => NextSaveFile;
+    public bool ShowPdfImport(ETPrinter.ViewModels.PdfImportViewModel importVm) { Messages.Add($"[PdfImport] {importVm.Items.Count} Module"); return PdfImportAnswer; }
 }

@@ -297,12 +297,12 @@
                                  Visibility="{Binding IsModuleBased, Converter={StaticResource BoolToVisibilityConverter}}">
                             <StackPanel Margin="5">
                                 <Label Content="Modul:" Padding="0" Margin="0,0,0,2" FontWeight="Bold"/>
-                                <TextBlock Text="{Binding SelectedMpModuleInfo, Mode=OneWay}"
+                                <TextBlock Text="{Binding MpEditor.SelectionInfo, Mode=OneWay}"
                                            Foreground="#0078D4" Margin="0,0,0,8"/>
 
                                 <Label Content="Siemens-Modul:" Padding="0" Margin="0,0,0,2"/>
-                                <ComboBox ItemsSource="{Binding AvailableMpArticles}"
-                                          SelectedItem="{Binding SelectedMpArticle}"
+                                <ComboBox ItemsSource="{Binding MpEditor.AvailableArticles}"
+                                          SelectedItem="{Binding MpEditor.SelectedArticle}"
                                           Margin="0,0,0,8">
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate>
@@ -315,8 +315,8 @@
                                 </ComboBox>
 
                                 <Label Content="Modulvariante (Layout):" Padding="0" Margin="0,0,0,2"/>
-                                <ComboBox ItemsSource="{Binding AvailableMpVariants}"
-                                          SelectedItem="{Binding SelectedMpVariant}"
+                                <ComboBox ItemsSource="{Binding MpEditor.AvailableVariants}"
+                                          SelectedItem="{Binding MpEditor.SelectedVariant}"
                                           DisplayMemberPath="DisplayName"
                                           Margin="0,0,0,8"/>
 

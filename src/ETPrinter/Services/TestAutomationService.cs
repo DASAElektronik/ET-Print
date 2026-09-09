@@ -216,8 +216,8 @@ public class TestAutomationService : IDisposable
             zoom = _viewModel.Zoom,
             status = _viewModel.StatusMessage,
             printGridLines = _viewModel.PrintGridLines,
-            availableVariants = _viewModel.AvailableMpVariants.Select(v => v.Variant.ToString()).ToArray(),
-            availableArticles = _viewModel.AvailableMpArticles.Where(e => e.ArticleNo != "").Select(e => e.ArticleNo).ToArray(),
+            availableVariants = _viewModel.MpEditor.AvailableVariants.Select(v => v.Variant.ToString()).ToArray(),
+            availableArticles = _viewModel.MpEditor.AvailableArticles.Where(e => e.ArticleNo != "").Select(e => e.ArticleNo).ToArray(),
             labelSheet = ProductFamilyDefinitions.Get(_viewModel.SelectedProductFamily).LabelSheetPartNumber
         };
         return Ok(JsonSerializer.Serialize(state));
@@ -525,7 +525,7 @@ public class TestAutomationService : IDisposable
         _viewModel.SuppressContentLossConfirm = true;
         try
         {
-            int n = _viewModel.ImportCellsFromFile(path);
+            int n = _viewModel.Import.ImportCellsFromFile(path);
             return Ok(JsonSerializer.Serialize(new { imported = n }));
         }
         catch (Exception ex) { return Error($"Importfehler: {ex.Message}"); }
@@ -538,7 +538,7 @@ public class TestAutomationService : IDisposable
         _viewModel.SuppressContentLossConfirm = true;
         try
         {
-            int n = _viewModel.ImportParsedLines(File.ReadAllLines(path));
+            int n = _viewModel.Import.ImportParsedLines(File.ReadAllLines(path));
             return Ok(JsonSerializer.Serialize(new { modules = n }));
         }
         catch (Exception ex) { return Error($"Importfehler: {ex.Message}"); }
@@ -608,12 +608,12 @@ public class TestAutomationService : IDisposable
         if (_viewModel.SelectedMpModule == null) return Error("Kein Modul ausgewaehlt");
         // Nur Artikel der aktiven Familie — sonst bekaeme das Modul eine Variante,
         // die die Familie gar nicht anbietet (25mm-Artikel in einer 35mm-Seite).
-        var available = _viewModel.AvailableMpArticles;
+        var available = _viewModel.MpEditor.AvailableArticles;
         var entry = available.FirstOrDefault(e => e.ArticleNo == articleNo && e.ArticleNo != "");
         if (entry is null && !string.IsNullOrEmpty(articleNo) && articleNo != "custom")
             return Error($"Unbekannter Artikel fuer diese Familie: {articleNo}. Verfuegbar: " +
                 string.Join(", ", available.Where(e => e.ArticleNo != "").Select(e => e.ArticleNo)));
-        _viewModel.SelectedMpArticle = entry ?? MpModuleCatalog.CustomEntry;
+        _viewModel.MpEditor.SelectedArticle = entry ?? MpModuleCatalog.CustomEntry;
         return Ok($"Modul-Artikel gesetzt: {(entry?.DisplayName ?? "Benutzerdefiniert")} (Variante {_viewModel.SelectedMpModule.Variant})");
     }
 

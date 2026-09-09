@@ -151,4 +151,19 @@ public static class AddressGenerator
         ModuleType.AI or ModuleType.AO => startByte + (count * 2),
         _ => startByte + count
     };
+
+    /// <summary>Verschraenkt Zeile 1 (ungerade Bits, oben) und Zeile 2 (gerade Bits,
+    /// unten) slotweise kanal-aufsteigend zu einer Zeile (fuer einzeilige Formate).</summary>
+    public static string MergeAddressLines(string line1, string line2)
+    {
+        var odd = line1.Split("  ", StringSplitOptions.None);
+        var even = line2.Split("  ", StringSplitOptions.None);
+        var merged = new List<string>();
+        for (int i = 0; i < Math.Max(odd.Length, even.Length); i++)
+        {
+            if (i < even.Length && !string.IsNullOrWhiteSpace(even[i])) merged.Add(even[i]);
+            if (i < odd.Length && !string.IsNullOrWhiteSpace(odd[i])) merged.Add(odd[i]);
+        }
+        return string.Join("  ", merged);
+    }
 }
