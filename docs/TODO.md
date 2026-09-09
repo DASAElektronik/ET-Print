@@ -268,7 +268,7 @@
 - [x] AP2 Mittlere Bugs (20 + 2.21 Shrink-to-fit; 150 Tests, Smoke 48/48). Offen aus AP2: toter GetCellSize-MP-Zweig -> AP3
 - [x] AP3 SheetGeometry fuer Druck/Vorschau/Kalibrierung, Migrations- + Roundtrip-Tests (173 Tests, Smoke 48/48)
 - [x] AP4 Import-Robustheit CSV/Excel/PDF + async + Auto-Variante (197 Tests, Smoke 62/62)
-- [ ] AP5 Komfort/UX
+- [x] AP5 Komfort/UX: Fensterzustand, Drag&Drop, Tastatur, Zoom-Fit, Wertebereiche, Panel-Umbau, MP-Tab, Info (210 Tests, Smoke 74/74)
 - [ ] AP6 Doku-Konsolidierung + Version
 - [ ] AP7 Release v3.1
 - [ ] AP8 MP25_32-Datenblatt (Stahllineal bleibt offen)

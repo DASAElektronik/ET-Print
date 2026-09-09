@@ -270,6 +270,37 @@ try {
     Assert-Eq 4 $m.filledCells "MP Modul 3: 4 Analogkanaele"
     Assert-True (-not (Get-State).isDirty -eq $false) "MP Import markiert dirty"
 
+    # --- Szenario 3c: Komfort/UX (AP5) ------------------------------------------
+    Write-Host "`n[3c] Komfort: Wertebereiche, Tab, Leeren, Schrift auf alle, Drop-Oeffnen" -ForegroundColor Yellow
+    Invoke-Cmd "new-project" | Out-Null
+    $s = Get-State
+    Assert-Eq 0 $s.inputTabIndex "SP: Generator-Tab aktiv"
+    Assert-True ($s.zoom -gt 0.3 -and $s.zoom -lt 1.5) "Startzoom passt Seite ein (zoom=$($s.zoom))"
+    $m = Invoke-Cmd "set-margin oben 99" | ConvertFrom-Json
+    Assert-Eq 60 $m.top "Rand oben auf 60 begrenzt"
+    Assert-True ($m.status -like "*begrenzt*") "Statusmeldung zur Begrenzung"
+    $m = Invoke-Cmd "set-margin oben 20.5" | ConvertFrom-Json
+    Assert-Eq 20.5 $m.top "Rand oben zurueck auf 20,5"
+    $c = Invoke-Cmd "set-calibration 25 -25" | ConvertFrom-Json
+    Assert-Eq 10 $c.x "Kalibrierung X auf +10 begrenzt"
+    Assert-Eq -10 $c.y "Kalibrierung Y auf -10 begrenzt"
+    Invoke-Cmd "set-calibration 0 0" | Out-Null
+    Invoke-Cmd "select-label 0" | Out-Null
+    Invoke-Cmd "set-text H|Z1|Z2" | Out-Null
+    Invoke-Cmd "clear-selected" | Out-Null
+    Assert-Eq 0 (Get-State).filledLabels "Auswahl leeren entfernt Etikett-Text"
+    Invoke-Cmd "set-font 9 1 0" | Out-Null
+    Invoke-Cmd "apply-font-all" | Out-Null
+    Assert-True ((Get-State).status -like "*100 Etiketten*") "Schrift auf alle 100 Etiketten"
+    Invoke-Cmd "set-font 7 0 0" | Out-Null
+    Invoke-Cmd "select-family S71500_ET200MP" | Out-Null
+    Assert-Eq 2 (Get-State).inputTabIndex "MP: Modul-Tab aktiv"
+    Invoke-Cmd "open-file $spFile" | Out-Null
+    $s = Get-State
+    Assert-Eq "ET200SP" $s.productFamily "open-file laedt SP-Projekt"
+    Assert-Eq 3 $s.filledLabels "open-file: 3 Etiketten"
+    Invoke-Cmd "screenshot $OutDir\panel_sp.png" | Out-Null
+
     # --- Szenario 4: Persistenz-Roundtrip -----------------------------------
     Write-Host "`n[4] Persistenz-Roundtrip" -ForegroundColor Yellow
     Invoke-Cmd "new-project" | Out-Null

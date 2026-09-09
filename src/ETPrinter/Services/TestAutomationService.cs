@@ -151,6 +151,11 @@ public class TestAutomationService : IDisposable
         ["mp-state"] = new("mp-state", "Ausgewaehltes Modul (JSON)", (s, _) => s.GetMpState()),
         ["set-generator"] = new("set-generator <name> <typ> <byte> <n>", "Generator-Felder setzen", (s, a) => s.SetGenerator(a)),
         ["set-font"] = new("set-font <groesse> <fett 0/1> <kursiv 0/1> [schriftart]", "Schrift-Eingabefelder setzen (Live-Apply)", (s, a) => s.SetFont(a)),
+        ["set-margin"] = new("set-margin <oben|links|unten|rechts> <mm>", "Seitenrand setzen (Wertebereich 0-60)", (s, a) => s.SetMargin(a)),
+        ["set-calibration"] = new("set-calibration <x> <y>", "Kalibrier-Versatz setzen (+/-10 mm)", (s, a) => s.SetCalibration(a)),
+        ["clear-selected"] = new("clear-selected", "Ausgewaehltes Etikett/Modul leeren", (s, _) => s.ClearSelected()),
+        ["apply-font-all"] = new("apply-font-all", "Schrift-Eingabefelder auf alle Etiketten/Module", (s, _) => s.ApplyFontAll()),
+        ["open-file"] = new("open-file <pfad.etprint>", "Projekt wie per Drag&Drop oeffnen (ohne Rueckfrage)", (s, a) => s.OpenFileLikeDrop(a)),
         ["import-file"] = new("import-file <pfad.csv|.xlsx>", "CSV/Excel ohne Dialog importieren (ab ausgewaehltem Etikett)", (s, a) => s.ImportFile(a)),
         ["import-lines"] = new("import-lines <pfad.txt>", "Textzeilen wie ein Schaltplan-PDF parsen und importieren (SP: Etiketten, MP: Module)", (s, a) => s.ImportLines(a)),
         ["toggle-print"] = new("toggle-print", "Druckflag des ausgewaehlten Etiketts/Moduls umschalten", (s, _) => s.TogglePrint()),
@@ -207,6 +212,9 @@ public class TestAutomationService : IDisposable
             printableModules = _viewModel.MpModules.Count(m => m.HasPrintableContent),
             isDirty = _viewModel.IsDirty,
             filePath = _viewModel.CurrentFilePath ?? "",
+            inputTabIndex = _viewModel.InputTabIndex,
+            zoom = _viewModel.Zoom,
+            status = _viewModel.StatusMessage,
             printGridLines = _viewModel.PrintGridLines,
             availableVariants = _viewModel.AvailableMpVariants.Select(v => v.Variant.ToString()).ToArray(),
             availableArticles = _viewModel.AvailableMpArticles.Where(e => e.ArticleNo != "").Select(e => e.ArticleNo).ToArray(),
@@ -453,6 +461,62 @@ public class TestAutomationService : IDisposable
         try { _viewModel.ClearAllCommand.Execute(null); }
         finally { _viewModel.SuppressContentLossConfirm = false; }
         return Ok("Alle Etiketten geloescht");
+    }
+
+    private string SetMargin(string arg)
+    {
+        var parts = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2 || !double.TryParse(parts[1], System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out double mm))
+            return Error("Format: set-margin <oben|links|unten|rechts> <mm>");
+        switch (parts[0].ToLowerInvariant())
+        {
+            case "oben": _viewModel.InputMarginTop = mm; break;
+            case "links": _viewModel.InputMarginLeft = mm; break;
+            case "unten": _viewModel.InputMarginBottom = mm; break;
+            case "rechts": _viewModel.InputMarginRight = mm; break;
+            default: return Error("Seite: oben|links|unten|rechts");
+        }
+        return Ok(JsonSerializer.Serialize(new
+        {
+            top = _viewModel.InputMarginTop, left = _viewModel.InputMarginLeft,
+            bottom = _viewModel.InputMarginBottom, right = _viewModel.InputMarginRight,
+            status = _viewModel.StatusMessage
+        }));
+    }
+
+    private string SetCalibration(string arg)
+    {
+        var parts = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2
+            || !double.TryParse(parts[0], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double x)
+            || !double.TryParse(parts[1], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double y))
+            return Error("Format: set-calibration <x> <y>");
+        _viewModel.CalibrationOffsetX = x;
+        _viewModel.CalibrationOffsetY = y;
+        return Ok(JsonSerializer.Serialize(new { x = _viewModel.CalibrationOffsetX, y = _viewModel.CalibrationOffsetY }));
+    }
+
+    private string ClearSelected()
+    {
+        if (!_viewModel.ClearSelectedCommand.CanExecute(null)) return Error("Keine Auswahl");
+        _viewModel.ClearSelectedCommand.Execute(null);
+        return Ok(_viewModel.StatusMessage);
+    }
+
+    private string ApplyFontAll()
+    {
+        _viewModel.ApplyFontToAllCommand.Execute(null);
+        return Ok(_viewModel.StatusMessage);
+    }
+
+    private string OpenFileLikeDrop(string path)
+    {
+        var validationError = ValidateProjectPath(path);
+        if (validationError != null) return Error(validationError);
+        _viewModel.DiscardChangesForShutdown(); // keine Rueckfrage headless
+        _viewModel.OpenFile(path);
+        return Ok(_viewModel.StatusMessage);
     }
 
     private string ImportFile(string path)

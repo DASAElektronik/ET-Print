@@ -56,11 +56,16 @@ public partial class App : Application
         {
             _testService = new TestAutomationService(MainWindow, viewModel);
             _testService.Start();
+            return;
         }
-        else
-        {
-            OfferRecovery(viewModel);
-        }
+
+        OfferRecovery(viewModel);
+
+        // Projektdatei als Startargument (Doppelklick auf .etprint, "Oeffnen mit")
+        var projectArg = e.Args.FirstOrDefault(a =>
+            string.Equals(Path.GetExtension(a), ".etprint", StringComparison.OrdinalIgnoreCase));
+        if (projectArg is not null)
+            viewModel.OpenFile(projectArg);
     }
 
     private static void OfferRecovery(MainViewModel viewModel)

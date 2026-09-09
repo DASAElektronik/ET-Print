@@ -82,18 +82,19 @@ public class MainViewModel : ViewModelBase
         AvailableMpVariants = new ObservableCollection<MpModuleLayout>(
             Services.MpModuleLayoutFactory.VariantsForFamily(_selectedProductFamily));
         FontSizes = [4, 5, 6, 7, 8, 9, 10];
-        AvailableFonts = new ObservableCollection<string>(
-            Fonts.SystemFontFamilies
-                .Select(f => f.Source)
-                .OrderBy(f => f, StringComparer.CurrentCultureIgnoreCase));
+        AvailableFonts = new ObservableCollection<string> { "Arial" };
+        LoadFontsInBackground();
 
         ApplyCommand = new RelayCommand(ApplyToLabel, () => SelectedLabel is not null || SelectedMpModule is not null);
         GenerateAndApplyCommand = new RelayCommand(GenerateAndApply, () => SelectedLabel is not null || SelectedMpModule is not null);
         GeneratePreviewCommand = new RelayCommand(UpdateGeneratorPreview);
         ClearAllCommand = new RelayCommand(ClearAllLabels);
+        ClearSelectedCommand = new RelayCommand(ClearSelected, () => HasSelection && !TextBoxHasFocus());
         ResetSettingsCommand = new RelayCommand(ResetSettings);
-        ApplySettingsCommand = new RelayCommand(ApplySettings);
+        ApplyFontToAllCommand = new RelayCommand(ApplyFontToAll);
+        FitZoomCommand = new RelayCommand(() => FitZoomRequested?.Invoke());
         PrintCommand = new RelayCommand(PrintLabels);
+        PrintCurrentPageCommand = new RelayCommand(PrintCurrentPage);
         PrintCalibrationCommand = new RelayCommand(PrintCalibration);
         NewProjectCommand = new RelayCommand(NewProject);
         SaveCommand = new RelayCommand(SaveProject);
@@ -445,6 +446,8 @@ public class MainViewModel : ViewModelBase
             if (SetProperty(ref _selectedFormat, value))
             {
                 InitializeLabels();
+                // Modul-Editor bei MP-Formaten aktivieren, Generator bei SP
+                InputTabIndex = value.IsModuleBased ? 2 : 0;
                 // Verworfener Inhalt = ungespeicherte Aenderung (Laden/Neu setzen danach
                 // selbst IsDirty=false)
                 if (hadContent || _currentFilePath is not null) IsDirty = true;
@@ -654,7 +657,11 @@ public class MainViewModel : ViewModelBase
     public int GenStartByte
     {
         get => _genStartByte;
-        set { if (SetProperty(ref _genStartByte, value)) UpdateGeneratorPreview(); }
+        set
+        {
+            if (value < 0) { StatusMessage = "Start-Byte darf nicht negativ sein"; value = 0; }
+            if (SetProperty(ref _genStartByte, value)) UpdateGeneratorPreview();
+        }
     }
 
     public int GenCount
@@ -747,12 +754,31 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    // Wertebereiche: Raender 0-60 mm (darueber laeuft das Raster aus dem Blatt),
+    // Kalibrierung +/-10 mm, Start-Byte >= 0. Ausserhalb liegende Eingaben werden
+    // begrenzt und in der Statusleiste gemeldet.
+    public const double MarginMinMm = 0, MarginMaxMm = 60, CalibrationMaxMm = 10;
+
+    private double ClampMargin(double v, string name)
+    {
+        double c = Math.Clamp(double.IsNaN(v) ? 0 : v, MarginMinMm, MarginMaxMm);
+        if (c != v) StatusMessage = $"Rand {name}: Wert auf {MarginMinMm:0}-{MarginMaxMm:0} mm begrenzt";
+        return c;
+    }
+
+    private double ClampCalibration(double v)
+    {
+        double c = Math.Clamp(double.IsNaN(v) ? 0 : v, -CalibrationMaxMm, CalibrationMaxMm);
+        if (c != v) StatusMessage = $"Kalibrierung: Wert auf +/-{CalibrationMaxMm:0} mm begrenzt";
+        return c;
+    }
+
     public double InputMarginTop
     {
         get => _inputMarginTop;
         set
         {
-            if (SetProperty(ref _inputMarginTop, value))
+            if (SetProperty(ref _inputMarginTop, ClampMargin(value, "oben")))
                 ApplyMarginsToSettings();
         }
     }
@@ -762,7 +788,7 @@ public class MainViewModel : ViewModelBase
         get => _inputMarginLeft;
         set
         {
-            if (SetProperty(ref _inputMarginLeft, value))
+            if (SetProperty(ref _inputMarginLeft, ClampMargin(value, "links")))
                 ApplyMarginsToSettings();
         }
     }
@@ -772,7 +798,7 @@ public class MainViewModel : ViewModelBase
         get => _inputMarginBottom;
         set
         {
-            if (SetProperty(ref _inputMarginBottom, value))
+            if (SetProperty(ref _inputMarginBottom, ClampMargin(value, "unten")))
                 ApplyMarginsToSettings();
         }
     }
@@ -782,7 +808,7 @@ public class MainViewModel : ViewModelBase
         get => _inputMarginRight;
         set
         {
-            if (SetProperty(ref _inputMarginRight, value))
+            if (SetProperty(ref _inputMarginRight, ClampMargin(value, "rechts")))
                 ApplyMarginsToSettings();
         }
     }
@@ -804,13 +830,13 @@ public class MainViewModel : ViewModelBase
     public double CalibrationOffsetX
     {
         get => _calibrationOffsetX;
-        set => SetProperty(ref _calibrationOffsetX, value);
+        set => SetProperty(ref _calibrationOffsetX, ClampCalibration(value));
     }
 
     public double CalibrationOffsetY
     {
         get => _calibrationOffsetY;
-        set => SetProperty(ref _calibrationOffsetY, value);
+        set => SetProperty(ref _calibrationOffsetY, ClampCalibration(value));
     }
 
     public double Zoom
@@ -862,10 +888,117 @@ public class MainViewModel : ViewModelBase
     public ICommand GenerateAndApplyCommand { get; }
     public ICommand GeneratePreviewCommand { get; }
     public ICommand ClearAllCommand { get; }
+    public ICommand ClearSelectedCommand { get; }
     public ICommand ResetSettingsCommand { get; }
-    public ICommand ApplySettingsCommand { get; }
+    public ICommand ApplyFontToAllCommand { get; }
+    public ICommand FitZoomCommand { get; }
     public ICommand PrintCommand { get; }
+    public ICommand PrintCurrentPageCommand { get; }
     public ICommand PrintCalibrationCommand { get; }
+
+    /// <summary>Die View setzt den Zoom so, dass die ganze Seite sichtbar ist (braucht
+    /// die Viewport-Groesse, die das ViewModel nicht kennt).</summary>
+    public event Action? FitZoomRequested;
+
+    /// <summary>
+    /// Systemschriften im Hintergrund laden: Fonts.SystemFontFamilies dauert je nach
+    /// Rechner mehrere hundert Millisekunden und verzoegerte frueher den Start.
+    /// </summary>
+    private void LoadFontsInBackground()
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null)
+        {
+            // Tests/Headless: synchron
+            foreach (var f in SystemFontNames().Where(f => f != "Arial")) AvailableFonts.Add(f);
+            return;
+        }
+        Task.Run(() =>
+        {
+            var names = SystemFontNames();
+            dispatcher.BeginInvoke(new Action(() =>
+            {
+                foreach (var f in names)
+                    if (!AvailableFonts.Contains(f)) AvailableFonts.Add(f);
+                // Sortiert nachziehen (Arial war Platzhalter an Position 0)
+                var sorted = AvailableFonts.OrderBy(f => f, StringComparer.CurrentCultureIgnoreCase).ToList();
+                for (int i = 0; i < sorted.Count; i++)
+                {
+                    int cur = AvailableFonts.IndexOf(sorted[i]);
+                    if (cur != i) AvailableFonts.Move(cur, i);
+                }
+            }));
+        });
+    }
+
+    private static List<string> SystemFontNames() =>
+        Fonts.SystemFontFamilies.Select(f => f.Source)
+            .OrderBy(f => f, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+    // Eingabe-Tabs: 0 = Adress-Generator, 1 = Manuell (nur SP), 2 = MP Modul.
+    // Beim Wechsel in ein modulbasiertes Format wird der Modul-Editor aktiviert.
+    private int _inputTabIndex;
+    public int InputTabIndex
+    {
+        get => _inputTabIndex;
+        set => SetProperty(ref _inputTabIndex, value);
+    }
+
+    private void ClearSelected()
+    {
+        if (_selectedFormat.IsModuleBased)
+        {
+            if (SelectedMpModule is null) return;
+            var empty = new MpModule { Variant = SelectedMpModule.Variant, IoType = SelectedMpModule.IoType, ArticleNumber = SelectedMpModule.ArticleNumber };
+            empty.AddressCells = MpModuleLayoutFactory.CreateCells(empty.Variant);
+            SelectedMpModule.SetModule(empty);
+            NotifyMpPreviewChanged();
+            IsDirty = true;
+            StatusMessage = $"Modul {SelectedMpModule.ModuleIndex + 1} geleert";
+            return;
+        }
+        if (SelectedLabel is null) return;
+        SelectedLabel.Clear();
+        InputHeader = string.Empty;
+        InputLine1 = string.Empty;
+        InputLine2 = string.Empty;
+        IsDirty = true;
+        StatusMessage = $"Etikett {SelectedLabel.DisplayPosition} geleert";
+    }
+
+    /// <summary>Schrift des Eingabepanels auf ALLE Etiketten/Module aller Seiten.</summary>
+    private void ApplyFontToAll()
+    {
+        int count = 0;
+        foreach (var page in _allPages)
+            foreach (var l in page) { ApplyFontToLabel(l); count++; }
+        foreach (var page in _allMpPages)
+            foreach (var m in page)
+            {
+                m.FontSize = _inputFontSize; m.IsBold = _inputIsBold; m.IsItalic = _inputIsItalic; m.FontFamily = _inputFontFamily;
+                count++;
+            }
+        _settings.FontSize = _inputFontSize;
+        _settings.IsBold = _inputIsBold;
+        _settings.IsItalic = _inputIsItalic;
+        _settings.FontFamily = _inputFontFamily;
+        IsDirty = true;
+        NotifyMpPreviewChanged();
+        StatusMessage = $"Schrift auf {count} {(IsModuleBased ? "Module" : "Etiketten")} angewendet";
+    }
+
+    /// <summary>Oeffnet eine Projektdatei (Drag&Drop, Kommandozeile) mit Rueckfrage bei
+    /// ungespeicherten Aenderungen.</summary>
+    public void OpenFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            StatusMessage = "Datei nicht gefunden";
+            return;
+        }
+        if (!ConfirmDiscardChanges()) return;
+        DoOpen(path);
+    }
     public ICommand NewProjectCommand { get; }
     public ICommand SaveCommand { get; }
     public ICommand SaveAsCommand { get; }
@@ -1640,38 +1773,6 @@ public class MainViewModel : ViewModelBase
         StatusMessage = "Einstellungen zurueckgesetzt";
     }
 
-    private void ApplySettings()
-    {
-        // Seitenraender global
-        _settings.MarginTop = InputMarginTop;
-        _settings.MarginLeft = InputMarginLeft;
-        _settings.MarginBottom = InputMarginBottom;
-        _settings.MarginRight = InputMarginRight;
-        _settings.FontSize = InputFontSize;
-        _settings.IsBold = InputIsBold;
-        _settings.IsItalic = InputIsItalic;
-        _settings.FontFamily = InputFontFamily;
-        _settings.HeaderFontSize = InputHeaderFontSize;
-        _settings.HeaderIsBold = InputHeaderIsBold;
-        OnPropertyChanged(nameof(Settings));
-        NotifyPreviewGeometry();
-        OnPropertyChanged(nameof(HeaderPreviewFontSize));
-        OnPropertyChanged(nameof(HeaderPreviewFontWeight));
-        NotifyMpPreviewChanged();
-
-        // Schrift aufs ausgewaehlte Etikett
-        if (SelectedLabel is not null)
-        {
-            ApplyFontToLabel(SelectedLabel);
-            StatusMessage = $"Schrift fuer Etikett {SelectedLabel.DisplayPosition} uebernommen";
-        }
-        else
-        {
-            StatusMessage = "Seitenraender uebernommen";
-        }
-        IsDirty = true;
-    }
-
     private void UpdateHeader()
     {
         if (_selectedFormat.IsModuleBased && SelectedMpModule is not null)
@@ -2059,11 +2160,29 @@ public class MainViewModel : ViewModelBase
         PrintService.BuildCalibrationDocument(_selectedFormat, _settings,
             CalibrationOffsetX, CalibrationOffsetY);
 
-    private void PrintLabels()
+    /// <summary>Druckdokument nur fuer die aktuell sichtbare Seite.</summary>
+    internal System.Windows.Documents.FixedDocument BuildCurrentPageDocument()
+    {
+        if (_selectedFormat.IsModuleBased)
+        {
+            IReadOnlyList<IReadOnlyList<MpModuleViewModel>> pages = [_allMpPages[_currentPageIndex].AsReadOnly()];
+            return PrintService.BuildMpDocument(pages, _selectedFormat, _settings, PrintGridLines,
+                CalibrationOffsetX, CalibrationOffsetY);
+        }
+        IReadOnlyList<IReadOnlyList<LabelViewModel>> spPages = [_allPages[_currentPageIndex].AsReadOnly()];
+        return PrintService.BuildDocument(spPages, _selectedFormat, _settings, PrintGridLines,
+            CalibrationOffsetX, CalibrationOffsetY);
+    }
+
+    private void PrintLabels() => PrintDocument(BuildPrintDocument, PageCount);
+
+    private void PrintCurrentPage() => PrintDocument(BuildCurrentPageDocument, 1);
+
+    private void PrintDocument(Func<System.Windows.Documents.FixedDocument> build, int requestedPages)
     {
         try
         {
-            var document = BuildPrintDocument();
+            var document = build();
             if (document.Pages.Count == 0)
             {
                 StatusMessage = "Nichts zu drucken";
@@ -2081,7 +2200,10 @@ public class MainViewModel : ViewModelBase
             // Kalibrierung erst nach tatsaechlichem Druck persistieren — ein
             // abgebrochener Dialog darf keine lokale calibration.json anlegen.
             SaveCalibration();
-            StatusMessage = $"Druckauftrag gesendet ({document.Pages.Count} Seiten)";
+            int skipped = requestedPages - document.Pages.Count;
+            StatusMessage = skipped > 0
+                ? $"Druckauftrag gesendet ({document.Pages.Count} von {requestedPages} Seiten, {skipped} leere uebersprungen)"
+                : $"Druckauftrag gesendet ({document.Pages.Count} Seiten)";
         }
         catch (Exception ex)
         {

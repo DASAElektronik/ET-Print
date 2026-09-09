@@ -7,7 +7,8 @@
         Title="{Binding WindowTitle}"
         Height="900" Width="1400"
         MinHeight="700" MinWidth="1000"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        AllowDrop="True" DragOver="Window_DragOver" Drop="Window_Drop">
 
     <Window.DataContext>
         <vm:MainViewModel/>
@@ -27,6 +28,10 @@
         <KeyBinding Gesture="Ctrl+V" Command="{Binding PasteCommand}"/>
         <KeyBinding Gesture="Ctrl+PageDown" Command="{Binding NextPageCommand}"/>
         <KeyBinding Gesture="Ctrl+PageUp" Command="{Binding PrevPageCommand}"/>
+        <KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding SaveAsCommand}"/>
+        <KeyBinding Gesture="F5" Command="{Binding PrintCommand}"/>
+        <KeyBinding Gesture="Ctrl+0" Command="{Binding FitZoomCommand}"/>
+        <KeyBinding Key="Delete" Command="{Binding ClearSelectedCommand}"/>
     </Window.InputBindings>
 
     <Grid>
@@ -44,7 +49,7 @@
                 <MenuItem Header="_Oeffnen..." Command="{Binding OpenCommand}" InputGestureText="Ctrl+O"/>
                 <Separator/>
                 <MenuItem Header="_Speichern" Command="{Binding SaveCommand}" InputGestureText="Ctrl+S"/>
-                <MenuItem Header="Speichern _unter..." Command="{Binding SaveAsCommand}"/>
+                <MenuItem Header="Speichern _unter..." Command="{Binding SaveAsCommand}" InputGestureText="Ctrl+Shift+S"/>
                 <Separator/>
                 <MenuItem Header="Zuletzt geoeffnet" ItemsSource="{Binding RecentFiles}">
                     <MenuItem.ItemContainerStyle>
@@ -70,10 +75,12 @@
                 </MenuItem>
                 <Separator/>
                 <MenuItem Header="_Drucken..." Command="{Binding PrintCommand}" InputGestureText="Ctrl+P"/>
+                <MenuItem Header="Nur aktuelle Seite drucken..." Command="{Binding PrintCurrentPageCommand}"/>
                 <Separator/>
                 <MenuItem Header="_Beenden" Click="MenuExit_Click"/>
             </MenuItem>
             <MenuItem Header="_Bearbeiten">
+                <MenuItem Header="Auswahl _leeren" Command="{Binding ClearSelectedCommand}" InputGestureText="Entf"/>
                 <MenuItem Header="Alle _loeschen" Command="{Binding ClearAllCommand}"/>
                 <Separator/>
                 <MenuItem Header="Druckauswahl">
@@ -116,7 +123,7 @@
         <!-- Main Content - 2 Spalten -->
         <Grid Grid.Row="2" Margin="5">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300"/>
+                <ColumnDefinition x:Name="LeftPanelColumn" Width="300" MinWidth="200" MaxWidth="800"/>
                 <ColumnDefinition Width="5"/>
                 <ColumnDefinition Width="*" MinWidth="400"/>
             </Grid.ColumnDefinitions>
@@ -159,7 +166,8 @@
 
                     <!-- Etikett-Eingabe als Tabs -->
                     <TabControl Margin="0,0,0,10"
-                                IsEnabled="{Binding HasSelection}">
+                                IsEnabled="{Binding HasSelection}"
+                                SelectedIndex="{Binding InputTabIndex}">
 
                         <!-- Tab 1: Adress-Generator -->
                         <TabItem Header="Adress-Generator">
@@ -193,7 +201,12 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
                                         <Label Content="Start-Byte:" Padding="0" Margin="0,0,0,2"/>
-                                        <TextBox Text="{Binding GenStartByte, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <TextBox Text="{Binding GenStartByte, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="Enter = Generieren + Uebertragen">
+                                            <TextBox.InputBindings>
+                                                <KeyBinding Key="Enter" Command="{Binding GenerateAndApplyCommand}"/>
+                                            </TextBox.InputBindings>
+                                        </TextBox>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
                                         <Label Content="{Binding GenCountLabel}" Padding="0" Margin="0,0,0,2"/>
@@ -239,21 +252,33 @@
                                                          Converter={StaticResource BoolToVisibilityConverter}}">
                                     <Label Content="Kopfzeile:" Padding="0" Margin="0,4,0,2"/>
                                     <TextBox Text="{Binding InputHeader, UpdateSourceTrigger=PropertyChanged}"
-                                             Margin="0,0,0,8"/>
+                                             Margin="0,0,0,8">
+                                        <TextBox.InputBindings>
+                                            <KeyBinding Key="Enter" Command="{Binding ApplyCommand}"/>
+                                        </TextBox.InputBindings>
+                                    </TextBox>
                                 </StackPanel>
 
                                 <!-- Zeile 1 -->
                                 <Label Content="Zeile 1:" Padding="0" Margin="0,4,0,2"/>
                                 <TextBox x:Name="Line1TextBox"
                                          Text="{Binding InputLine1, UpdateSourceTrigger=PropertyChanged}"
-                                         Margin="0,0,0,8"/>
+                                         Margin="0,0,0,8" ToolTip="Enter = Uebertragen (naechstes Etikett)">
+                                    <TextBox.InputBindings>
+                                        <KeyBinding Key="Enter" Command="{Binding ApplyCommand}"/>
+                                    </TextBox.InputBindings>
+                                </TextBox>
 
                                 <!-- Zeile 2 (nur bei zweizeiligen Formaten) -->
                                 <StackPanel Visibility="{Binding IsDoubleLine,
                                                          Converter={StaticResource BoolToVisibilityConverter}}">
                                     <Label Content="Zeile 2:" Padding="0" Margin="0,0,0,2"/>
                                     <TextBox Text="{Binding InputLine2, UpdateSourceTrigger=PropertyChanged}"
-                                             Margin="0,0,0,8"/>
+                                             Margin="0,0,0,8" ToolTip="Enter = Uebertragen (naechstes Etikett)">
+                                        <TextBox.InputBindings>
+                                            <KeyBinding Key="Enter" Command="{Binding ApplyCommand}"/>
+                                        </TextBox.InputBindings>
+                                    </TextBox>
                                 </StackPanel>
 
                                 <!-- Uebertragen-Button -->
@@ -328,57 +353,27 @@
 
                     </TabControl>
 
-                    <!-- Einstellungen -->
-                    <GroupBox Header="Einstellungen" Margin="0,0,0,10">
+                    <!-- Seite: globale Einstellungen (Kopfzeilen-Schrift, Raender, Kalibrierung, Blanko) -->
+                    <GroupBox Header="Seite (gilt fuer alle Etiketten)" Margin="0,0,0,10">
                         <StackPanel Margin="5">
-                            <!-- Schriftart -->
-                            <TextBlock Text="Schriftart:" Margin="0,0,0,2"/>
-                            <ComboBox ItemsSource="{Binding AvailableFonts}"
-                                      SelectedItem="{Binding InputFontFamily}"
-                                      MaxDropDownHeight="300"
-                                      Margin="0,0,0,5">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding}" FontFamily="{Binding}" FontSize="12"/>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-
-                            <!-- Schriftgroesse Adressen -->
+                            <!-- Header-Schrift (global) -->
                             <Grid Margin="0,0,0,5">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="Adressen:" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="Schriftgroesse der Adressen (Line1/Line2 bzw. AddressCells)"/>
-                                <ComboBox Grid.Column="1"
-                                          ItemsSource="{Binding FontSizes}"
-                                          SelectedItem="{Binding InputFontSize}"/>
-                            </Grid>
-
-                            <!-- Fett / Kursiv Adressen -->
-                            <CheckBox Content="Adressen fett" IsChecked="{Binding InputIsBold}" Margin="0,0,0,3"/>
-                            <CheckBox Content="Adressen kursiv" IsChecked="{Binding InputIsItalic}" Margin="0,0,0,3"/>
-
-                            <!-- Header-Schrift (global) -->
-                            <Grid Margin="0,5,0,5">
-                                <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Header:" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="Schriftgroesse der Kopfzeile (Header)"/>
+                                <TextBlock Text="Kopfzeile:" VerticalAlignment="Center" Margin="0,0,10,0"
+                                           ToolTip="Schriftgroesse der Kopfzeile (SP) bzw. des Modul-Headers (MP), Punkt"/>
                                 <ComboBox Grid.Column="1"
                                           ItemsSource="{Binding FontSizes}"
                                           SelectedItem="{Binding InputHeaderFontSize}"/>
+                                <CheckBox Grid.Column="2" Content="fett" IsChecked="{Binding InputHeaderIsBold}"
+                                          VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </Grid>
-                            <CheckBox Content="Header fett" IsChecked="{Binding InputHeaderIsBold}" Margin="0,0,0,3"/>
-                            <CheckBox Content="Blanko A4 (alle Rahmen drucken)"
-                                      IsChecked="{Binding PrintGridLines}"
-                                      Margin="0,0,0,8" FontSize="11" Foreground="Gray"
-                                      ToolTip="Aktivieren fuer Druck auf Blanko-A4-Papier (z.B. 120g Karton, hellblau = Standard, gelb = Safety). Druckt Schnittkanten + Rahmen um Adressen + Kopfzeile. Deaktiviert fuer perforierte Siemens-Etikettenboegen."/>
 
                             <!-- Seitenraender -->
-                            <TextBlock Text="Seitenraender (mm):" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                            <TextBlock Text="Seitenraender (mm, 0-60):" FontWeight="SemiBold" Margin="0,4,0,5"/>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
@@ -405,7 +400,7 @@
                             </Grid>
 
                             <!-- Druckkalibrierung -->
-                            <TextBlock Text="Druckkalibrierung (mm):" FontWeight="SemiBold" Margin="0,5,0,5"/>
+                            <TextBlock Text="Druckkalibrierung (mm, +/-10):" FontWeight="SemiBold" Margin="0,6,0,5"/>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
@@ -428,21 +423,71 @@
                                     Padding="8,4" Margin="0,4,0,0" FontSize="11"
                                     ToolTip="Druckt Fadenkreuze an den Ecken des Etikettenrasters. Auf Normalpapier drucken und mit Siemens-Blatt vergleichen."/>
 
-                            <!-- Buttons -->
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Button Content="Zuruecksetzen" Padding="10,5"
-                                        Command="{Binding ResetSettingsCommand}"/>
-                                <Button Content="Uebernehmen" Padding="10,5" Margin="10,0,0,0"
-                                        Command="{Binding ApplySettingsCommand}"
-                                        Background="#0078D4" Foreground="White"/>
-                            </StackPanel>
+                            <CheckBox Content="Blanko A4 (alle Rahmen drucken)"
+                                      IsChecked="{Binding PrintGridLines}"
+                                      Margin="0,8,0,4" FontSize="11"
+                                      ToolTip="Aktivieren fuer Druck auf Blanko-A4-Papier (z.B. 120g Karton, hellblau = Standard, gelb = Safety). Druckt Schnittkanten + Rahmen um Adressen + Kopfzeile. Deaktiviert fuer perforierte Siemens-Etikettenboegen."/>
+
+                            <Button Content="Seite zuruecksetzen (Raender, Kopfzeile)" Padding="10,4" Margin="0,4,0,0" FontSize="11"
+                                    Command="{Binding ResetSettingsCommand}"
+                                    ToolTip="Raender und Schrift-Einstellungen auf die Standardwerte der Produktfamilie"/>
                         </StackPanel>
                     </GroupBox>
 
-                    <!-- Alle loeschen -->
-                    <Button Content="Alle Etiketten loeschen"
-                            Command="{Binding ClearAllCommand}"
-                            Padding="10,8" Margin="0,0,0,10"/>
+                    <!-- Ausgewaehltes Etikett/Modul: Schrift (Live-Apply) -->
+                    <GroupBox Margin="0,0,0,10">
+                        <GroupBox.Header>
+                            <TextBlock>
+                                <Run Text="Schrift: "/>
+                                <Run Text="{Binding EditTargetInfo, Mode=OneWay}" Foreground="#0078D4"/>
+                            </TextBlock>
+                        </GroupBox.Header>
+                        <StackPanel Margin="5">
+                            <TextBlock Text="Aenderungen wirken sofort auf das ausgewaehlte Etikett bzw. Modul."
+                                       FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                            <ComboBox ItemsSource="{Binding AvailableFonts}"
+                                      SelectedItem="{Binding InputFontFamily}"
+                                      MaxDropDownHeight="300"
+                                      Margin="0,0,0,5"
+                                      ToolTip="Schriftart (alle installierten Windows-Schriften)">
+                                <ComboBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel/>
+                                    </ItemsPanelTemplate>
+                                </ComboBox.ItemsPanel>
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" FontFamily="{Binding}" FontSize="12"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Grid Margin="0,0,0,5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Groesse:" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="Schriftgroesse der Adressen in Punkt"/>
+                                <ComboBox Grid.Column="1"
+                                          ItemsSource="{Binding FontSizes}"
+                                          SelectedItem="{Binding InputFontSize}"/>
+                                <CheckBox Grid.Column="2" Content="fett" IsChecked="{Binding InputIsBold}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                <CheckBox Grid.Column="3" Content="kursiv" IsChecked="{Binding InputIsItalic}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </Grid>
+                            <Button Content="Auf alle Etiketten/Module anwenden" Padding="10,4" FontSize="11"
+                                    Command="{Binding ApplyFontToAllCommand}"
+                                    ToolTip="Diese Schrift-Einstellungen auf alle Etiketten bzw. Module aller Seiten uebertragen"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Loeschen -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Button Content="Auswahl leeren" Command="{Binding ClearSelectedCommand}"
+                                Padding="10,6" ToolTip="Ausgewaehltes Etikett/Modul leeren (Entf)"/>
+                        <Button Content="Alle loeschen" Command="{Binding ClearAllCommand}"
+                                Padding="10,6" Margin="8,0,0,0" ToolTip="Alle Etiketten/Module aller Seiten loeschen (mit Rueckfrage)"/>
+                    </StackPanel>
 
                 </StackPanel>
             </ScrollViewer>
@@ -451,7 +496,7 @@
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch"/>
 
             <!-- RECHTS: A4-Vorschau -->
-            <Border Grid.Column="2" BorderBrush="Gray" BorderThickness="1" Background="#E0E0E0">
+            <Border x:Name="PreviewHost" Grid.Column="2" BorderBrush="Gray" BorderThickness="1" Background="#E0E0E0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -467,12 +512,16 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Zoom:" FontSize="11" VerticalAlignment="Center"/>
-                            <Slider Grid.Column="1" Value="{Binding Zoom}" Minimum="0.5" Maximum="4"
-                                    TickFrequency="0.5" IsSnapToTickEnabled="True" Margin="5,0"/>
-                            <TextBlock Grid.Column="2" Text="{Binding Zoom, StringFormat={}{0:0.0}x}"
-                                       FontSize="11" VerticalAlignment="Center" Width="30"/>
+                            <Slider Grid.Column="1" Value="{Binding Zoom}" Minimum="0.3" Maximum="4"
+                                    TickFrequency="0.5" IsSnapToTickEnabled="False" Margin="5,0"
+                                    ToolTip="Strg + Mausrad ueber der Vorschau zoomt ebenfalls"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Zoom, StringFormat={}{0:0.00}x}"
+                                       FontSize="11" VerticalAlignment="Center" Width="40"/>
+                            <Button Grid.Column="3" Content="Ganze Seite" Click="FitZoom_Click" Padding="6,1" FontSize="11"
+                                    ToolTip="Zoom so setzen, dass die ganze A4-Seite sichtbar ist (Strg+0)"/>
                         </Grid>
                     </StackPanel>
 
@@ -493,7 +542,8 @@
                     </Border>
 
                     <!-- A4-Blatt: ET200SP Preview (UniformGrid) -->
-                    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                    <ScrollViewer x:Name="SpScrollViewer" Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                  PreviewMouseWheel="Preview_PreviewMouseWheel"
                                   Visibility="{Binding IsModuleBased, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                         <Border Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Border.LayoutTransform>
@@ -763,7 +813,8 @@
                     </ScrollViewer>
 
                     <!-- A4-Blatt: ET200MP Preview (Canvas-basiert) -->
-                    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                    <ScrollViewer x:Name="MpScrollViewer" Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                  PreviewMouseWheel="Preview_PreviewMouseWheel"
                                   Visibility="{Binding IsModuleBased, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Border Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Border.LayoutTransform>
