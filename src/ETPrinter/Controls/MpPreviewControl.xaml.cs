@@ -17,6 +17,12 @@ namespace ETPrinter.Controls;
 /// Der A4-Bogen hat ModulesPerPage Streifen-Positionen: Band 0 (oben, Header 25.7mm)
 /// und Band 1 (unten, Header 20.6mm) mit je ColumnsPerPage Spalten (35mm: 5, 25mm: 10).
 /// Jede Position = 1 Modul.
+///
+/// Inkrementelles Rendern (ABSCHLUSSPLAN AP9d): jedes Modul zeichnet in eine eigene
+/// Canvas-Ebene. Aenderungen an einem Modul (Tippen im Header/in Zellen, Auswahl,
+/// Druckflag, Variante) bauen nur diese Ebene neu auf; ein kompletter Neuaufbau
+/// (Seitenwechsel, Familie/Format, Raender/Kopfzeilen-Schrift, MpPreviewRefreshToken)
+/// bleibt der Ausnahmefall.
 /// </summary>
 public partial class MpPreviewControl : UserControl
 {
@@ -34,23 +40,45 @@ public partial class MpPreviewControl : UserControl
     private static readonly Brush StructTextBrush = new SolidColorBrush(Color.FromRgb(140, 140, 140));
     private static readonly Brush CellBorderBrush = new SolidColorBrush(Color.FromRgb(160, 160, 160));
     private static readonly Brush SelectedCellBorderBrush = new SolidColorBrush(Color.FromRgb(0, 120, 212));
+    private static readonly Brush CheckedFrameBrush = new SolidColorBrush(Color.FromRgb(255, 149, 0));
 
-    // Entprelltes Rendern: jeder Tastendruck im Header/einer Zelle und jeder
-    // Seitenwechsel (Clear + 10-20x Add) loeste frueher einen kompletten Neuaufbau
-    // von 1000-1700 Canvas-Elementen aus — pro Ereignis.
+    // Entprelltes Rendern: mehrere Ereignisse (Seitenwechsel = Clear + 10-20x Add,
+    // Generator = 32 Zellen) werden zu EINEM Neuaufbau gebuendelt.
     private readonly DispatcherTimer _renderTimer;
     private MainViewModel? _vm;
     private NotifyCollectionChangedEventHandler? _collectionHandler;
     private PropertyChangedEventHandler? _propertyHandler;
 
-    // Opacity der Elemente des gerade gezeichneten Moduls (0.4 = vom Druck ausgeschlossen)
+    /// <summary>Pro sichtbarem Modul: Zeichen-Ebene und die abonnierten Handler.</summary>
+    private sealed class ModuleLayer
+    {
+        public required Canvas Canvas { get; init; }
+        public required PropertyChangedEventHandler ModuleHandler { get; init; }
+        public required NotifyCollectionChangedEventHandler CellsHandler { get; init; }
+        public required PropertyChangedEventHandler CellHandler { get; init; }
+        public List<MpAddressCellViewModel> Cells { get; } = [];
+    }
+
+    private readonly Dictionary<MpModuleViewModel, ModuleLayer> _layers = [];
+    private readonly HashSet<MpModuleViewModel> _dirty = [];
+    private bool _fullRenderPending = true;
+    private MpModuleViewModel? _lastSelectedModule;
+
+    // Ziel-Ebene und Opacity waehrend des Zeichnens eines Moduls
+    private Panel _target = null!;
     private double _moduleOpacity = 1.0;
+
+    /// <summary>Diagnose (Tests): Anzahl kompletter Neuaufbauten.</summary>
+    internal int FullRenderCount { get; private set; }
+
+    /// <summary>Diagnose (Tests): Anzahl einzeln neu gezeichneter Module (ohne Vollaufbau).</summary>
+    internal int ModuleRenderCount { get; private set; }
 
     public MpPreviewControl()
     {
         InitializeComponent();
         _renderTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(40) };
-        _renderTimer.Tick += (_, _) => { _renderTimer.Stop(); Render(); };
+        _renderTimer.Tick += (_, _) => { _renderTimer.Stop(); RenderPending(); };
         DataContextChanged += (_, _) => BindToModules();
     }
 
@@ -62,26 +90,48 @@ public partial class MpPreviewControl : UserControl
             if (_collectionHandler is not null) _vm.MpModules.CollectionChanged -= _collectionHandler;
             if (_propertyHandler is not null) _vm.PropertyChanged -= _propertyHandler;
         }
+        DetachLayers();
         _vm = DataContext as MainViewModel;
         if (_vm is null) return;
 
         _collectionHandler = (_, _) => ScheduleRender();
         _propertyHandler = (_, e) =>
         {
-            if (e.PropertyName is nameof(MainViewModel.SelectedMpModule)
-                                or nameof(MainViewModel.SelectedMpCell)
-                                or nameof(MainViewModel.MpPreviewRefreshToken)
-                                or nameof(MainViewModel.IsModuleBased))
-                ScheduleRender();
+            switch (e.PropertyName)
+            {
+                case nameof(MainViewModel.SelectedMpModule):
+                    // Nur altes + neues Modul neu zeichnen (Auswahlrahmen)
+                    if (_lastSelectedModule is not null) MarkDirty(_lastSelectedModule);
+                    _lastSelectedModule = _vm.SelectedMpModule;
+                    if (_lastSelectedModule is not null) MarkDirty(_lastSelectedModule);
+                    break;
+                case nameof(MainViewModel.SelectedMpCell):
+                    // Zellauswahl: die Zellen melden IsSelected selbst (Zell-Handler)
+                    break;
+                case nameof(MainViewModel.MpPreviewRefreshToken):
+                case nameof(MainViewModel.IsModuleBased):
+                    ScheduleRender();
+                    break;
+            }
         };
         _vm.MpModules.CollectionChanged += _collectionHandler;
         _vm.PropertyChanged += _propertyHandler;
+        _lastSelectedModule = _vm.SelectedMpModule;
         Render();
     }
 
-    /// <summary>Render-Anforderung buendeln (mehrere Ereignisse -> ein Neuaufbau).</summary>
+    /// <summary>Kompletten Neuaufbau anfordern (gebuendelt).</summary>
     public void ScheduleRender()
     {
+        _fullRenderPending = true;
+        _renderTimer.Stop();
+        _renderTimer.Start();
+    }
+
+    /// <summary>Nur dieses Modul neu zeichnen (gebuendelt).</summary>
+    private void MarkDirty(MpModuleViewModel module)
+    {
+        _dirty.Add(module);
         _renderTimer.Stop();
         _renderTimer.Start();
     }
@@ -93,15 +143,103 @@ public partial class MpPreviewControl : UserControl
         if (_renderTimer.IsEnabled)
         {
             _renderTimer.Stop();
-            Render();
+            RenderPending();
         }
     }
 
+    private void RenderPending()
+    {
+        if (_fullRenderPending)
+        {
+            Render();
+            return;
+        }
+        if (_dirty.Count == 0) return;
+        var modules = _dirty.ToList();
+        _dirty.Clear();
+        foreach (var mod in modules)
+        {
+            if (_layers.TryGetValue(mod, out var layer))
+            {
+                RenderModule(mod, layer.Canvas);
+                ModuleRenderCount++;
+            }
+        }
+    }
+
+    /// <summary>Kompletter Neuaufbau aller sichtbaren Module.</summary>
     public void Render()
     {
+        _fullRenderPending = false;
+        _dirty.Clear();
+        DetachLayers();
         PreviewCanvas.Children.Clear();
+        FullRenderCount++;
+
         if (DataContext is not MainViewModel vm) return;
         if (!vm.IsModuleBased || vm.MpModules.Count == 0) return;
+
+        PreviewCanvas.Width = FormatDefinitions.PageWidth * PxPerMm;
+        PreviewCanvas.Height = FormatDefinitions.PageHeight * PxPerMm;
+        _lastSelectedModule = vm.SelectedMpModule;
+
+        foreach (var mod in vm.MpModules)
+        {
+            var layer = AttachLayer(mod);
+            PreviewCanvas.Children.Add(layer.Canvas);
+            RenderModule(mod, layer.Canvas);
+        }
+    }
+
+    private ModuleLayer AttachLayer(MpModuleViewModel mod)
+    {
+        var canvas = new Canvas();
+        Canvas.SetLeft(canvas, 0);
+        Canvas.SetTop(canvas, 0);
+
+        var layer = new ModuleLayer
+        {
+            Canvas = canvas,
+            ModuleHandler = (_, _) => MarkDirty(mod),
+            CellsHandler = (_, _) => { ResubscribeCells(mod); MarkDirty(mod); },
+            CellHandler = (_, _) => MarkDirty(mod)
+        };
+        mod.PropertyChanged += layer.ModuleHandler;
+        mod.AddressCells.CollectionChanged += layer.CellsHandler;
+        _layers[mod] = layer;
+        ResubscribeCells(mod);
+        return layer;
+    }
+
+    private void ResubscribeCells(MpModuleViewModel mod)
+    {
+        if (!_layers.TryGetValue(mod, out var layer)) return;
+        foreach (var cell in layer.Cells) cell.PropertyChanged -= layer.CellHandler;
+        layer.Cells.Clear();
+        foreach (var cell in mod.AddressCells)
+        {
+            cell.PropertyChanged += layer.CellHandler;
+            layer.Cells.Add(cell);
+        }
+    }
+
+    private void DetachLayers()
+    {
+        foreach (var (mod, layer) in _layers)
+        {
+            mod.PropertyChanged -= layer.ModuleHandler;
+            mod.AddressCells.CollectionChanged -= layer.CellsHandler;
+            foreach (var cell in layer.Cells) cell.PropertyChanged -= layer.CellHandler;
+        }
+        _layers.Clear();
+    }
+
+    /// <summary>Ein Modul in seine Ebene zeichnen (Ebene wird vorher geleert).</summary>
+    private void RenderModule(MpModuleViewModel mod, Canvas layer)
+    {
+        layer.Children.Clear();
+        if (DataContext is not MainViewModel vm) return;
+        if (!vm.IsModuleBased) return;
 
         var format = vm.SelectedFormat;
         var settings = vm.Settings;
@@ -110,47 +248,42 @@ public partial class MpPreviewControl : UserControl
         // Kalibrier-Versatz, die Vorschau zeigt das unverschobene Raster)
         var geo = SheetGeometry.For(format, settings);
 
-        PreviewCanvas.Width = FormatDefinitions.PageWidth * PxPerMm;
-        PreviewCanvas.Height = FormatDefinitions.PageHeight * PxPerMm;
+        _target = layer;
+        int idx = mod.ModuleIndex;
+        bool isModSelected = mod == vm.SelectedMpModule;
+        _moduleOpacity = mod.PrintOpacity;
 
-        foreach (var mod in vm.MpModules)
+        // Katalog-Belegung (konkretes Siemens-Modul) oder Varianten-Default
+        var definitions = MpModuleLayoutFactory.GetDefinitions(mod.GetModule());
+
+        // Header — globaler Header-Style aus Settings, mehrzeilig wie im Druck.
+        var header = geo.MpHeaderRect(idx).Scale(PxPerMm);
+        double headerFs = settings.HeaderFontSize * PtToPx;
+        DrawCell(header.X, header.Y, header.Width, header.Height,
+            mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: headerFs,
+            isBold: settings.HeaderIsBold, fontFamily: mod.FontFamily,
+            wrap: true,
+            clickAction: () => SelectModule(vm, mod));
+
+        RenderHalfCells(vm, mod, definitions, 0, geo, format.IsVertical, isModSelected);
+        RenderNetAddrAndCpu(mod, geo);
+
+        // Multi-Selection-Markierung: orange Umrandung ueber die Streifen-Position
+        if (mod.IsChecked)
         {
-            int idx = mod.ModuleIndex;
-            bool isModSelected = mod == vm.SelectedMpModule;
-            _moduleOpacity = mod.PrintOpacity;
-
-            // Katalog-Belegung (konkretes Siemens-Modul) oder Varianten-Default
-            var definitions = MpModuleLayoutFactory.GetDefinitions(mod.GetModule());
-
-            // Header — globaler Header-Style aus Settings, mehrzeilig wie im Druck.
-            var header = geo.MpHeaderRect(idx).Scale(PxPerMm);
-            double headerFs = settings.HeaderFontSize * PtToPx;
-            DrawCell(header.X, header.Y, header.Width, header.Height,
-                mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: headerFs,
-                isBold: settings.HeaderIsBold, fontFamily: mod.FontFamily,
-                wrap: true,
-                clickAction: () => SelectModule(vm, mod));
-
-            RenderHalfCells(vm, mod, definitions, 0, geo, format.IsVertical, isModSelected);
-            RenderNetAddrAndCpu(mod, geo);
-
-            // Multi-Selection-Markierung: orange Umrandung ueber die Streifen-Position
-            if (mod.IsChecked)
+            var r = geo.MpModuleRect(idx).Scale(PxPerMm);
+            var checkedFrame = new Rectangle
             {
-                var r = geo.MpModuleRect(idx).Scale(PxPerMm);
-                var checkedFrame = new Rectangle
-                {
-                    Width = r.Width,
-                    Height = r.Height,
-                    Stroke = new SolidColorBrush(Color.FromRgb(255, 149, 0)),
-                    StrokeThickness = 2,
-                    Fill = Brushes.Transparent,
-                    IsHitTestVisible = false
-                };
-                Canvas.SetLeft(checkedFrame, r.X);
-                Canvas.SetTop(checkedFrame, r.Y);
-                PreviewCanvas.Children.Add(checkedFrame);
-            }
+                Width = r.Width,
+                Height = r.Height,
+                Stroke = CheckedFrameBrush,
+                StrokeThickness = 2,
+                Fill = Brushes.Transparent,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(checkedFrame, r.X);
+            Canvas.SetTop(checkedFrame, r.Y);
+            layer.Children.Add(checkedFrame);
         }
         _moduleOpacity = 1.0;
     }
@@ -237,7 +370,7 @@ public partial class MpPreviewControl : UserControl
             rect.MouseLeftButtonDown += (_, _) => clickAction();
         Canvas.SetLeft(rect, x);
         Canvas.SetTop(rect, y);
-        PreviewCanvas.Children.Add(rect);
+        _target.Children.Add(rect);
 
         if (!string.IsNullOrWhiteSpace(text))
         {
@@ -275,7 +408,7 @@ public partial class MpPreviewControl : UserControl
                 tb.LayoutTransform = new RotateTransform(-90);
             Canvas.SetLeft(container, x);
             Canvas.SetTop(container, y);
-            PreviewCanvas.Children.Add(container);
+            _target.Children.Add(container);
         }
     }
 

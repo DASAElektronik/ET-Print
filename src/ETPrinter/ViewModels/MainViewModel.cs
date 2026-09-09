@@ -794,7 +794,6 @@ public class MainViewModel : ViewModelBase, IImportTarget
             var empty = new MpModule { Variant = SelectedMpModule.Variant, IoType = SelectedMpModule.IoType, ArticleNumber = SelectedMpModule.ArticleNumber };
             empty.AddressCells = MpModuleLayoutFactory.CreateCells(empty.Variant);
             SelectedMpModule.SetModule(empty);
-            NotifyMpPreviewChanged();
             MarkChanged();
             StatusMessage = $"Modul {SelectedMpModule.ModuleIndex + 1} geleert";
             return;
@@ -896,7 +895,6 @@ public class MainViewModel : ViewModelBase, IImportTarget
     {
         if (Panel.SuspendLiveApply) return;
         MarkChanged("Modulinhalt");
-        NotifyMpPreviewChanged();
     }
 
     private List<LabelViewModel> CreateEmptyPage(int count)
@@ -997,7 +995,6 @@ public class MainViewModel : ViewModelBase, IImportTarget
             if (SelectedMpCell is not null && SelectedMpCell.IsEditable)
                 SelectedMpCell.Text = InputLine1;
             MarkChanged();
-            NotifyMpPreviewChanged();
             return;
         }
 
@@ -1035,7 +1032,6 @@ public class MainViewModel : ViewModelBase, IImportTarget
             int filledCount = SelectedMpModule.AddressCells.Count(c => c.IsEditable && c.HasText);
             string status = $"Generiert: {Generator.ModuleName} ({Generator.ModuleType.DisplayName}) → {filledCount} Adressen auf Modul {SelectedMpModule.ModuleIndex + 1}";
 
-            NotifyMpPreviewChanged();
 
             // Zum naechsten Modul springen (analog AdvanceToNextLabel bei ET200SP).
             // Adressen werden NICHT automatisch neu generiert — User muss Variante
@@ -1216,7 +1212,6 @@ public class MainViewModel : ViewModelBase, IImportTarget
     public void ClearAllMpModuleChecks()
     {
         foreach (var m in MpModules) m.IsChecked = false;
-        NotifyMpPreviewChanged();
     }
 
     /// <summary>Shift+Klick: Range zwischen SelectedLabel (Anker) und target checken.</summary>
@@ -1249,7 +1244,6 @@ public class MainViewModel : ViewModelBase, IImportTarget
         for (int i = from; i <= to; i++)
             MpModules[i].IsChecked = true;
         SelectedMpModule = target;
-        NotifyMpPreviewChanged();
     }
 
     // === Copy / Paste ===
@@ -1295,7 +1289,6 @@ public class MainViewModel : ViewModelBase, IImportTarget
             SelectedMpModule.IsChecked = true;
         module.IsChecked = !module.IsChecked;
         SelectedMpModule = module;
-        NotifyMpPreviewChanged();
     }
 
     private IReadOnlyList<LabelViewModel> GetCopySourceLabels()
@@ -1379,7 +1372,6 @@ public class MainViewModel : ViewModelBase, IImportTarget
             MpModules[targetIndex].SetModule(source[i]);
             pasted++;
         }
-        NotifyMpPreviewChanged();
         StatusMessage = pasted < source.Count
             ? $"{pasted} von {source.Count} Modul(en) eingefuegt ab Position {startIndex + 1} (Seitenende erreicht)"
             : $"{pasted} Modul(e) eingefuegt ab Position {startIndex + 1}";
@@ -1471,7 +1463,6 @@ public class MainViewModel : ViewModelBase, IImportTarget
         {
             SelectedMpModule.HeaderText = Generator.ModuleName;
             MarkChanged();
-            NotifyMpPreviewChanged();
             StatusMessage = $"Kopfzeile von Modul {SelectedMpModule.ModuleIndex + 1} geaendert";
             return;
         }
