@@ -80,9 +80,38 @@ public static class PrintService
         if (printDialog.ShowDialog() != true)
             return false;
 
+        // Papierformat explizit A4 Hochformat: Drucker mit Standard Letter/A5 oder
+        // Querformat skalieren/beschneiden sonst die fest 210x297 mm grosse Seite,
+        // und die Kalibrierung stimmt nicht mehr.
+        try
+        {
+            printDialog.PrintTicket.PageMediaSize = new System.Printing.PageMediaSize(System.Printing.PageMediaSizeName.ISOA4);
+            printDialog.PrintTicket.PageOrientation = System.Printing.PageOrientation.Portrait;
+        }
+        catch (Exception ex) when (ex is System.Printing.PrintSystemException or InvalidOperationException)
+        {
+            Log.Warn($"PrintTicket A4 nicht setzbar: {ex.Message}");
+        }
+
         printDialog.PrintDocument(document.DocumentPaginator, jobTitle);
         return true;
     }
+
+    /// <summary>
+    /// Shrink-to-fit-Container: verkleinert den Inhalt, wenn er nicht in w x h passt,
+    /// vergroessert aber nie (DownOnly) und zentriert ihn. Ersetzt das fruehere
+    /// "..."-Trimming, das z.B. "EW 10" in 6,4 mm hohen Vertikal-Slots zu "E..." machte.
+    /// Preview nutzt dieselbe Viewbox-Konstruktion (MainWindow.xaml), damit beide
+    /// identisch reagieren.
+    /// </summary>
+    private static Viewbox FitBox(UIElement child, double w, double h) => new()
+    {
+        Width = w,
+        Height = h,
+        Stretch = Stretch.Uniform,
+        StretchDirection = StretchDirection.DownOnly,
+        Child = child
+    };
 
     public static string JobTitleFor(FormatInfo format) =>
         format.Family == ProductFamily.ET200SP ? "ET200SP Etiketten" : "ET200MP Etiketten";
@@ -268,12 +297,10 @@ public static class PrintService
             Height = cellH
         };
 
-        var tb = CreateTextBlock(text, fontSize, isBold: isBold, isItalic: false, fontFamily: fontFamily);
+        var tb = CreateTextBlock(text, fontSize, isBold: isBold, isItalic: false, fontFamily: fontFamily, fit: true);
         tb.LayoutTransform = new RotateTransform(-90);
-        tb.HorizontalAlignment = HorizontalAlignment.Center;
-        tb.VerticalAlignment = VerticalAlignment.Center;
 
-        container.Child = tb;
+        container.Child = FitBox(tb, headerW, cellH);
         Canvas.SetLeft(container, x);
         Canvas.SetTop(container, y);
         canvas.Children.Add(container);
@@ -285,31 +312,23 @@ public static class PrintService
     {
         double lineH = cellH / Math.Max(rowsPerLabel, 1);
 
-        if (!string.IsNullOrWhiteSpace(label.Line1))
-        {
-            var tb = CreateTextBlock(label.Line1, label.CellFontSize, label.CellIsBold, label.CellIsItalic, label.CellFontFamily);
-            tb.TextAlignment = TextAlignment.Center;
-            tb.Width = cellW;
-            tb.HorizontalAlignment = HorizontalAlignment.Center;
-            tb.VerticalAlignment = VerticalAlignment.Center;
+        // Leerslots des Generators entfernen (sonst ~50 Zeichen fuer 31 mm)
+        string line1 = label.Line1Display;
+        string line2 = label.Line2Display;
 
-            var container = new Border { Width = cellW, Height = lineH };
-            container.Child = tb;
+        if (line1.Length > 0)
+        {
+            var tb = CreateTextBlock(line1, label.CellFontSize, label.CellIsBold, label.CellIsItalic, label.CellFontFamily, fit: true);
+            var container = new Border { Width = cellW, Height = lineH, Child = FitBox(tb, cellW - 1, lineH) };
             Canvas.SetLeft(container, x);
             Canvas.SetTop(container, y);
             canvas.Children.Add(container);
         }
 
-        if (rowsPerLabel >= 2 && !string.IsNullOrWhiteSpace(label.Line2))
+        if (rowsPerLabel >= 2 && line2.Length > 0)
         {
-            var tb = CreateTextBlock(label.Line2, label.CellFontSize, label.CellIsBold, label.CellIsItalic, label.CellFontFamily);
-            tb.TextAlignment = TextAlignment.Center;
-            tb.Width = cellW;
-            tb.HorizontalAlignment = HorizontalAlignment.Center;
-            tb.VerticalAlignment = VerticalAlignment.Center;
-
-            var container = new Border { Width = cellW, Height = lineH };
-            container.Child = tb;
+            var tb = CreateTextBlock(line2, label.CellFontSize, label.CellIsBold, label.CellIsItalic, label.CellFontFamily, fit: true);
+            var container = new Border { Width = cellW, Height = lineH, Child = FitBox(tb, cellW - 1, lineH) };
             Canvas.SetLeft(container, x);
             Canvas.SetTop(container, y + lineH);
             canvas.Children.Add(container);
@@ -378,18 +397,18 @@ public static class PrintService
                 canvas.Children.Add(rect);
             }
 
-            // Text 90 Grad gedreht
-            var tb = CreateTextBlock(parts[i], fontSize, isBold, isItalic, fontFamily);
+            if (string.IsNullOrWhiteSpace(parts[i])) continue;
+
+            // Text 90 Grad gedreht, shrink-to-fit in den Slot (partW x rowHeight)
+            var tb = CreateTextBlock(parts[i], fontSize, isBold, isItalic, fontFamily, fit: true);
             tb.LayoutTransform = new RotateTransform(-90);
-            tb.HorizontalAlignment = HorizontalAlignment.Center;
-            tb.VerticalAlignment = VerticalAlignment.Center;
 
             var container = new Border
             {
                 Width = partW,
-                Height = rowHeight
+                Height = rowHeight,
+                Child = FitBox(tb, partW, rowHeight)
             };
-            container.Child = tb;
             Canvas.SetLeft(container, px);
             Canvas.SetTop(container, y);
             canvas.Children.Add(container);
@@ -543,7 +562,10 @@ public static class PrintService
     // Umrechnung druckte die App ~25% kleiner als das Original-Template.
     private const double PtToDip = 96.0 / 72.0;
 
-    private static TextBlock CreateTextBlock(string text, int fontSize, bool isBold, bool isItalic, string fontFamily = "Arial")
+    /// <param name="fit">true = Text wird per FitBox verkleinert statt mit "..." gekappt
+    /// (kein Trimming, damit die Messung die volle Breite liefert).</param>
+    private static TextBlock CreateTextBlock(string text, int fontSize, bool isBold, bool isItalic,
+        string fontFamily = "Arial", bool fit = false)
     {
         return new TextBlock
         {
@@ -552,7 +574,7 @@ public static class PrintService
             FontSize = fontSize * PtToDip,
             FontWeight = isBold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = isItalic ? FontStyles.Italic : FontStyles.Normal,
-            TextTrimming = TextTrimming.CharacterEllipsis
+            TextTrimming = fit ? TextTrimming.None : TextTrimming.CharacterEllipsis
         };
     }
 
@@ -627,16 +649,18 @@ public static class PrintService
             double modHeaderH = band == 0 ? headerH : band2HeaderH;
             double headerY = band == 0 ? marginTop : marginTop + headerH + bandDataH;
 
-            // Header oben im Streifen — globaler Header-Style aus settings
+            // Header oben im Streifen — globaler Header-Style aus settings.
+            // Mehrzeilig (Device / Module / Slot wie im Excel-Template): Zeilenumbrueche
+            // bleiben, lange Zeilen werden umbrochen statt mit "..." gekappt; passt es
+            // in der Hoehe nicht, verkleinert die FitBox.
             if (!string.IsNullOrWhiteSpace(mod.HeaderText))
             {
-                var tb = CreateTextBlock(mod.HeaderText.Replace("\n", " / "),
-                    settings.HeaderFontSize, settings.HeaderIsBold, false, mod.FontFamily);
-                tb.Width = moduleW - 2;
+                var tb = CreateTextBlock(mod.HeaderText.Replace("\r\n", "\n"),
+                    settings.HeaderFontSize, settings.HeaderIsBold, false, mod.FontFamily, fit: true);
+                tb.MaxWidth = moduleW - 2;
+                tb.TextWrapping = TextWrapping.Wrap;
                 tb.TextAlignment = TextAlignment.Center;
-                tb.VerticalAlignment = VerticalAlignment.Center;
-                var container = new Border { Width = moduleW, Height = modHeaderH };
-                container.Child = tb;
+                var container = new Border { Width = moduleW, Height = modHeaderH, Child = FitBox(tb, moduleW - 2, modHeaderH - 1) };
                 Canvas.SetLeft(container, modX);
                 Canvas.SetTop(container, headerY);
                 canvas.Children.Add(container);

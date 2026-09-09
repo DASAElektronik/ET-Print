@@ -26,14 +26,18 @@ public class LabelViewModel : ViewModelBase
     public string Line1
     {
         get => _cell.Line1;
-        set { _cell.Line1 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line1Parts)); OnPropertyChanged(nameof(EffectiveLine2Parts)); }
+        set { _cell.Line1 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line1Parts)); OnPropertyChanged(nameof(Line1Display)); OnPropertyChanged(nameof(EffectiveLine2Parts)); }
     }
 
     public string Line2
     {
         get => _cell.Line2;
-        set { _cell.Line2 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line2Parts)); OnPropertyChanged(nameof(HasLine2)); OnPropertyChanged(nameof(EffectiveLine2Parts)); }
+        set { _cell.Line2 = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasText)); OnPropertyChanged(nameof(Line2Parts)); OnPropertyChanged(nameof(Line2Display)); OnPropertyChanged(nameof(HasLine2)); OnPropertyChanged(nameof(EffectiveLine2Parts)); }
     }
+
+    /// <summary>Druckflag-Umschaltung mit Aenderungsmeldung (Kontextmenue) — direktes
+    /// Setzen von IsPrintEnabled markiert das Projekt sonst nicht als geaendert.</summary>
+    public Action? PrintFlagChanged { get; set; }
 
     // Per-Etikett Schrift-Einstellungen
     public int CellFontSize
@@ -78,7 +82,14 @@ public class LabelViewModel : ViewModelBase
     public bool IsPrintEnabled
     {
         get => _cell.IsPrintEnabled;
-        set { _cell.IsPrintEnabled = value; OnPropertyChanged(); OnPropertyChanged(nameof(PrintOpacity)); }
+        set
+        {
+            if (_cell.IsPrintEnabled == value) return;
+            _cell.IsPrintEnabled = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(PrintOpacity));
+            PrintFlagChanged?.Invoke();
+        }
     }
 
     public double PrintOpacity => IsPrintEnabled ? 1.0 : 0.4;
@@ -96,6 +107,20 @@ public class LabelViewModel : ViewModelBase
 
     /// <summary>Einzelne Adressen aus Line2 (getrennt durch doppeltes Leerzeichen).</summary>
     public string[] Line2Parts => string.IsNullOrEmpty(Line2) ? [] : Line2.Split("  ", StringSplitOptions.None);
+
+    /// <summary>Darstellung fuer HORIZONTALE Formate: die Slot-Struktur des Generators
+    /// (8 Plaetze mit Leerslots) ergibt dort ~50 Zeichen fuer 31 mm — der Text wurde
+    /// mit "..." gekappt und durch trailing Leerzeichen aus der Mitte geschoben.
+    /// Leerslots entfernen, Rest mit doppeltem Leerzeichen trennen.</summary>
+    public string Line1Display => CompactSlots(Line1);
+    public string Line2Display => CompactSlots(Line2);
+
+    public static string CompactSlots(string line) =>
+        string.IsNullOrWhiteSpace(line)
+            ? string.Empty
+            : string.Join("  ", line.Split("  ", StringSplitOptions.RemoveEmptyEntries)
+                                    .Select(p => p.Trim())
+                                    .Where(p => p.Length > 0));
 
     /// <summary>True wenn Line2 befuellt ist (digital odd/even Split).
     /// Analog nutzt nur Line1, untere Reihe bleibt als leere Platzhalter sichtbar.</summary>
@@ -144,6 +169,8 @@ public class LabelViewModel : ViewModelBase
         OnPropertyChanged(nameof(Line2));
         OnPropertyChanged(nameof(Line1Parts));
         OnPropertyChanged(nameof(Line2Parts));
+        OnPropertyChanged(nameof(Line1Display));
+        OnPropertyChanged(nameof(Line2Display));
         OnPropertyChanged(nameof(HasLine2));
         OnPropertyChanged(nameof(EffectiveLine2Parts));
         OnPropertyChanged(nameof(CellFontSize));
@@ -167,6 +194,8 @@ public class LabelViewModel : ViewModelBase
         OnPropertyChanged(nameof(Line2));
         OnPropertyChanged(nameof(Line1Parts));
         OnPropertyChanged(nameof(Line2Parts));
+        OnPropertyChanged(nameof(Line1Display));
+        OnPropertyChanged(nameof(Line2Display));
         OnPropertyChanged(nameof(HasLine2));
         OnPropertyChanged(nameof(EffectiveLine2Parts));
         OnPropertyChanged(nameof(HasText));

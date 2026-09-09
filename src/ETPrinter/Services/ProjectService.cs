@@ -160,7 +160,7 @@ public static class ProjectService
         return [];
     }
 
-    private static void AddRecentFile(string filePath)
+    public static void AddRecentFile(string filePath)
     {
         var fullPath = Path.GetFullPath(filePath);
         var recent = LoadRecentFiles();
@@ -168,7 +168,22 @@ public static class ProjectService
         recent.Insert(0, fullPath);
         if (recent.Count > MaxRecentFiles)
             recent = recent.GetRange(0, MaxRecentFiles);
+        SaveRecentFiles(recent);
+    }
 
+    /// <summary>Eintrag entfernen (z.B. Datei geloescht/verschoben).</summary>
+    public static void RemoveRecentFile(string filePath)
+    {
+        string fullPath;
+        try { fullPath = Path.GetFullPath(filePath); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return; }
+        var recent = LoadRecentFiles();
+        if (recent.RemoveAll(p => string.Equals(p, fullPath, StringComparison.OrdinalIgnoreCase)) > 0)
+            SaveRecentFiles(recent);
+    }
+
+    private static void SaveRecentFiles(List<string> recent)
+    {
         try
         {
             var dir = Path.GetDirectoryName(RecentFilePath)!;

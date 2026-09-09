@@ -119,7 +119,7 @@ public class MainViewModel : ViewModelBase
         SelectAllForPrintCommand = new RelayCommand(SelectAllForPrint);
         DeselectAllForPrintCommand = new RelayCommand(DeselectAllForPrint);
         SelectFilledForPrintCommand = new RelayCommand(SelectFilledForPrint);
-        TogglePrintCommand = new RelayCommand(TogglePrint, () => SelectedLabel is not null);
+        TogglePrintCommand = new RelayCommand(TogglePrint, () => HasSelection);
 
         // Copy / Paste
         CopyCommand = new RelayCommand(CopySelection, CanCopy);
@@ -296,6 +296,8 @@ public class MainViewModel : ViewModelBase
                 LoadFontInputsFromMpModule(value);
             }
             OnPropertyChanged(nameof(SelectedMpModuleInfo));
+            OnPropertyChanged(nameof(EditTargetInfo));
+            OnPropertyChanged(nameof(StatusSelectionInfo));
             OnPropertyChanged(nameof(SelectedMpVariant));
             OnPropertyChanged(nameof(SelectedMpArticle));
             OnPropertyChanged(nameof(HasSelection));
@@ -439,9 +441,16 @@ public class MainViewModel : ViewModelBase
                     new Action(() => OnPropertyChanged(nameof(SelectedFormat))));
                 return;
             }
+            bool hadContent = HasAnyContent();
             if (SetProperty(ref _selectedFormat, value))
             {
                 InitializeLabels();
+                // Verworfener Inhalt = ungespeicherte Aenderung (Laden/Neu setzen danach
+                // selbst IsDirty=false)
+                if (hadContent || _currentFilePath is not null) IsDirty = true;
+                OnPropertyChanged(nameof(IsMarginBottomEditable));
+                OnPropertyChanged(nameof(EditTargetInfo));
+                OnPropertyChanged(nameof(LayoutInfo));
                 OnPropertyChanged(nameof(HasHeader));
                 OnPropertyChanged(nameof(IsDoubleLine));
                 OnPropertyChanged(nameof(Line2RowHeight));
@@ -495,6 +504,8 @@ public class MainViewModel : ViewModelBase
                     StatusMessage = $"Etikett {value.DisplayPosition}/{Labels.Count} (Seite {_currentPageIndex + 1}/{PageCount})";
                 }
                 OnPropertyChanged(nameof(SelectedLabelInfo));
+                OnPropertyChanged(nameof(EditTargetInfo));
+                OnPropertyChanged(nameof(StatusSelectionInfo));
                 OnPropertyChanged(nameof(HasSelection));
             }
         }
@@ -503,6 +514,26 @@ public class MainViewModel : ViewModelBase
     public string SelectedLabelInfo => SelectedLabel is not null
         ? $"Etikett {SelectedLabel.DisplayPosition} von {Labels.Count} (Seite {_currentPageIndex + 1})"
         : "Kein Etikett ausgewaehlt";
+
+    /// <summary>"Bearbeite:"-Zeile, familienbewusst (MP: Modul statt Etikett).</summary>
+    public string EditTargetInfo => _selectedFormat.IsModuleBased ? SelectedMpModuleInfo : SelectedLabelInfo;
+
+    /// <summary>Raster-Zeile, familienbewusst.</summary>
+    public string LayoutInfo
+    {
+        get
+        {
+            if (!_selectedFormat.IsModuleBased)
+                return $"Raster: {LabelsPerRow} x {LabelRows} = {_selectedFormat.LabelsPerPage} Etiketten";
+            var fam = ProductFamilyDefinitions.Get(_selectedFormat.Family);
+            return $"Bogen: {fam.BandsPerPageText} = {fam.ModulesPerPage} Streifen";
+        }
+    }
+
+    /// <summary>Statusleiste: "Etikett 3 / 100" bzw. "Modul 2 / 10".</summary>
+    public string StatusSelectionInfo => _selectedFormat.IsModuleBased
+        ? $"Modul: {(SelectedMpModule is null ? "-" : (SelectedMpModule.ModuleIndex + 1).ToString())} / {MpModules.Count}"
+        : $"Etikett: {(SelectedLabel is null ? "-" : SelectedLabel.DisplayPosition.ToString())} / {_selectedFormat.LabelsPerPage}";
 
     public bool HasHeader => _selectedFormat.HasHeader;
     public bool IsDoubleLine => _selectedFormat.RowsPerLabel == 2;
@@ -609,6 +640,10 @@ public class MainViewModel : ViewModelBase
             {
                 OnPropertyChanged(nameof(GenCountLabel));
                 OnPropertyChanged(nameof(GenTypicalCounts));
+                // DI (1/2/4 Bytes) -> AI (2/4/8 Kanaele): ein nicht mehr gueltiger
+                // Wert liess die ComboBox leer, der Generator rechnete still weiter.
+                if (!GenTypicalCounts.Contains(GenCount))
+                    GenCount = GenTypicalCounts[0];
                 ApplyIoTypeToSelectedMpModule();
                 UpdateGeneratorPreview();
             }
@@ -754,8 +789,16 @@ public class MainViewModel : ViewModelBase
     public bool PrintGridLines
     {
         get => _printGridLines;
-        set => SetProperty(ref _printGridLines, value);
+        set
+        {
+            if (SetProperty(ref _printGridLines, value))
+                IsDirty = true; // wird mitgespeichert -> Aenderung
+        }
     }
+
+    /// <summary>Der MP-Druck rastert von oben (Header + 2 x 20 Zeilen mit festen Hoehen);
+    /// "Rand unten" hat dort keine Wirkung und wird in der UI gesperrt.</summary>
+    public bool IsMarginBottomEditable => !IsModuleBased;
 
     public double CalibrationOffsetX
     {
@@ -895,9 +938,12 @@ public class MainViewModel : ViewModelBase
     {
         var page = new List<LabelViewModel>(count);
         for (int i = 0; i < count; i++)
-            page.Add(new LabelViewModel(new LabelCell { Index = i }));
+            page.Add(CreateLabelViewModel(new LabelCell { Index = i }));
         return page;
     }
+
+    private LabelViewModel CreateLabelViewModel(LabelCell cell) =>
+        new(cell) { PrintFlagChanged = () => IsDirty = true };
 
     private void NavigateToPage(int index)
     {
@@ -974,6 +1020,14 @@ public class MainViewModel : ViewModelBase
 
     private void RemovePage()
     {
+        bool pageHasContent = _selectedFormat.IsModuleBased
+            ? MpModules.Any(m => m.HasPrintableContent)
+            : Labels.Any(l => l.HasText);
+        if (pageHasContent && !ConfirmDestructive(
+                $"Seite {_currentPageIndex + 1} enthaelt befuellte Etiketten/Module.\n\nSeite wirklich entfernen?",
+                "Seite entfernen"))
+            return;
+
         if (_selectedFormat.IsModuleBased)
         {
             if (_allMpPages.Count <= 1) return;
@@ -1286,8 +1340,15 @@ public class MainViewModel : ViewModelBase
 
     // === Copy / Paste ===
 
+    /// <summary>Strg+C/V sind Window-KeyBindings und wuerden der TextBox das
+    /// Kopieren/Einfuegen von Text wegnehmen. Hat ein Textfeld den Fokus, sind die
+    /// Etiketten-Commands nicht ausfuehrbar — die Taste geht dann an die TextBox.</summary>
+    private static bool TextBoxHasFocus() =>
+        Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase;
+
     private bool CanCopy()
     {
+        if (TextBoxHasFocus()) return false;
         if (_selectedFormat.IsModuleBased)
             return GetCopySourceModules().Any();
         return GetCopySourceLabels().Any();
@@ -1295,9 +1356,32 @@ public class MainViewModel : ViewModelBase
 
     private bool CanPaste()
     {
+        if (TextBoxHasFocus()) return false;
         if (_selectedFormat.IsModuleBased)
             return ClipboardService.HasModules && SelectedMpModule is not null;
         return ClipboardService.HasLabels && SelectedLabel is not null;
+    }
+
+    /// <summary>Strg+Klick: Markierung umschalten. Beim ersten Strg+Klick wird das
+    /// bisher ausgewaehlte Etikett (Anker) mit markiert — sonst kopierte "3 markiert,
+    /// Strg+Klick auf 5" nur Etikett 5.</summary>
+    public void ToggleCheck(LabelViewModel label)
+    {
+        bool anyChecked = Labels.Any(l => l.IsChecked);
+        if (!anyChecked && SelectedLabel is not null && !ReferenceEquals(SelectedLabel, label))
+            SelectedLabel.IsChecked = true;
+        label.IsChecked = !label.IsChecked;
+        SelectedLabel = label;
+    }
+
+    public void ToggleCheck(MpModuleViewModel module)
+    {
+        bool anyChecked = MpModules.Any(m => m.IsChecked);
+        if (!anyChecked && SelectedMpModule is not null && !ReferenceEquals(SelectedMpModule, module))
+            SelectedMpModule.IsChecked = true;
+        module.IsChecked = !module.IsChecked;
+        SelectedMpModule = module;
+        NotifyMpPreviewChanged();
     }
 
     private IReadOnlyList<LabelViewModel> GetCopySourceLabels()
@@ -1360,7 +1444,9 @@ public class MainViewModel : ViewModelBase
             Labels[targetIndex].SetCell(source[i]);
             pasted++;
         }
-        StatusMessage = $"{pasted} Etikett(en) eingefuegt ab Position {startIndex + 1}";
+        StatusMessage = pasted < source.Count
+            ? $"{pasted} von {source.Count} Etikett(en) eingefuegt ab Position {startIndex + 1} (Seitenende erreicht)"
+            : $"{pasted} Etikett(en) eingefuegt ab Position {startIndex + 1}";
     }
 
     private void PasteModules()
@@ -1380,11 +1466,27 @@ public class MainViewModel : ViewModelBase
             pasted++;
         }
         NotifyMpPreviewChanged();
-        StatusMessage = $"{pasted} Modul(e) eingefuegt ab Position {startIndex + 1}";
+        StatusMessage = pasted < source.Count
+            ? $"{pasted} von {source.Count} Modul(en) eingefuegt ab Position {startIndex + 1} (Seitenende erreicht)"
+            : $"{pasted} Modul(e) eingefuegt ab Position {startIndex + 1}";
+    }
+
+    /// <summary>Rueckfrage vor destruktiven Aktionen (Alle loeschen, Seite entfernen).
+    /// Automation unterdrueckt sie ueber SuppressContentLossConfirm.</summary>
+    private bool ConfirmDestructive(string message, string title)
+    {
+        if (_suppressContentLossConfirm) return true;
+        return MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)
+            == MessageBoxResult.Yes;
     }
 
     private void ClearAllLabels()
     {
+        if (HasAnyContent() && !ConfirmDestructive(
+                "Alle Etiketten bzw. Module auf ALLEN Seiten werden geloescht.\n\nFortfahren?",
+                "Alle loeschen"))
+            return;
+
         if (_selectedFormat.IsModuleBased)
         {
             // ET200MP: alle Modul-Seiten auf eine leere Seite zuruecksetzen
@@ -1698,26 +1800,43 @@ public class MainViewModel : ViewModelBase
 
     private void OpenRecentFile(string? filePath)
     {
-        if (filePath is not null && File.Exists(filePath))
+        if (filePath is null) return;
+        if (!File.Exists(filePath))
         {
-            if (!ConfirmDiscardChanges()) return;
-            DoOpen(filePath);
-        }
-        else
+            // Toter Eintrag: anbieten, ihn aus der Liste zu entfernen
+            var result = MessageBox.Show(
+                $"Die Datei wurde nicht gefunden:\n{filePath}\n\nEintrag aus der Liste entfernen?",
+                "Datei nicht gefunden", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (result == MessageBoxResult.Yes)
+            {
+                ProjectService.RemoveRecentFile(filePath);
+                RefreshRecentFiles();
+            }
             StatusMessage = "Datei nicht gefunden";
+            return;
+        }
+        if (!ConfirmDiscardChanges()) return;
+        DoOpen(filePath);
     }
 
     private void DoOpen(string filePath)
     {
         try
         {
-            var project = ProjectService.Load(filePath);
+            // Recent-Eintrag erst nach erfolgreichem Laden (eine kaputte Datei
+            // wanderte sonst an die Spitze der Liste)
+            var project = ProjectService.Load(filePath, addToRecent: false);
             ApplyLoadedProject(project, filePath);
+            ProjectService.AddRecentFile(filePath);
+            RefreshRecentFiles();
             StatusMessage = $"Geladen: {Path.GetFileName(filePath)} ({PageCount} Seiten)";
         }
         catch (Exception ex)
         {
             StatusMessage = $"Ladefehler: {ex.Message}";
+            MessageBox.Show(
+                $"Das Projekt konnte nicht geladen werden:\n{filePath}\n\n{ex.Message}",
+                "Ladefehler", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -1817,7 +1936,7 @@ public class MainViewModel : ViewModelBase
                             cell.FontFamily = src.FontFamily;
                             cell.IsPrintEnabled = src.IsPrintEnabled;
                         }
-                        pageVms.Add(new LabelViewModel(cell));
+                        pageVms.Add(CreateLabelViewModel(cell));
                     }
                     _allPages.Add(pageVms);
                 }
@@ -2282,35 +2401,47 @@ public class MainViewModel : ViewModelBase
 
     // === Selective Print Methods ===
 
-    private void SelectAllForPrint()
+    private void SetPrintFlagForAll(Func<LabelViewModel, bool> labelRule, Func<MpModuleViewModel, bool> moduleRule)
     {
         foreach (var page in _allPages)
             foreach (var label in page)
-                label.IsPrintEnabled = true;
+                label.IsPrintEnabled = labelRule(label);
+        foreach (var page in _allMpPages)
+            foreach (var mod in page)
+                mod.IsPrintEnabled = moduleRule(mod);
         IsDirty = true;
-        StatusMessage = "Alle Etiketten zum Drucken aktiviert";
+        NotifyMpPreviewChanged();
+    }
+
+    private void SelectAllForPrint()
+    {
+        SetPrintFlagForAll(_ => true, _ => true);
+        StatusMessage = IsModuleBased ? "Alle Module zum Drucken aktiviert" : "Alle Etiketten zum Drucken aktiviert";
     }
 
     private void DeselectAllForPrint()
     {
-        foreach (var page in _allPages)
-            foreach (var label in page)
-                label.IsPrintEnabled = false;
-        IsDirty = true;
-        StatusMessage = "Alle Etiketten vom Drucken ausgeschlossen";
+        SetPrintFlagForAll(_ => false, _ => false);
+        StatusMessage = IsModuleBased ? "Alle Module vom Drucken ausgeschlossen" : "Alle Etiketten vom Drucken ausgeschlossen";
     }
 
     private void SelectFilledForPrint()
     {
-        foreach (var page in _allPages)
-            foreach (var label in page)
-                label.IsPrintEnabled = label.HasText;
-        IsDirty = true;
-        StatusMessage = "Nur befuellte Etiketten zum Drucken aktiviert";
+        SetPrintFlagForAll(l => l.HasText, m => m.HasPrintableContent);
+        StatusMessage = IsModuleBased ? "Nur befuellte Module zum Drucken aktiviert" : "Nur befuellte Etiketten zum Drucken aktiviert";
     }
 
     private void TogglePrint()
     {
+        if (_selectedFormat.IsModuleBased)
+        {
+            if (SelectedMpModule is null) return;
+            SelectedMpModule.IsPrintEnabled = !SelectedMpModule.IsPrintEnabled; // ContentChanged -> dirty + preview
+            StatusMessage = SelectedMpModule.IsPrintEnabled
+                ? $"Modul {SelectedMpModule.ModuleIndex + 1}: Druck aktiviert"
+                : $"Modul {SelectedMpModule.ModuleIndex + 1}: Druck deaktiviert";
+            return;
+        }
         if (SelectedLabel is null) return;
         SelectedLabel.IsPrintEnabled = !SelectedLabel.IsPrintEnabled;
         IsDirty = true;

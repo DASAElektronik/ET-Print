@@ -11,6 +11,36 @@
 
 ## 2026-09-09 - Projekttag 7 (Abschluss v3.1, siehe docs/ABSCHLUSSPLAN.md)
 
+### AP2: Mittlere Bugs + UX
+- **Strg+C/V in Textfeldern**: Window-KeyBindings sind nicht ausfuehrbar, solange eine
+  TextBox den Fokus hat — die Taste geht an das Textfeld (frueher wurden Etiketten kopiert).
+- **Kontextmenue-Commands** ueber `BindingProxy` (ContextMenu haengt nicht im Visual Tree,
+  `RelativeSource AncestorType=Window` lieferte null); Rechtsklick selektiert das Etikett.
+  Kontextmenue auch auf der MP-Vorschau (Kopieren/Einfuegen/Druck umschalten).
+- **Rueckfragen** vor "Alle loeschen" und "- Seite" bei vorhandenem Inhalt.
+- **Druckauswahl im MP-Modus**: Alle/Keine/Nur befuellte wirken auf Module, "Druck
+  umschalten" fuer das ausgewaehlte Modul, Checkbox "Modul drucken" im MP-Tab, ausgegraute
+  Module in der Vorschau.
+- **Dirty-Tracking**: Druckflag per Kontextmenue, Blanko-A4-Option und Format-/Familienwechsel
+  mit Inhalt markieren das Projekt als geaendert.
+- **Recent-Files**: fehlende Datei -> Rueckfrage "Eintrag entfernen?"; Ladefehler als
+  MessageBox; Eintrag erst nach erfolgreichem Laden.
+- **Shrink-to-fit statt "..."** (2.21): vertikale SP-Slots, horizontale Zeilen und
+  Kopfzeile verkleinern den Text per Viewbox (DownOnly) in Druck UND Vorschau —
+  "EW 10" in 6,4 mm hohen Slots ist wieder lesbar. Horizontale Formate ohne Leerslots
+  (`Line1Display`/`CompactSlots`).
+- **MP-Header mehrzeilig** (Device / Module / Slot): Zeilenumbrueche bleiben, Umbruch statt
+  Kappen, FitBox bei Platzmangel — Druck und Vorschau identisch.
+- **MP-Vorschau entprellt** (DispatcherTimer 40 ms, Abmeldung beim DataContext-Wechsel):
+  kein kompletter Canvas-Neuaufbau mehr pro Tastendruck; `FlushRender` fuer Screenshots.
+- `PrintTicket` erzwingt A4 Hochformat; "Rand unten" im MP-Modus gesperrt (Tooltip);
+  "Manuell"-Tab im MP-Modus ausgeblendet; Infozeilen und Statusleiste familienbewusst
+  ("Modul 3 / 10", "Bogen: 2 Baender x 5 Spalten = 10 Streifen").
+- Strg+Klick markiert den Anker mit; Paste meldet "N von M (Seitenende)"; GenCount folgt
+  dem Modultyp (DI 1/2/4 -> AI 2/4/8).
+- Test-Automation: `toggle-print`; `clear-all`/`remove-page` unterdruecken die Rueckfrage.
+- Tests: 150 (17 neu in MediumFixTests). Smoke AP2: 48/48 gruen.
+
 ### AP1: Kritische Bugs (falscher/fehlender Druck, Datenverlust)
 - **"Neu" bei aktivem Standardformat war ein No-op**: der Format-Setter kehrte bei
   gleichem Format sofort zurueck, `InitializeLabels` lief nie, `IsDirty=false` — alte
@@ -35,7 +65,8 @@
 - **Atomares Speichern** (`ProjectService.WriteAtomic`: .tmp + Move, vorherige Version
   als .bak) fuer Projekt und calibration.json.
 - **Globaler Exception-Handler** (App.xaml.cs): Log + Notfall-Sicherung nach
-  `%LOCALAPPDATA%\ETPrinterecovery.etprint` + Hinweis; beim naechsten Start wird die
+  `%LOCALAPPDATA%\ETPrinter
+ecovery.etprint` + Hinweis; beim naechsten Start wird die
   Wiederherstellung angeboten. `TaskScheduler.UnobservedTaskException` wird geloggt.
 - **Zellauswahl** wird bei Modulwechsel zurueckgesetzt und nach Zell-Neuaufbau
   (Variante/Artikel/Modultyp/Paste) per CellIndex neu aufgeloest (`CellsRebuilt`).

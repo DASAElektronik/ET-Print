@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ETPrinter.ViewModels"
         xmlns:controls="clr-namespace:ETPrinter.Controls"
+        xmlns:converters="clr-namespace:ETPrinter.Converters"
         Title="{Binding WindowTitle}"
         Height="900" Width="1400"
         MinHeight="700" MinWidth="1000"
@@ -11,6 +12,11 @@
     <Window.DataContext>
         <vm:MainViewModel/>
     </Window.DataContext>
+
+    <Window.Resources>
+        <!-- Bruecke fuer Elemente ausserhalb des Visual Trees (ContextMenu, RowDefinition) -->
+        <converters:BindingProxy x:Key="Proxy" Data="{Binding}"/>
+    </Window.Resources>
 
     <Window.InputBindings>
         <KeyBinding Gesture="Ctrl+N" Command="{Binding NewProjectCommand}"/>
@@ -75,7 +81,7 @@
                     <MenuItem Header="Keine drucken" Command="{Binding DeselectAllForPrintCommand}"/>
                     <MenuItem Header="Nur befuellte drucken" Command="{Binding SelectFilledForPrintCommand}"/>
                     <Separator/>
-                    <MenuItem Header="Ausgewaehltes Etikett umschalten" Command="{Binding TogglePrintCommand}"/>
+                    <MenuItem Header="Ausgewaehltes Etikett/Modul umschalten" Command="{Binding TogglePrintCommand}"/>
                 </MenuItem>
             </MenuItem>
             <MenuItem Header="_Hilfe">
@@ -124,7 +130,7 @@
                         <GroupBox.Header>
                             <TextBlock>
                                 <Run Text="Bearbeite: " FontWeight="Bold"/>
-                                <Run Text="{Binding SelectedLabelInfo, Mode=OneWay}" Foreground="#0078D4"/>
+                                <Run Text="{Binding EditTargetInfo, Mode=OneWay}" Foreground="#0078D4"/>
                             </TextBlock>
                         </GroupBox.Header>
                         <StackPanel Margin="5">
@@ -132,15 +138,7 @@
                                 <Run Text="Format: "/>
                                 <Run Text="{Binding SelectedFormat.DisplayName, Mode=OneWay}"/>
                             </TextBlock>
-                            <TextBlock FontSize="11" Foreground="Gray">
-                                <Run Text="Raster: "/>
-                                <Run Text="{Binding LabelsPerRow, Mode=OneWay}"/>
-                                <Run Text=" x "/>
-                                <Run Text="{Binding LabelRows, Mode=OneWay}"/>
-                                <Run Text=" = "/>
-                                <Run Text="{Binding SelectedFormat.LabelsPerPage, Mode=OneWay}"/>
-                                <Run Text=" Etiketten"/>
-                            </TextBlock>
+                            <TextBlock FontSize="11" Foreground="Gray" Text="{Binding LayoutInfo, Mode=OneWay}"/>
                         </StackPanel>
                     </GroupBox>
 
@@ -232,8 +230,9 @@
                             </StackPanel>
                         </TabItem>
 
-                        <!-- Tab 2: Manuelle Eingabe -->
-                        <TabItem Header="Manuell">
+                        <!-- Tab 2: Manuelle Eingabe (nur ET200SP; MP hat den Modul-Editor) -->
+                        <TabItem Header="Manuell"
+                                 Visibility="{Binding IsModuleBased, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                             <StackPanel Margin="5">
                                 <!-- Header (nur bei +Header Formaten) -->
                                 <StackPanel Visibility="{Binding HasHeader,
@@ -312,6 +311,11 @@
                                 <Label Content="CPU-Name:" Padding="0" Margin="0,0,0,2"/>
                                 <TextBox Text="{Binding SelectedMpModule.CpuName, UpdateSourceTrigger=PropertyChanged}"
                                          Margin="0,0,0,8"/>
+
+                                <CheckBox Content="Modul drucken"
+                                          IsChecked="{Binding SelectedMpModule.IsPrintEnabled}"
+                                          Margin="0,0,0,4"
+                                          ToolTip="Abgewaehlte Module werden nicht gedruckt (Vorschau: ausgegraut)"/>
 
                                 <Separator Margin="0,4"/>
 
@@ -394,7 +398,10 @@
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Links:" VerticalAlignment="Center" Margin="0,2"/>
                                 <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding InputMarginLeft, StringFormat={}{0:0.0}}" Margin="5,2"/>
                                 <TextBlock Grid.Row="1" Grid.Column="3" Text="Unten:" VerticalAlignment="Center" Margin="0,2"/>
-                                <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding InputMarginBottom, StringFormat={}{0:0.0}}" Margin="5,2"/>
+                                <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding InputMarginBottom, StringFormat={}{0:0.0}}" Margin="5,2"
+                                         IsEnabled="{Binding IsMarginBottomEditable}"
+                                         ToolTipService.ShowOnDisabled="True"
+                                         ToolTip="ET200MP: Der Streifenbogen wird von oben gerastert (feste Zeilenhoehen), der untere Rand ergibt sich daraus."/>
                             </Grid>
 
                             <!-- Druckkalibrierung -->
@@ -530,19 +537,21 @@
                                                     Margin="0"
                                                     Cursor="Hand"
                                                     Opacity="{Binding PrintOpacity}"
-                                                    MouseLeftButtonDown="Label_Click">
+                                                    MouseLeftButtonDown="Label_Click"
+                                                    PreviewMouseRightButtonDown="Label_RightClick">
                                                 <!-- Zurueck-spiegeln damit Inhalt lesbar bleibt -->
                                                 <Border.LayoutTransform>
                                                     <ScaleTransform ScaleX="-1" ScaleY="-1"/>
                                                 </Border.LayoutTransform>
+                                                <!-- ContextMenu haengt nicht im Visual Tree: Commands ueber den BindingProxy -->
                                                 <Border.ContextMenu>
                                                     <ContextMenu>
                                                         <MenuItem Header="Kopieren"
                                                                   InputGestureText="Strg+C"
-                                                                  Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                  Command="{Binding Data.CopyCommand, Source={StaticResource Proxy}}"/>
                                                         <MenuItem Header="Einfuegen"
                                                                   InputGestureText="Strg+V"
-                                                                  Command="{Binding DataContext.PasteCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                  Command="{Binding Data.PasteCommand, Source={StaticResource Proxy}}"/>
                                                         <Separator/>
                                                         <MenuItem Header="Druck umschalten" Click="TogglePrint_Click"/>
                                                     </ContextMenu>
@@ -598,18 +607,18 @@
                                                             Visibility="{Binding DataContext.HasHeader,
                                                                          RelativeSource={RelativeSource AncestorType=Window},
                                                                          Converter={StaticResource BoolToVisibilityConverter}}">
-                                                        <TextBlock Text="{Binding Header}"
-                                                                   FontSize="{Binding DataContext.HeaderPreviewFontSize, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                   FontFamily="{Binding PreviewFontFamily}"
-                                                                   FontWeight="{Binding DataContext.HeaderPreviewFontWeight, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                   Foreground="#4A148C"
-                                                                   HorizontalAlignment="Center"
-                                                                   VerticalAlignment="Center"
-                                                                   TextTrimming="CharacterEllipsis">
-                                                            <TextBlock.LayoutTransform>
-                                                                <RotateTransform Angle="-90"/>
-                                                            </TextBlock.LayoutTransform>
-                                                        </TextBlock>
+                                                        <!-- Shrink-to-fit wie im Druck (PrintService.FitBox) -->
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                                            <TextBlock Text="{Binding Header}"
+                                                                       FontSize="{Binding DataContext.HeaderPreviewFontSize, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                       FontFamily="{Binding PreviewFontFamily}"
+                                                                       FontWeight="{Binding DataContext.HeaderPreviewFontWeight, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                       Foreground="#4A148C">
+                                                                <TextBlock.LayoutTransform>
+                                                                    <RotateTransform Angle="-90"/>
+                                                                </TextBlock.LayoutTransform>
+                                                            </TextBlock>
+                                                        </Viewbox>
                                                     </Border>
 
                                                     <!-- Textinhalt -->
@@ -629,25 +638,20 @@
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </StackPanel.Style>
-                                                            <TextBlock Text="{Binding Line1}"
-                                                                       FontSize="{Binding PreviewFontSize}"
-                                                                       FontWeight="{Binding PreviewFontWeight}"
-                                                                       FontStyle="{Binding PreviewFontStyle}"
-                                                                       FontFamily="{Binding PreviewFontFamily}"
-                                                                       TextTrimming="CharacterEllipsis"
-                                                                       HorizontalAlignment="Center"
-                                                                       Foreground="#1A237E"/>
-                                                            <TextBlock Text="{Binding Line2}"
-                                                                       FontSize="{Binding PreviewFontSize}"
-                                                                       FontWeight="{Binding PreviewFontWeight}"
-                                                                       FontStyle="{Binding PreviewFontStyle}"
-                                                                       FontFamily="{Binding PreviewFontFamily}"
-                                                                       TextTrimming="CharacterEllipsis"
-                                                                       HorizontalAlignment="Center"
-                                                                       Foreground="#37474F">
-                                                                <TextBlock.Style>
+                                                            <!-- Leerslots entfernt (Line1Display), shrink-to-fit wie im Druck -->
+                                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" MaxWidth="90">
+                                                                <TextBlock Text="{Binding Line1Display}"
+                                                                           FontSize="{Binding PreviewFontSize}"
+                                                                           FontWeight="{Binding PreviewFontWeight}"
+                                                                           FontStyle="{Binding PreviewFontStyle}"
+                                                                           FontFamily="{Binding PreviewFontFamily}"
+                                                                           HorizontalAlignment="Center"
+                                                                           Foreground="#1A237E"/>
+                                                            </Viewbox>
+                                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" MaxWidth="90">
+                                                                <Viewbox.Style>
                                                                     <!-- Einzeilige Formate drucken Line2 nicht — Preview = Druck -->
-                                                                    <Style TargetType="TextBlock">
+                                                                    <Style TargetType="Viewbox">
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding DataContext.IsDoubleLine,
                                                                                          RelativeSource={RelativeSource AncestorType=Window}}"
@@ -656,8 +660,15 @@
                                                                             </DataTrigger>
                                                                         </Style.Triggers>
                                                                     </Style>
-                                                                </TextBlock.Style>
-                                                            </TextBlock>
+                                                                </Viewbox.Style>
+                                                                <TextBlock Text="{Binding Line2Display}"
+                                                                           FontSize="{Binding PreviewFontSize}"
+                                                                           FontWeight="{Binding PreviewFontWeight}"
+                                                                           FontStyle="{Binding PreviewFontStyle}"
+                                                                           FontFamily="{Binding PreviewFontFamily}"
+                                                                           HorizontalAlignment="Center"
+                                                                           Foreground="#37474F"/>
+                                                            </Viewbox>
                                                         </StackPanel>
 
                                                         <!-- VERTIKAL: Einzelne Adress-Rechtecke pro Zeile -->
@@ -694,18 +705,18 @@
                                                                     <DataTemplate>
                                                                         <Border BorderBrush="#A0A0A0" BorderThickness="0.3"
                                                                                 Margin="0">
-                                                                            <TextBlock Text="{Binding}"
-                                                                                       FontSize="{Binding DataContext.PreviewFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                                       FontWeight="{Binding DataContext.PreviewFontWeight, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                                       FontStyle="{Binding DataContext.PreviewFontStyle, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                                       FontFamily="{Binding DataContext.PreviewFontFamily, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                                       Foreground="#1A237E"
-                                                                                       HorizontalAlignment="Center"
-                                                                                       VerticalAlignment="Center">
-                                                                                <TextBlock.LayoutTransform>
-                                                                                    <RotateTransform Angle="-90"/>
-                                                                                </TextBlock.LayoutTransform>
-                                                                            </TextBlock>
+                                                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                                                                <TextBlock Text="{Binding}"
+                                                                                           FontSize="{Binding DataContext.PreviewFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                           FontWeight="{Binding DataContext.PreviewFontWeight, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                           FontStyle="{Binding DataContext.PreviewFontStyle, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                           FontFamily="{Binding DataContext.PreviewFontFamily, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                           Foreground="#1A237E">
+                                                                                    <TextBlock.LayoutTransform>
+                                                                                        <RotateTransform Angle="-90"/>
+                                                                                    </TextBlock.LayoutTransform>
+                                                                                </TextBlock>
+                                                                            </Viewbox>
                                                                         </Border>
                                                                     </DataTemplate>
                                                                 </ItemsControl.ItemTemplate>
@@ -721,18 +732,18 @@
                                                                     <DataTemplate>
                                                                         <Border BorderBrush="#A0A0A0" BorderThickness="0.3"
                                                                                 Margin="0">
-                                                                            <TextBlock Text="{Binding}"
-                                                                                       FontSize="{Binding DataContext.PreviewFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                                       FontWeight="{Binding DataContext.PreviewFontWeight, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                                       FontStyle="{Binding DataContext.PreviewFontStyle, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                                       FontFamily="{Binding DataContext.PreviewFontFamily, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                                       Foreground="#37474F"
-                                                                                       HorizontalAlignment="Center"
-                                                                                       VerticalAlignment="Center">
-                                                                                <TextBlock.LayoutTransform>
-                                                                                    <RotateTransform Angle="-90"/>
-                                                                                </TextBlock.LayoutTransform>
-                                                                            </TextBlock>
+                                                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                                                                <TextBlock Text="{Binding}"
+                                                                                           FontSize="{Binding DataContext.PreviewFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                           FontWeight="{Binding DataContext.PreviewFontWeight, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                           FontStyle="{Binding DataContext.PreviewFontStyle, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                           FontFamily="{Binding DataContext.PreviewFontFamily, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                           Foreground="#37474F">
+                                                                                    <TextBlock.LayoutTransform>
+                                                                                        <RotateTransform Angle="-90"/>
+                                                                                    </TextBlock.LayoutTransform>
+                                                                                </TextBlock>
+                                                                            </Viewbox>
                                                                         </Border>
                                                                     </DataTemplate>
                                                                 </ItemsControl.ItemTemplate>
@@ -786,7 +797,19 @@
                                 <Border.Effect>
                                     <DropShadowEffect ShadowDepth="3" Opacity="0.3"/>
                                 </Border.Effect>
-                                <controls:MpPreviewControl DataContext="{Binding}"/>
+                                <controls:MpPreviewControl x:Name="MpPreview" DataContext="{Binding}">
+                                    <controls:MpPreviewControl.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Kopieren" InputGestureText="Strg+C"
+                                                      Command="{Binding Data.CopyCommand, Source={StaticResource Proxy}}"/>
+                                            <MenuItem Header="Einfuegen" InputGestureText="Strg+V"
+                                                      Command="{Binding Data.PasteCommand, Source={StaticResource Proxy}}"/>
+                                            <Separator/>
+                                            <MenuItem Header="Druck umschalten (ausgewaehltes Modul)"
+                                                      Command="{Binding Data.TogglePrintCommand, Source={StaticResource Proxy}}"/>
+                                        </ContextMenu>
+                                    </controls:MpPreviewControl.ContextMenu>
+                                </controls:MpPreviewControl>
                             </Border>
                         </Border>
                     </ScrollViewer>
@@ -803,12 +826,7 @@
             </StatusBarItem>
             <Separator/>
             <StatusBarItem>
-                <TextBlock>
-                    <Run Text="Etikett: "/>
-                    <Run Text="{Binding SelectedLabel.DisplayPosition, Mode=OneWay, FallbackValue=-}"/>
-                    <Run Text=" / "/>
-                    <Run Text="{Binding SelectedFormat.LabelsPerPage, Mode=OneWay}"/>
-                </TextBlock>
+                <TextBlock Text="{Binding StatusSelectionInfo, Mode=OneWay}"/>
             </StatusBarItem>
             <Separator/>
             <StatusBarItem>

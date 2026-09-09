@@ -1,8 +1,11 @@
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using ETPrinter.Models;
 using ETPrinter.Services;
 using ETPrinter.ViewModels;
@@ -11,8 +14,9 @@ namespace ETPrinter.Controls;
 
 /// <summary>
 /// Canvas-basierte Vorschau fuer ET200MP Module.
-/// Der A4-Bogen hat 10 Streifen-Positionen: Band 0 (oben, Header 25.7mm) und
-/// Band 1 (unten, Header 20.6mm) mit je 5 Spalten. Jede Position = 1 Modul.
+/// Der A4-Bogen hat ModulesPerPage Streifen-Positionen: Band 0 (oben, Header 25.7mm)
+/// und Band 1 (unten, Header 20.6mm) mit je ColumnsPerPage Spalten (35mm: 5, 25mm: 10).
+/// Jede Position = 1 Modul.
 /// </summary>
 public partial class MpPreviewControl : UserControl
 {
@@ -31,24 +35,64 @@ public partial class MpPreviewControl : UserControl
     private static readonly Brush CellBorderBrush = new SolidColorBrush(Color.FromRgb(160, 160, 160));
     private static readonly Brush SelectedCellBorderBrush = new SolidColorBrush(Color.FromRgb(0, 120, 212));
 
+    // Entprelltes Rendern: jeder Tastendruck im Header/einer Zelle und jeder
+    // Seitenwechsel (Clear + 10-20x Add) loeste frueher einen kompletten Neuaufbau
+    // von 1000-1700 Canvas-Elementen aus — pro Ereignis.
+    private readonly DispatcherTimer _renderTimer;
+    private MainViewModel? _vm;
+    private NotifyCollectionChangedEventHandler? _collectionHandler;
+    private PropertyChangedEventHandler? _propertyHandler;
+
+    // Opacity der Elemente des gerade gezeichneten Moduls (0.4 = vom Druck ausgeschlossen)
+    private double _moduleOpacity = 1.0;
+
     public MpPreviewControl()
     {
         InitializeComponent();
+        _renderTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(40) };
+        _renderTimer.Tick += (_, _) => { _renderTimer.Stop(); Render(); };
         DataContextChanged += (_, _) => BindToModules();
     }
 
     private void BindToModules()
     {
-        if (DataContext is MainViewModel vm)
+        // Altes ViewModel abmelden — sonst rendert jede frueher gebundene Instanz mit
+        if (_vm is not null)
         {
-            vm.MpModules.CollectionChanged += (_, _) => Render();
-            vm.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName is nameof(vm.SelectedMpModule)
-                                    or nameof(vm.SelectedMpCell)
-                                    or nameof(vm.MpPreviewRefreshToken))
-                    Render();
-            };
+            if (_collectionHandler is not null) _vm.MpModules.CollectionChanged -= _collectionHandler;
+            if (_propertyHandler is not null) _vm.PropertyChanged -= _propertyHandler;
+        }
+        _vm = DataContext as MainViewModel;
+        if (_vm is null) return;
+
+        _collectionHandler = (_, _) => ScheduleRender();
+        _propertyHandler = (_, e) =>
+        {
+            if (e.PropertyName is nameof(MainViewModel.SelectedMpModule)
+                                or nameof(MainViewModel.SelectedMpCell)
+                                or nameof(MainViewModel.MpPreviewRefreshToken)
+                                or nameof(MainViewModel.IsModuleBased))
+                ScheduleRender();
+        };
+        _vm.MpModules.CollectionChanged += _collectionHandler;
+        _vm.PropertyChanged += _propertyHandler;
+        Render();
+    }
+
+    /// <summary>Render-Anforderung buendeln (mehrere Ereignisse -> ein Neuaufbau).</summary>
+    public void ScheduleRender()
+    {
+        _renderTimer.Stop();
+        _renderTimer.Start();
+    }
+
+    /// <summary>Ausstehenden Neuaufbau sofort ausfuehren (Test-Automation: Screenshot
+    /// direkt nach einer Aenderung, bevor der Debounce-Timer gefeuert hat).</summary>
+    public void FlushRender()
+    {
+        if (_renderTimer.IsEnabled)
+        {
+            _renderTimer.Stop();
             Render();
         }
     }
@@ -86,11 +130,12 @@ public partial class MpPreviewControl : UserControl
 
         foreach (var mod in vm.MpModules)
         {
-            // 10 Positionen: Band 0 oben (hoher Header), Band 1 unten (flacher Header)
+            // Positionen: Band 0 oben (hoher Header), Band 1 unten (flacher Header)
             int band = familyInfo.BandOf(mod.ModuleIndex);
             int col = familyInfo.ColumnOf(mod.ModuleIndex);
             double modX = marginL + col * moduleW;
             bool isModSelected = mod == vm.SelectedMpModule;
+            _moduleOpacity = mod.PrintOpacity;
 
             // Katalog-Belegung (konkretes Siemens-Modul) oder Varianten-Default
             var definitions = MpModuleLayoutFactory.GetDefinitions(mod.GetModule());
@@ -98,11 +143,12 @@ public partial class MpPreviewControl : UserControl
             double modHeaderH = band == 0 ? headerH : band2HeaderH;
             double headerY = band == 0 ? marginT : marginT + headerH + bandDataH;
 
-            // Header — globaler Header-Style aus Settings.
+            // Header — globaler Header-Style aus Settings, mehrzeilig wie im Druck.
             double headerFs = settings.HeaderFontSize * PtToPx;
             DrawCell(modX, headerY, moduleW, modHeaderH,
                 mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: headerFs,
                 isBold: settings.HeaderIsBold, fontFamily: mod.FontFamily,
+                wrap: true,
                 clickAction: () => SelectModule(vm, mod));
 
             double dataStartY = headerY + modHeaderH;
@@ -128,6 +174,7 @@ public partial class MpPreviewControl : UserControl
                 PreviewCanvas.Children.Add(checkedFrame);
             }
         }
+        _moduleOpacity = 1.0;
     }
 
     private void RenderHalfCells(MainViewModel vm, MpModuleViewModel mod,
@@ -202,6 +249,7 @@ public partial class MpPreviewControl : UserControl
         double fontSize = 5, bool rotate = false, bool isBold = false,
         bool isItalic = false,
         string fontFamily = "Arial",
+        bool wrap = false,
         Brush? foreground = null, Action? clickAction = null)
     {
         var rect = new Rectangle
@@ -210,7 +258,8 @@ public partial class MpPreviewControl : UserControl
             Fill = isSelected ? SelectedBrush : background,
             Stroke = isSelected ? SelectedCellBorderBrush : CellBorderBrush,
             StrokeThickness = isSelected ? 1.5 : 0.3,
-            Cursor = clickAction != null ? Cursors.Hand : null
+            Cursor = clickAction != null ? Cursors.Hand : null,
+            Opacity = _moduleOpacity
         };
         if (clickAction != null)
             rect.MouseLeftButtonDown += (_, _) => clickAction();
@@ -222,7 +271,7 @@ public partial class MpPreviewControl : UserControl
         {
             var tb = new TextBlock
             {
-                Text = text.Replace("\n", " / "),
+                Text = wrap ? text.Replace("\r\n", "\n") : text.Replace("\n", " / "),
                 FontSize = fontSize,
                 FontWeight = isBold ? FontWeights.Bold : FontWeights.Normal,
                 FontStyle = isItalic ? FontStyles.Italic : FontStyles.Normal,
@@ -232,6 +281,12 @@ public partial class MpPreviewControl : UserControl
                 MaxWidth = rotate ? h - 2 : w - 2,
                 MaxHeight = rotate ? w - 2 : h - 2
             };
+            if (wrap)
+            {
+                tb.TextWrapping = TextWrapping.Wrap;
+                tb.TextAlignment = TextAlignment.Center;
+                tb.TextTrimming = TextTrimming.None;
+            }
 
             // Wie im Druck (RenderRotatedText): Border als Container zentriert den
             // Text auf beiden Achsen — identische Struktur garantiert Preview = Druck.
@@ -239,7 +294,8 @@ public partial class MpPreviewControl : UserControl
             {
                 Width = w, Height = h,
                 Child = tb,
-                IsHitTestVisible = false
+                IsHitTestVisible = false,
+                Opacity = _moduleOpacity
             };
             tb.HorizontalAlignment = HorizontalAlignment.Center;
             tb.VerticalAlignment = VerticalAlignment.Center;
@@ -262,9 +318,7 @@ public partial class MpPreviewControl : UserControl
         }
         else if ((mods & ModifierKeys.Control) == ModifierKeys.Control)
         {
-            mod.IsChecked = !mod.IsChecked;
-            vm.SelectedMpModule = mod;
-            vm.NotifyMpPreviewChanged();
+            vm.ToggleCheck(mod);
         }
         else
         {
@@ -285,10 +339,8 @@ public partial class MpPreviewControl : UserControl
         else if ((mods & ModifierKeys.Control) == ModifierKeys.Control)
         {
             // Strg+Klick: Modul-Markierung togglen
-            mod.IsChecked = !mod.IsChecked;
-            vm.SelectedMpModule = mod;
+            vm.ToggleCheck(mod);
             vm.SelectedMpCell = cell;
-            vm.NotifyMpPreviewChanged();
         }
         else
         {

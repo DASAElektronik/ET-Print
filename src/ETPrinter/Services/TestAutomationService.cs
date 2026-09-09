@@ -151,6 +151,7 @@ public class TestAutomationService : IDisposable
         ["mp-state"] = new("mp-state", "Ausgewaehltes Modul (JSON)", (s, _) => s.GetMpState()),
         ["set-generator"] = new("set-generator <name> <typ> <byte> <n>", "Generator-Felder setzen", (s, a) => s.SetGenerator(a)),
         ["set-font"] = new("set-font <groesse> <fett 0/1> <kursiv 0/1> [schriftart]", "Schrift-Eingabefelder setzen (Live-Apply)", (s, a) => s.SetFont(a)),
+        ["toggle-print"] = new("toggle-print", "Druckflag des ausgewaehlten Etiketts/Moduls umschalten", (s, _) => s.TogglePrint()),
         ["print-state"] = new("print-state", "Druckentscheidung: Seiten im Dokument + druckbare Etiketten/Module je Seite (JSON)", (s, _) => s.GetPrintState()),
         ["trigger-generate"] = new("trigger-generate", "Generieren + Uebertragen", (s, _) => s.TriggerGenerate()),
         ["save-project"] = new("save-project <pfad.etprint>", "Projekt speichern", (s, a) => s.SaveProject(a)),
@@ -217,9 +218,10 @@ public class TestAutomationService : IDisposable
         if (string.IsNullOrWhiteSpace(path))
             path = Path.Combine(Path.GetTempPath(), "etprinter_screenshot.png");
 
-        // Fenster nach vorne bringen
+        // Fenster nach vorne bringen, entprellte Vorschau-Renders sofort ausfuehren
         _mainWindow.Activate();
         _mainWindow.Focus();
+        (_mainWindow as MainWindow)?.FlushPreview();
 
         // WPF Visual rendern
         var dpi = VisualTreeHelper.GetDpi(_mainWindow);
@@ -432,9 +434,12 @@ public class TestAutomationService : IDisposable
                 _viewModel.AddPageCommand.Execute(null);
                 break;
             case "remove":
-                if (_viewModel.RemovePageCommand.CanExecute(null))
-                    _viewModel.RemovePageCommand.Execute(null);
-                else return Error("Letzte Seite kann nicht entfernt werden");
+                if (!_viewModel.RemovePageCommand.CanExecute(null))
+                    return Error("Letzte Seite kann nicht entfernt werden");
+                // Rueckfrage unterdruecken (headless)
+                _viewModel.SuppressContentLossConfirm = true;
+                try { _viewModel.RemovePageCommand.Execute(null); }
+                finally { _viewModel.SuppressContentLossConfirm = false; }
                 break;
         }
         return Ok($"Seite {_viewModel.CurrentPageIndex + 1}/{_viewModel.PageCount}");
@@ -442,8 +447,17 @@ public class TestAutomationService : IDisposable
 
     private string ClearAll()
     {
-        _viewModel.ClearAllCommand.Execute(null);
+        _viewModel.SuppressContentLossConfirm = true;
+        try { _viewModel.ClearAllCommand.Execute(null); }
+        finally { _viewModel.SuppressContentLossConfirm = false; }
         return Ok("Alle Etiketten geloescht");
+    }
+
+    private string TogglePrint()
+    {
+        if (!_viewModel.TogglePrintCommand.CanExecute(null)) return Error("Keine Auswahl");
+        _viewModel.TogglePrintCommand.Execute(null);
+        return Ok(_viewModel.StatusMessage);
     }
 
     private string NewProject()

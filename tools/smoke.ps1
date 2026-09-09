@@ -116,6 +116,18 @@ try {
     $s = Get-State
     Assert-Eq "ET200SP" $s.productFamily "SP Familie"
     Assert-Eq 3 $s.filledLabels "SP befuellte Etiketten"
+    # AP2: clear-all headless, dann Inhalt wiederherstellen
+    Invoke-Cmd "clear-all" | Out-Null
+    Assert-Eq 0 (Get-State).filledLabels "SP clear-all leert alles"
+    Invoke-Cmd "select-label 0" | Out-Null
+    Invoke-Cmd "set-generator M1 DI 0 2" | Out-Null
+    Invoke-Cmd "trigger-generate" | Out-Null
+    Invoke-Cmd "set-generator M2 AI 10 4" | Out-Null
+    Invoke-Cmd "trigger-generate" | Out-Null
+    Invoke-Cmd "select-label 5" | Out-Null
+    Invoke-Cmd "set-input Kopf|Zeile 1|Zeile 2" | Out-Null
+    Invoke-Cmd "apply" | Out-Null
+    Assert-Eq 3 (Get-State).filledLabels "SP Inhalt wiederhergestellt"
     Assert-True $s.isDirty "SP isDirty nach Eingabe"
     Invoke-Cmd "screenshot $OutDir\sp_preview.png" | Out-Null
     # Leere Seite anhaengen: darf im Druck nicht auftauchen (AP1 1.4)
@@ -177,6 +189,19 @@ try {
     Assert-Eq 9 $m.fontSize "MP Modul 0 Schriftgroesse 9"
     Assert-True ($m.isBold -and $m.isItalic) "MP Modul 0 fett + kursiv"
     Invoke-Cmd "set-font 7 0 0" | Out-Null
+    # AP2 2.5: Druckflag im MP-Modus
+    Invoke-Cmd "select-module 7" | Out-Null
+    Invoke-Cmd "toggle-print" | Out-Null
+    Assert-True (-not (Get-MpState).isPrintEnabled) "Modul 7 vom Druck ausgeschlossen"
+    $ps = Invoke-Cmd "print-state" | ConvertFrom-Json
+    Assert-Eq 2 $ps.printablePerPage[0] "MP druckbare Module nach Ausschluss"
+    Invoke-Cmd "toggle-print" | Out-Null
+    Assert-Eq 3 ((Invoke-Cmd "print-state" | ConvertFrom-Json).printablePerPage[0]) "MP druckbare Module nach Wiederaufnahme"
+    # AP2 2.3: remove-page / clear-all laufen headless ohne Rueckfrage
+    Invoke-Cmd "add-page" | Out-Null
+    Assert-Eq 2 (Get-State).pageCount "MP Seite hinzugefuegt"
+    Invoke-Cmd "remove-page" | Out-Null
+    Assert-Eq 1 (Get-State).pageCount "MP Seite entfernt"
     Invoke-Cmd "screenshot $OutDir\mp_preview.png" | Out-Null
     $rp = Invoke-Cmd "render-print $OutDir\mp_print" | ConvertFrom-Json
     Assert-Eq 1 $rp.pages "MP render-print Seiten"
