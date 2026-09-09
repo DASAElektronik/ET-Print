@@ -11,6 +11,15 @@
 
 ## 2026-09-09 - Projekttag 7 (Abschluss v3.1, siehe docs/ABSCHLUSSPLAN.md)
 
+### AP7: Release v3.1.0
+- App-Icon `Assets/ETPrinter.ico` (generiert: Beschriftungsstreifen in DASA-Blau, 16-256 px).
+- NuGet: PdfPig 0.1.16, ClosedXML 0.105.1.
+- `tools/register-etprint.ps1`: .etprint-Dateizuordnung per HKCU (manuell, -Remove zum Entfernen).
+- Publish-Profil win-x64 (self-contained, single-file, ReadyToRun) -> `publish/ET-Printer.exe`,
+  ProductVersion 3.1.0+<commit>.
+- GitHub-Release `v3.1.0` (DASAElektronik/ET-Print) mit EXE + Registrierungs-Script,
+  Smoke-Test der Release-EXE 82/82.
+
 ### AP9a: Katalog-Rest (Analogmodule)
 - Vier 35mm-Analogmodule per Modulname waehlbar: AI 8xU/I/RTD/TC ST (6ES7531-7KF00),
   AI 8xU/I HF (6ES7531-7NF00), AI 8xU/I/R/RTD BA (6ES7531-7QF00), AQ 4xU/I ST

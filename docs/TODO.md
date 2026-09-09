@@ -270,7 +270,7 @@
 - [x] AP4 Import-Robustheit CSV/Excel/PDF + async + Auto-Variante (197 Tests, Smoke 62/62)
 - [x] AP5 Komfort/UX: Fensterzustand, Drag&Drop, Tastatur, Zoom-Fit, Wertebereiche, Panel-Umbau, MP-Tab, Info (210 Tests, Smoke 74/74)
 - [x] AP6 Doku-Konsolidierung: ARCHITECTURE/FEATURES/PRODUCT neu, README, PRINT-FORMATS bereinigt, Version 3.1.0
-- [ ] AP7 Release v3.1
+- [x] AP7 Release v3.1.0 (Icon, NuGet, Publish, register-etprint.ps1, GitHub-Release mit EXE, Smoke 82/82)
 - [x] AP8 25mm-BA-Module datenblattverifiziert, 14 Katalog-Eintraege, MP25-Layouts mit Struktur (Stahllineal bleibt offen)
 - [ ] AP9 Katalog-Rest [x] (4 Analogmodule, 18 Eintraege), MainViewModel-Zerlegung [ ], Undo/Redo [ ], inkrementelles Rendering [ ]
 
