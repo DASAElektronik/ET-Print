@@ -37,6 +37,10 @@ public static class PrintService
 
         foreach (var pageLabels in pages)
         {
+            // Leere Seiten ueberspringen — jede Seite ist ein Siemens-Etikettenbogen.
+            // Auto-Advance legt nach dem letzten Etikett immer eine neue Seite an,
+            // ohne diesen Skip endete praktisch jeder Druck mit einem Leerbogen.
+            if (!pageLabels.Any(IsPrintable)) continue;
             var page = CreatePage(pageLabels, format, settings, printGridLines,
                 calibrationOffsetX, calibrationOffsetY);
             AddPage(document, page);
@@ -44,6 +48,12 @@ public static class PrintService
 
         return document;
     }
+
+    /// <summary>Einzige Druck-Entscheidung fuer ET200SP-Etiketten (Seite, Schnittkante, Inhalt).</summary>
+    public static bool IsPrintable(LabelViewModel label) => label.HasText && label.IsPrintEnabled;
+
+    /// <summary>Einzige Druck-Entscheidung fuer ET200MP-Module.</summary>
+    public static bool IsPrintable(MpModuleViewModel module) => module.IsPrintEnabled && module.HasPrintableContent;
 
     private static FixedDocument NewDocument()
     {
@@ -182,7 +192,7 @@ public static class PrintService
             }
 
             // Schnittkanten + Inhalt nur bei befuellten und druckaktiven Etiketten
-            if (label.HasText && label.IsPrintEnabled)
+            if (IsPrintable(label))
             {
                 if (printGridLines)
                     DrawCellBorder(canvas, x, y, groupW, cellH);
@@ -561,6 +571,7 @@ public static class PrintService
 
         foreach (var pageModules in pages)
         {
+            if (!pageModules.Any(IsPrintable)) continue; // Leerbogen vermeiden
             var page = CreateMpPage(pageModules, format, settings, printGridLines,
                 calibrationOffsetX, calibrationOffsetY);
             AddPage(document, page);
@@ -601,8 +612,9 @@ public static class PrintService
 
         foreach (var mod in modules)
         {
-            if (!mod.IsPrintEnabled) continue;
-            if (!mod.HasText) continue; // leere Module komplett ueberspringen (keine Schnittkanten)
+            // Leere Module komplett ueberspringen (keine Schnittkanten). Reine
+            // Pinout-Streifen (SIWAREX) zaehlen als Inhalt — siehe HasPrintableContent.
+            if (!IsPrintable(mod)) continue;
 
             // 10 Streifen-Positionen pro A4: Band 0 (oben, hoher Header) und
             // Band 1 (unten, flacher Header) mit je ColumnsPerPage Spalten.
@@ -652,7 +664,7 @@ public static class PrintService
                 string text = def.IsEditable ? cellVm.Text : def.Label;
                 if (!string.IsNullOrWhiteSpace(text))
                 {
-                    var tb = CreateTextBlock(text, mod.FontSize, mod.IsBold, false, mod.FontFamily);
+                    var tb = CreateTextBlock(text, mod.FontSize, mod.IsBold, mod.IsItalic, mod.FontFamily);
                     if (format.IsVertical && def.IsEditable)
                     {
                         tb.LayoutTransform = new RotateTransform(-90);
@@ -681,9 +693,9 @@ public static class PrintService
             {
                 double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
                 RenderRotatedText(canvas, mod.NetAddress1, col2X, dataStartY, col2W, blockH,
-                    mod.FontSize, mod.FontFamily);
+                    mod.FontSize, mod.FontFamily, mod.IsItalic);
                 RenderRotatedText(canvas, mod.NetAddress2, col2X, dataStartY + blockH, col2W, blockH,
-                    mod.FontSize, mod.FontFamily);
+                    mod.FontSize, mod.FontFamily, mod.IsItalic);
                 if (printGridLines)
                 {
                     DrawCellBorder(canvas, col2X, dataStartY, col2W, blockH);
@@ -694,7 +706,7 @@ public static class PrintService
             // Col 3: CPU-Name
             double col3X = col2X + col2W;
             RenderRotatedText(canvas, mod.CpuName, col3X, dataStartY, col3W, bandDataH,
-                mod.FontSize, mod.FontFamily);
+                mod.FontSize, mod.FontFamily, mod.IsItalic);
             if (printGridLines)
                 DrawCellBorder(canvas, col3X, dataStartY, col3W, bandDataH);
         }
@@ -707,11 +719,11 @@ public static class PrintService
     }
 
     private static void RenderRotatedText(Canvas canvas, string text,
-        double x, double y, double w, double h, int fontSize, string fontFamily)
+        double x, double y, double w, double h, int fontSize, string fontFamily, bool isItalic = false)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
 
-        var tb = CreateTextBlock(text, fontSize, false, false, fontFamily);
+        var tb = CreateTextBlock(text, fontSize, false, isItalic, fontFamily);
         tb.LayoutTransform = new RotateTransform(-90);
         tb.HorizontalAlignment = HorizontalAlignment.Center;
         tb.VerticalAlignment = VerticalAlignment.Center;

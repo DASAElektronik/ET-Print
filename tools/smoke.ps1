@@ -88,6 +88,18 @@ try {
     Invoke-Cmd "resize 1600x1000" | Out-Null
     Invoke-Cmd "zoom 1.0" | Out-Null
 
+    # --- Szenario 0: "Neu" bei aktivem Standardformat (AP1 1.1) ---------------
+    Write-Host "`n[0] Neu bei aktivem Standardformat" -ForegroundColor Yellow
+    Invoke-Cmd "new-project" | Out-Null
+    Invoke-Cmd "select-format HorizontalDouble" | Out-Null
+    Invoke-Cmd "select-label 0" | Out-Null
+    Invoke-Cmd "set-text Zeile A|Zeile B" | Out-Null
+    Assert-Eq 1 (Get-State).filledLabels "Vor Neu: 1 Etikett befuellt"
+    Invoke-Cmd "new-project" | Out-Null
+    $s = Get-State
+    Assert-Eq 0 $s.filledLabels "Nach Neu (gleiches Format): 0 Etiketten"
+    Assert-True (-not $s.isDirty) "Nach Neu nicht dirty"
+
     # --- Szenario 1: ET200SP ------------------------------------------------
     Write-Host "`n[1] ET200SP Vertikal + Kopfzeile" -ForegroundColor Yellow
     Invoke-Cmd "new-project" | Out-Null
@@ -106,8 +118,14 @@ try {
     Assert-Eq 3 $s.filledLabels "SP befuellte Etiketten"
     Assert-True $s.isDirty "SP isDirty nach Eingabe"
     Invoke-Cmd "screenshot $OutDir\sp_preview.png" | Out-Null
+    # Leere Seite anhaengen: darf im Druck nicht auftauchen (AP1 1.4)
+    Invoke-Cmd "add-page" | Out-Null
+    Invoke-Cmd "prev-page" | Out-Null
+    Assert-Eq 2 (Get-State).pageCount "SP 2 Seiten im Projekt"
+    $ps = Invoke-Cmd "print-state" | ConvertFrom-Json
+    Assert-Eq 1 $ps.pagesInDocument "SP Druckdokument ohne Leerseite"
     $rp = Invoke-Cmd "render-print $OutDir\sp_print" | ConvertFrom-Json
-    Assert-True ($rp.pages -ge 1) "SP render-print Seiten = $($rp.pages)"
+    Assert-Eq 1 $rp.pages "SP render-print Seiten"
     Assert-Eq $rp.pages (Count-Png "$OutDir\sp_print") "SP PNG-Dateien"
     $spFile = "$OutDir\sp.etprint"
     Invoke-Cmd "save-project $spFile" | Out-Null
@@ -136,9 +154,32 @@ try {
     Invoke-Cmd "set-module-cpu PLC1" | Out-Null
     Invoke-Cmd "set-generator DQ16 DO 4 2" | Out-Null
     Invoke-Cmd "trigger-generate" | Out-Null
+    # AP1 1.2: SIWAREX (nur feste Labels) zaehlt als druckbar -> 3 Module auf Seite 1
+    $ps = Invoke-Cmd "print-state" | ConvertFrom-Json
+    Assert-Eq 3 $ps.printablePerPage[0] "MP druckbare Module (DI32 + SIWAREX + DQ16)"
+    # AP1 1.3: Variantenwechsel loescht nicht passenden Artikel
+    Invoke-Cmd "select-module 7" | Out-Null
+    Assert-Eq "6ES7522-1BH00-0AB0" (Get-MpState).article "Modul 7 Artikel vor Variantenwechsel"
+    Invoke-Cmd "set-module-variant DI_DQ_32" | Out-Null
+    Assert-Eq "" (Get-MpState).article "Modul 7 Artikel nach Variantenwechsel geloescht"
+    Invoke-Cmd "set-module-article 6ES7522-1BH00-0AB0" | Out-Null
+    Assert-Eq "DI_DQ_16" (Get-MpState).variant "Modul 7 Variante folgt Artikel"
+    # AP1 1.8: Zellauswahl folgt Modulwechsel
+    Invoke-Cmd "select-module 0" | Out-Null
+    Invoke-Cmd "select-cell 0" | Out-Null
+    Assert-Eq 0 (Get-MpState).selectedCell "Zelle 0 in Modul 0 gewaehlt"
+    Invoke-Cmd "select-module 1" | Out-Null
+    Assert-True ($null -eq (Get-MpState).selectedCell) "Zellauswahl nach Modulwechsel leer"
+    # AP1 1.9: Schrift wirkt auf MP-Modul
+    Invoke-Cmd "select-module 0" | Out-Null
+    Invoke-Cmd "set-font 9 1 1" | Out-Null
+    $m = Get-MpState
+    Assert-Eq 9 $m.fontSize "MP Modul 0 Schriftgroesse 9"
+    Assert-True ($m.isBold -and $m.isItalic) "MP Modul 0 fett + kursiv"
+    Invoke-Cmd "set-font 7 0 0" | Out-Null
     Invoke-Cmd "screenshot $OutDir\mp_preview.png" | Out-Null
     $rp = Invoke-Cmd "render-print $OutDir\mp_print" | ConvertFrom-Json
-    Assert-True ($rp.pages -ge 1) "MP render-print Seiten = $($rp.pages)"
+    Assert-Eq 1 $rp.pages "MP render-print Seiten"
     $mpFile = "$OutDir\mp.etprint"
     Invoke-Cmd "save-project $mpFile" | Out-Null
     Assert-True (Test-Path $mpFile) "MP Projekt gespeichert"
@@ -163,6 +204,8 @@ try {
     Invoke-Cmd "screenshot $OutDir\mp25_preview.png" | Out-Null
     $rp = Invoke-Cmd "render-print $OutDir\mp25_print" | ConvertFrom-Json
     Assert-True ($rp.pages -ge 1) "25mm render-print Seiten = $($rp.pages)"
+    $mp25File = "$OutDir\mp25.etprint"
+    Invoke-Cmd "save-project $mp25File" | Out-Null
 
     # --- Szenario 4: Persistenz-Roundtrip -----------------------------------
     Write-Host "`n[4] Persistenz-Roundtrip" -ForegroundColor Yellow
@@ -183,6 +226,13 @@ try {
     Assert-Eq 32 $m.filledCells "MP Zellen nach Laden"
     Invoke-Cmd "select-module 6" | Out-Null
     Assert-Eq "SIWAREX_WP52x" (Get-MpState).variant "SIWAREX nach Laden"
+    # AP1 1.11: 25mm-Projekt aus 35mm-Zustand laden -> Varianten/Artikel der 25mm-Familie
+    Invoke-Cmd "load-project $mp25File" | Out-Null
+    $s = Get-State
+    Assert-Eq "S71500_ET200MP_25mm" $s.productFamily "25mm Familie nach Laden"
+    Assert-True ($s.availableVariants -contains "MP25_16") "25mm Varianten enthalten MP25_16"
+    Assert-True (-not ($s.availableVariants -contains "DI_DQ_16")) "25mm Varianten ohne DI_DQ_16"
+    Assert-True ($s.availableArticles -contains "6ES7532-5NB00-0AB0") "25mm Artikel enthalten AQ 2"
 
     # --- Kalibrierseite -------------------------------------------------------
     $rp = Invoke-Cmd "render-calibration $OutDir\mp_calibration" | ConvertFrom-Json

@@ -108,9 +108,11 @@ public class MainViewModel : ViewModelBase
         AddPageCommand = new RelayCommand(AddPage);
         RemovePageCommand = new RelayCommand(RemovePage, () => PageCount > 1);
 
-        // Import commands
-        ImportCsvCommand = new RelayCommand(ImportCsv);
-        ImportExcelCommand = new RelayCommand(ImportExcel);
+        // Import commands — CSV/Excel liefern Etikettenzeilen (Header/Zeile1/Zeile2),
+        // dafuer gibt es im modulbasierten MP-Modus kein Ziel. PDF-Import fuellt
+        // dort Module ueber den Generator.
+        ImportCsvCommand = new RelayCommand(ImportCsv, () => !IsModuleBased);
+        ImportExcelCommand = new RelayCommand(ImportExcel, () => !IsModuleBased);
         ImportSchematicCommand = new RelayCommand(ImportSchematic);
 
         // Selective print commands
@@ -151,7 +153,40 @@ public class MainViewModel : ViewModelBase
 
     private bool HasAnyContent() =>
         _allPages.Any(p => p.Any(l => l.HasText))
-        || _allMpPages.Any(p => p.Any(m => m.HasText));
+        || _allMpPages.Any(p => p.Any(m => m.HasPrintableContent));
+
+    /// <summary>Fuer die Notfall-Sicherung im globalen Exception-Handler.</summary>
+    internal bool HasAnyContentForRecovery => HasAnyContent();
+
+    /// <summary>Projekt als geaendert markieren (z.B. nach Wiederherstellung).</summary>
+    internal void MarkDirty(string status)
+    {
+        IsDirty = true;
+        StatusMessage = status;
+    }
+
+    /// <summary>
+    /// Gemeinsamer Familienwechsel fuer Setter, NewProject und ApplyLoadedProject:
+    /// Formate, Modul-Varianten und Katalog-Artikel der Familie nachziehen.
+    /// Frueher aktualisierte ApplyLoadedProject nur die Formate — nach dem Laden
+    /// eines 25mm-Projekts zeigten Varianten-/Artikel-ComboBox die 35mm-Familie.
+    /// </summary>
+    private void ApplyFamilyCore(ProductFamily family)
+    {
+        _selectedProductFamily = family;
+
+        AvailableFormats.Clear();
+        foreach (var fmt in FormatDefinitions.GetFormatsForFamily(family))
+            AvailableFormats.Add(fmt);
+
+        AvailableMpVariants.Clear();
+        foreach (var v in MpModuleLayoutFactory.VariantsForFamily(family))
+            AvailableMpVariants.Add(v);
+
+        OnPropertyChanged(nameof(AvailableMpArticles));
+        OnPropertyChanged(nameof(SelectedProductFamilyInfo));
+        OnPropertyChanged(nameof(SelectedProductFamily));
+    }
 
     /// <summary>Warnt vor Format-/Familienwechsel, wenn befuellte Etiketten/Module
     /// verworfen wuerden. True = fortfahren.</summary>
@@ -179,46 +214,38 @@ public class MainViewModel : ViewModelBase
                     new Action(() => OnPropertyChanged(nameof(SelectedProductFamilyInfo))));
                 return;
             }
-            if (SetProperty(ref _selectedProductFamily, value.Family))
+            ApplyFamilyCore(value.Family);
+
+            // Nur die Raender auf Family-Defaults setzen — Schrift-Einstellungen
+            // bleiben (frueher setzte ResetForFamily auch Header-Font zurueck, ohne
+            // die Input-Felder zu benachrichtigen: ComboBox zeigte 6, Druck nutzte 9).
+            // Guard verhindert, dass der erste Input-Setter via Live-Apply die noch
+            // alten Input-Werte der vorherigen Familie zurueckschreibt.
+            _settings.ResetMarginsForFamily(_selectedProductFamily);
+            _suspendLiveApply = true;
+            try
             {
-                // Ränder auf Family-Defaults setzen. Guard verhindert, dass der erste
-                // Input-Setter via Live-Apply die noch alten Input-Werte der vorherigen
-                // Familie in _settings zurueckschreibt (Regression aus 06d52ad).
-                _settings.ResetForFamily(_selectedProductFamily);
-                _suspendLiveApply = true;
-                try
-                {
-                    InputMarginTop = _settings.MarginTop;
-                    InputMarginLeft = _settings.MarginLeft;
-                    InputMarginBottom = _settings.MarginBottom;
-                    InputMarginRight = _settings.MarginRight;
-                }
-                finally { _suspendLiveApply = false; }
-                OnPropertyChanged(nameof(Settings));
-                OnPropertyChanged(nameof(PreviewMargin));
-                NotifyMpPreviewChanged();
-
-                // Formate filtern
-                AvailableFormats.Clear();
-                foreach (var fmt in FormatDefinitions.GetFormatsForFamily(_selectedProductFamily))
-                    AvailableFormats.Add(fmt);
-
-                // Modul-Varianten familiengerecht filtern (25mm vs 35mm)
-                AvailableMpVariants.Clear();
-                foreach (var v in MpModuleLayoutFactory.VariantsForFamily(_selectedProductFamily))
-                    AvailableMpVariants.Add(v);
-                OnPropertyChanged(nameof(AvailableMpArticles));
-
-                // Erstes Format der neuen Familie waehlen — Inhaltsverlust wurde
-                // hier schon bestaetigt, daher kein zweiter Format-Prompt.
-                _suppressContentLossConfirm = true;
-                try { SelectedFormat = FormatDefinitions.GetDefaultFormat(_selectedProductFamily); }
-                finally { _suppressContentLossConfirm = false; }
-                OnPropertyChanged(nameof(SelectedProductFamily));
-                OnPropertyChanged(nameof(BandsPerPage));
-                OnPropertyChanged(nameof(IsMultiBand));
-                OnPropertyChanged(nameof(WindowTitle));
+                InputMarginTop = _settings.MarginTop;
+                InputMarginLeft = _settings.MarginLeft;
+                InputMarginBottom = _settings.MarginBottom;
+                InputMarginRight = _settings.MarginRight;
             }
+            finally { _suspendLiveApply = false; }
+            OnPropertyChanged(nameof(Settings));
+            OnPropertyChanged(nameof(PreviewMargin));
+            NotifyMpPreviewChanged();
+
+            // Erstes Format der neuen Familie waehlen — Inhaltsverlust wurde
+            // hier schon bestaetigt, daher kein zweiter Format-Prompt.
+            bool hadContent = HasAnyContent();
+            _suppressContentLossConfirm = true;
+            try { SelectedFormat = FormatDefinitions.GetDefaultFormat(_selectedProductFamily); }
+            finally { _suppressContentLossConfirm = false; }
+            OnPropertyChanged(nameof(BandsPerPage));
+            OnPropertyChanged(nameof(IsMultiBand));
+            OnPropertyChanged(nameof(WindowTitle));
+            // Verworfener Inhalt oder geaenderte Raender = ungespeicherte Aenderung
+            if (hadContent || _currentFilePath is not null) IsDirty = true;
         }
     }
 
@@ -247,18 +274,67 @@ public class MainViewModel : ViewModelBase
         get => _selectedMpModule;
         set
         {
+            // Erneute Auswahl desselben Moduls darf die Markierung nicht loeschen
+            if (ReferenceEquals(_selectedMpModule, value))
+            {
+                if (value is not null) value.IsSelected = true;
+                return;
+            }
             if (_selectedMpModule is not null)
                 _selectedMpModule.IsSelected = false;
-            if (SetProperty(ref _selectedMpModule, value))
+
+            // Die ausgewaehlte Zelle gehoert zum ALTEN Modul — ohne Reset schrieben
+            // "Ausgewaehlte Adresszelle" und "Uebertragen" nach Auto-Advance oder
+            // Header-Klick unsichtbar ins vorherige Modul.
+            SelectedMpCell = null;
+
+            _selectedMpModule = value;
+            OnPropertyChanged();
+            if (value is not null)
             {
-                if (value is not null)
-                    value.IsSelected = true;
-                OnPropertyChanged(nameof(SelectedMpModuleInfo));
-                OnPropertyChanged(nameof(SelectedMpVariant));
-                OnPropertyChanged(nameof(SelectedMpArticle));
-                OnPropertyChanged(nameof(HasSelection));
+                value.IsSelected = true;
+                LoadFontInputsFromMpModule(value);
             }
+            OnPropertyChanged(nameof(SelectedMpModuleInfo));
+            OnPropertyChanged(nameof(SelectedMpVariant));
+            OnPropertyChanged(nameof(SelectedMpArticle));
+            OnPropertyChanged(nameof(HasSelection));
         }
+    }
+
+    /// <summary>Schrift-Eingabefelder aus dem Modul laden (wie bei SP-Etiketten),
+    /// ohne dass Live-Apply das Modul sofort mit seinen eigenen Werten ueberschreibt.</summary>
+    private void LoadFontInputsFromMpModule(MpModuleViewModel module)
+    {
+        _suspendLiveApply = true;
+        try
+        {
+            InputFontSize = module.FontSize;
+            InputIsBold = module.IsBold;
+            InputIsItalic = module.IsItalic;
+            InputFontFamily = module.FontFamily;
+        }
+        finally { _suspendLiveApply = false; }
+    }
+
+    /// <summary>Nach Zell-Neuaufbau (Variante/Artikel/Modultyp/Paste) die ausgewaehlte
+    /// Zelle per CellIndex neu aufloesen — die alte VM ist abgehaengt, Eingaben
+    /// darin verschwanden ohne Markierung.</summary>
+    private void OnMpCellsRebuilt(MpModuleViewModel module)
+    {
+        if (!ReferenceEquals(module, _selectedMpModule)) return;
+        var old = _selectedMpCell;
+        if (old is null) return;
+        var replacement = module.AddressCells
+            .FirstOrDefault(c => c.CellIndex == old.CellIndex && c.IsEditable);
+        SelectedMpCell = replacement;
+    }
+
+    private MpModuleViewModel CreateMpModuleViewModel(MpModule module)
+    {
+        var vm = new MpModuleViewModel(module) { ContentChanged = OnMpContentChanged };
+        vm.CellsRebuilt = () => OnMpCellsRebuilt(vm);
+        return vm;
     }
 
     public MpAddressCellViewModel? SelectedMpCell
@@ -387,6 +463,12 @@ public class MainViewModel : ViewModelBase
         get => _selectedLabel;
         set
         {
+            // Klick auf das bereits markierte Etikett darf den Rahmen nicht entfernen
+            if (ReferenceEquals(_selectedLabel, value))
+            {
+                if (value is not null) value.IsSelected = true;
+                return;
+            }
             if (_selectedLabel is not null)
                 _selectedLabel.IsSelected = false;
 
@@ -794,7 +876,7 @@ public class MainViewModel : ViewModelBase
         {
             var module = new MpModule { ModuleIndex = i, Variant = defaultVariant };
             module.AddressCells = MpModuleLayoutFactory.CreateCells(module.Variant);
-            page.Add(new MpModuleViewModel(module) { ContentChanged = OnMpContentChanged });
+            page.Add(CreateMpModuleViewModel(module));
         }
         return page;
     }
@@ -948,74 +1030,16 @@ public class MainViewModel : ViewModelBase
             // damit die Menge der editierbaren Zellen.
             ApplyIoTypeToSelectedMpModule();
 
-            // Fuer MP: Anzahl Bytes/Kanaele automatisch aus Modulvariante ableiten
             var info = AddressGenerator.ModuleTypes.First(m => m.Type == GenModuleType.Type);
-            var editableCells = SelectedMpModule.AddressCells.Where(c => c.IsEditable).ToList();
-            int editableCount = editableCells.Count;
+            int consumed = FillMpModuleAddresses(SelectedMpModule, GenModuleType.Type, GenStartByte, GenCount);
 
-            if (info.IsBitAddressed)
-            {
-                // Byte-Anzahl: 35mm-Varianten haben ein festes Kanalraster -> aus den
-                // editierbaren Zellen ableiten. 25mm-Varianten haben generische 20/40
-                // Slots (mehr als Kanaele) -> GenCount (Bytes) entscheidet, Rest leer.
-                int maxBytes = editableCount / 8;
-                bool is25 = SelectedMpModule.Variant
-                    is MpModuleVariant.MP25_16 or MpModuleVariant.MP25_32;
-                int byteCount = is25
-                    ? Math.Clamp(GenCount, 1, maxBytes)
-                    : Math.Max(1, maxBytes);
-
-                var addresses = new List<string>();
-                for (int b = 0; b < byteCount; b++)
-                {
-                    int byteNum = GenStartByte + b;
-                    for (int bit = 0; bit < 8; bit++)
-                        addresses.Add($"{info.Prefix} {byteNum}.{bit}");
-                }
-                for (int i = 0; i < editableCells.Count; i++)
-                    editableCells[i].Text = i < addresses.Count ? addresses[i] : string.Empty;
-
-                // Auto-Advance: um die tatsaechliche Byte-Anzahl weiterschalten
-                if (GenAutoAdvanceAddress)
-                    GenStartByte += byteCount;
-            }
-            else
-            {
-                // Analog: GenCount Kanaele, SPALTENAUSGEGLICHEN verteilen. Das Excel-
-                // Layout hat 5 generische Bloecke pro Spalte (inkl. MANA/Reserve);
-                // ein AI 8 hat physisch CH0-3 links + CH4-7 rechts, also 4+4 statt 5+3.
-                // Restbloecke bleiben leer (fuer manuelle MANA-Beschriftung).
-                int channelCount = Math.Min(Math.Max(GenCount, 0), editableCount);
-                var byColumn = editableCells
-                    .GroupBy(c => c.StartCol)
-                    .OrderBy(g => g.Key)
-                    .Select(g => g.ToList())
-                    .ToList();
-                int numCols = byColumn.Count;
-
-                // Alle Zellen leeren, dann kanalweise spaltenausgeglichen befuellen
-                foreach (var c in editableCells) c.Text = string.Empty;
-                int ch = 0;
-                for (int colIdx = 0; colIdx < numCols && ch < channelCount; colIdx++)
-                {
-                    // Diese Spalte bekommt ceil(rest / verbleibende Spalten) Kanaele
-                    int remainingCols = numCols - colIdx;
-                    int perCol = (int)Math.Ceiling((channelCount - ch) / (double)remainingCols);
-                    var colCells = byColumn[colIdx];
-                    for (int k = 0; k < perCol && k < colCells.Count; k++)
-                        colCells[k].Text = $"{info.Prefix} {GenStartByte + ch++ * 2}";
-                }
-
-                if (GenAutoAdvanceAddress)
-                    GenStartByte += channelCount * 2;
-            }
-
-            // GenCount fuer UI-Anzeige aktualisieren (damit Preview stimmt)
-            // NICHT GenAutoAdvanceAddress nochmal ausfuehren — wurde oben schon gemacht
+            // Auto-Advance: um die tatsaechlich belegten Bytes/Kanaele weiterschalten
+            if (GenAutoAdvanceAddress)
+                GenStartByte += info.IsBitAddressed ? consumed : consumed * 2;
 
             IsDirty = true;
-            int filledCount = editableCells.Count(c => c.HasText);
-            StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) → {filledCount} Adressen auf Modul {SelectedMpModule.ModuleIndex + 1}";
+            int filledCount = SelectedMpModule.AddressCells.Count(c => c.IsEditable && c.HasText);
+            string status = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) → {filledCount} Adressen auf Modul {SelectedMpModule.ModuleIndex + 1}";
 
             NotifyMpPreviewChanged();
 
@@ -1023,6 +1047,7 @@ public class MainViewModel : ViewModelBase
             // Adressen werden NICHT automatisch neu generiert — User muss Variante
             // und Start-Byte pruefen und erneut "Generieren + Uebertragen" druecken.
             AdvanceToNextMpModule();
+            StatusMessage = status; // nach dem Advance, sonst ueberschreibt der Setter die Meldung
         }
         else if (SelectedLabel is not null)
         {
@@ -1048,7 +1073,7 @@ public class MainViewModel : ViewModelBase
             ApplyFontToLabel(SelectedLabel);
 
             IsDirty = true;
-            StatusMessage = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte}";
+            string status = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte}";
 
             if (GenAutoAdvanceAddress)
             {
@@ -1059,12 +1084,78 @@ public class MainViewModel : ViewModelBase
             }
 
             AdvanceToNextLabel();
+            StatusMessage = status; // nach dem Advance, sonst ueberschreibt der Setter die Meldung
+        }
+    }
+
+    /// <summary>
+    /// Verteilt Adressen klemmengerecht auf die editierbaren Zellen eines MP-Moduls.
+    /// Digital: Byte-Anzahl aus dem Kanalraster der Variante (35mm) bzw. aus genCount
+    /// (25mm, generische 20/40 Slots). Analog: genCount Kanaele spaltenausgeglichen.
+    /// Liefert die belegte Anzahl (Bytes bei digital, Kanaele bei analog) fuer den
+    /// Auto-Advance. Gemeinsame Quelle fuer Generator und PDF-Import.
+    /// </summary>
+    internal static int FillMpModuleAddresses(MpModuleViewModel module, ModuleType type, int startByte, int genCount)
+    {
+        var info = AddressGenerator.ModuleTypes.First(m => m.Type == type);
+        var editableCells = module.AddressCells.Where(c => c.IsEditable).ToList();
+        int editableCount = editableCells.Count;
+
+        if (info.IsBitAddressed)
+        {
+            // Byte-Anzahl: 35mm-Varianten haben ein festes Kanalraster -> aus den
+            // editierbaren Zellen ableiten. 25mm-Varianten haben generische 20/40
+            // Slots (mehr als Kanaele) -> genCount (Bytes) entscheidet, Rest leer.
+            int maxBytes = editableCount / 8;
+            bool is25 = MpModuleLayoutFactory.Is25mmVariant(module.Variant);
+            int byteCount = is25
+                ? Math.Clamp(genCount, 1, Math.Max(1, maxBytes))
+                : Math.Max(1, maxBytes);
+
+            var addresses = new List<string>();
+            for (int b = 0; b < byteCount; b++)
+            {
+                int byteNum = startByte + b;
+                for (int bit = 0; bit < 8; bit++)
+                    addresses.Add($"{info.Prefix} {byteNum}.{bit}");
+            }
+            for (int i = 0; i < editableCells.Count; i++)
+                editableCells[i].Text = i < addresses.Count ? addresses[i] : string.Empty;
+
+            return byteCount;
+        }
+        else
+        {
+            // Analog: genCount Kanaele, SPALTENAUSGEGLICHEN verteilen. Das Excel-
+            // Layout hat 5 generische Bloecke pro Spalte (inkl. MANA/Reserve);
+            // ein AI 8 hat physisch CH0-3 links + CH4-7 rechts, also 4+4 statt 5+3.
+            // Restbloecke bleiben leer (fuer manuelle MANA-Beschriftung).
+            int channelCount = Math.Min(Math.Max(genCount, 0), editableCount);
+            var byColumn = editableCells
+                .GroupBy(c => c.StartCol)
+                .OrderBy(g => g.Key)
+                .Select(g => g.ToList())
+                .ToList();
+            int numCols = byColumn.Count;
+
+            foreach (var c in editableCells) c.Text = string.Empty;
+            int ch = 0;
+            for (int colIdx = 0; colIdx < numCols && ch < channelCount; colIdx++)
+            {
+                int remainingCols = numCols - colIdx;
+                int perCol = (int)Math.Ceiling((channelCount - ch) / (double)remainingCols);
+                var colCells = byColumn[colIdx];
+                for (int k = 0; k < perCol && k < colCells.Count; k++)
+                    colCells[k].Text = $"{info.Prefix} {startByte + ch++ * 2}";
+            }
+
+            return channelCount;
         }
     }
 
     /// <summary>Verschraenkt Zeile 1 (ungerade Bits, oben) und Zeile 2 (gerade Bits,
     /// unten) slotweise kanal-aufsteigend zu einer Zeile (fuer einzeilige Formate).</summary>
-    private static string MergeAddressLines(string line1, string line2)
+    internal static string MergeAddressLines(string line1, string line2)
     {
         var odd = line1.Split("  ", StringSplitOptions.None);
         var even = line2.Split("  ", StringSplitOptions.None);
@@ -1352,6 +1443,20 @@ public class MainViewModel : ViewModelBase
     private void ApplyInputFontToSelected()
     {
         if (_suspendLiveApply) return;
+
+        // ET200MP: Schrift wirkt auf das ausgewaehlte Modul (Setter melden
+        // ContentChanged -> Dirty + Preview-Refresh). Frueher waren die vier
+        // Schrift-Bedienelemente im MP-Modus komplett wirkungslos.
+        if (_selectedFormat.IsModuleBased)
+        {
+            if (SelectedMpModule is null) return;
+            SelectedMpModule.FontSize = _inputFontSize;
+            SelectedMpModule.IsBold = _inputIsBold;
+            SelectedMpModule.IsItalic = _inputIsItalic;
+            SelectedMpModule.FontFamily = _inputFontFamily;
+            return;
+        }
+
         if (SelectedLabel is null) return;
         SelectedLabel.CellFontSize = _inputFontSize;
         SelectedLabel.CellIsBold = _inputIsBold;
@@ -1476,18 +1581,26 @@ public class MainViewModel : ViewModelBase
         try
         {
             _currentFilePath = null;
-            _selectedProductFamily = ProductFamily.ET200SP;
-            AvailableFormats.Clear();
-            foreach (var fmt in FormatDefinitions.GetFormatsForFamily(ProductFamily.ET200SP))
-                AvailableFormats.Add(fmt);
-            OnPropertyChanged(nameof(SelectedProductFamilyInfo));
-            OnPropertyChanged(nameof(SelectedProductFamily));
+            ApplyFamilyCore(ProductFamily.ET200SP);
             _settings.Reset();
             ResetSettings();
             GenModuleName = string.Empty;
             GenStartByte = 0;
             GenCount = 2;
-            SelectedFormat = FormatDefinitions.GetDefaultFormat(ProductFamily.ET200SP);
+            PrintGridLines = false;
+
+            // Etiketten IMMER neu anlegen: der Format-Setter kehrt bei unveraendertem
+            // Format sofort zurueck — dann blieben alle Etiketten stehen und galten
+            // wegen IsDirty=false als gespeichert ("Neu" war ein No-op mit Datenverlust-
+            // Risiko beim naechsten "Speichern unter").
+            var defaultFormat = FormatDefinitions.GetDefaultFormat(ProductFamily.ET200SP);
+            if (_selectedFormat.Format != defaultFormat.Format)
+                SelectedFormat = defaultFormat;
+            else
+                InitializeLabels();
+
+            OnPropertyChanged(nameof(BandsPerPage));
+            OnPropertyChanged(nameof(IsMultiBand));
             IsDirty = false;
             OnPropertyChanged(nameof(WindowTitle));
             StatusMessage = "Neues Projekt erstellt";
@@ -1618,13 +1731,8 @@ public class MainViewModel : ViewModelBase
         _suppressContentLossConfirm = true;
         try
         {
-            // ProductFamily setzen (filtert Formate, setzt Raender)
-            _selectedProductFamily = project.ProductFamily;
-            AvailableFormats.Clear();
-            foreach (var fmt in FormatDefinitions.GetFormatsForFamily(_selectedProductFamily))
-                AvailableFormats.Add(fmt);
-            OnPropertyChanged(nameof(SelectedProductFamilyInfo));
-            OnPropertyChanged(nameof(SelectedProductFamily));
+            // ProductFamily setzen (filtert Formate, Varianten, Katalog)
+            ApplyFamilyCore(project.ProductFamily);
             OnPropertyChanged(nameof(BandsPerPage));
             OnPropertyChanged(nameof(IsMultiBand));
 
@@ -1644,17 +1752,29 @@ public class MainViewModel : ViewModelBase
 
                 if (project.MpPages != null && project.MpPages.Count > 0)
                 {
+                    var loadedFamily = ProductFamilyDefinitions.Get(_selectedFormat.Family);
+                    var defaultVariant = MpModuleLayoutFactory.DefaultVariantFor(_selectedFormat.Family);
                     foreach (var mpPage in project.MpPages)
                     {
                         var pageVms = mpPage.Modules
+                            .Take(loadedFamily.ModulesPerPage)
                             .Select(mod =>
                             {
                                 // Zellen neu generieren falls noetig
                                 if (mod.AddressCells.Count == 0)
                                     mod.AddressCells = MpModuleLayoutFactory.CreateCells(mod.Variant);
-                                return new MpModuleViewModel(mod) { ContentChanged = OnMpContentChanged };
+                                return CreateMpModuleViewModel(mod);
                             })
                             .ToList();
+                        // Seite auf alle Streifen-Positionen auffuellen (handeditierte
+                        // oder unvollstaendige Dateien) — sonst fehlen Positionen in
+                        // Vorschau und Auswahl.
+                        while (pageVms.Count < loadedFamily.ModulesPerPage)
+                        {
+                            var module = new MpModule { ModuleIndex = pageVms.Count, Variant = defaultVariant };
+                            module.AddressCells = MpModuleLayoutFactory.CreateCells(module.Variant);
+                            pageVms.Add(CreateMpModuleViewModel(module));
+                        }
                         _allMpPages.Add(pageVms);
                     }
                 }
@@ -1803,6 +1923,15 @@ public class MainViewModel : ViewModelBase
         try
         {
             var document = BuildPrintDocument();
+            if (document.Pages.Count == 0)
+            {
+                StatusMessage = "Nichts zu drucken";
+                MessageBox.Show(
+                    "Es gibt keine befuellten, druckaktiven Etiketten bzw. Module.\n" +
+                    "Leere Seiten werden nicht gedruckt.",
+                    "Drucken", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
             if (!PrintService.Print(document, PrintService.JobTitleFor(_selectedFormat)))
             {
                 StatusMessage = "Druck abgebrochen";
@@ -2020,66 +2149,135 @@ public class MainViewModel : ViewModelBase
             MessageBoxImage.Information);
     }
 
-    private void PopulateFromParsedModules(List<ParsedModule> modules)
+    internal static ModuleType? MapParsedModuleType(string moduleType) => moduleType.ToUpperInvariant() switch
     {
-        // Convert parsed modules to label cells using the address generator
+        "DI" => ModuleType.DI,
+        "DO" => ModuleType.DO,
+        "AI" => ModuleType.AI,
+        "AO" => ModuleType.AO,
+        _ => null
+    };
+
+    /// <summary>Anzahl der Generator-Einheiten eines geparsten Moduls: Bytes bei
+    /// digital (aufgerundet), Kanaele bei analog. Mindestens 1.</summary>
+    internal static int ParsedModuleUnits(ModuleType type, int channelCount)
+    {
+        var info = AddressGenerator.ModuleTypes.First(m => m.Type == type);
+        return info.IsBitAddressed
+            ? Math.Max(1, (channelCount + 7) / 8)
+            : Math.Max(1, channelCount);
+    }
+
+    /// <summary>
+    /// ET200SP: Etikettenzellen fuer ein geparstes Modul. Ein Etikett fasst maximal
+    /// 2 Bytes bzw. 16 Kanaele (AddressGenerator.GetEffectiveCount) — groessere Module
+    /// werden auf mehrere Etiketten verteilt, statt still gekappt (32-Kanal-Modul
+    /// verlor frueher Byte 2+3). Einzeilige Formate bekommen die Adressen gemerged.
+    /// </summary>
+    internal static List<LabelCell> BuildImportCells(string moduleName, ModuleType? type,
+        int startByte, int channelCount, IReadOnlyList<string> rawAddresses, bool isDoubleLine)
+    {
         var cells = new List<LabelCell>();
 
+        if (type is null)
+        {
+            // Unbekannter Typ: Modulname + Rohadressen auf zwei Zeilen
+            int half = (rawAddresses.Count + 1) / 2;
+            string l1 = string.Join("  ", rawAddresses.Take(half));
+            string l2 = rawAddresses.Count > half ? string.Join("  ", rawAddresses.Skip(half)) : string.Empty;
+            if (!isDoubleLine && l2.Length > 0) { l1 = string.Join("  ", rawAddresses); l2 = string.Empty; }
+            cells.Add(new LabelCell { Header = moduleName, Line1 = l1, Line2 = l2 });
+            return cells;
+        }
+
+        int remaining = ParsedModuleUnits(type.Value, channelCount);
+        int cursor = startByte;
+        while (remaining > 0)
+        {
+            int chunk = AddressGenerator.GetEffectiveCount(type.Value, remaining);
+            var generated = AddressGenerator.Generate(moduleName, type.Value, cursor, chunk);
+            string line1 = generated.Line1;
+            string line2 = generated.Line2;
+            if (!isDoubleLine && !string.IsNullOrWhiteSpace(line2))
+            {
+                line1 = MergeAddressLines(line1, line2);
+                line2 = string.Empty;
+            }
+            cells.Add(new LabelCell { Header = generated.Header, Line1 = line1, Line2 = line2 });
+            cursor = AddressGenerator.GetNextStartByte(type.Value, cursor, chunk);
+            remaining -= chunk;
+        }
+        return cells;
+    }
+
+    private void PopulateFromParsedModules(List<ParsedModule> modules)
+    {
+        if (_selectedFormat.IsModuleBased)
+        {
+            PopulateMpFromParsedModules(modules);
+            return;
+        }
+
+        var cells = new List<LabelCell>();
         foreach (var module in modules)
         {
-            // Map parsed module type to AddressGenerator ModuleType
-            ModuleType? moduleType = module.ModuleType.ToUpperInvariant() switch
-            {
-                "DI" => ModuleType.DI,
-                "DO" => ModuleType.DO,
-                "AI" => ModuleType.AI,
-                "AO" => ModuleType.AO,
-                _ => null
-            };
-
-            if (moduleType is not null)
-            {
-                var info = AddressGenerator.ModuleTypes.First(m => m.Type == moduleType.Value);
-
-                // Determine count parameter based on module type
-                int count;
-                if (info.IsBitAddressed)
-                {
-                    // Digital modules: channels / 8 = bytes
-                    count = Math.Max(1, module.ChannelCount / 8);
-                    if (count == 0) count = 1;
-                }
-                else
-                {
-                    // Analog modules: count = channel count
-                    count = Math.Max(1, module.ChannelCount);
-                }
-
-                var generated = AddressGenerator.Generate(module.ModuleName, moduleType.Value, module.StartByte, count);
-                cells.Add(new LabelCell
-                {
-                    Header = generated.Header,
-                    Line1 = generated.Line1,
-                    Line2 = generated.Line2
-                });
-            }
-            else
-            {
-                // Unknown type: just use the module name and channel addresses
-                var addresses = module.Channels.Select(c => c.Address).ToList();
-                int half = (addresses.Count + 1) / 2;
-
-                cells.Add(new LabelCell
-                {
-                    Header = module.ModuleName,
-                    Line1 = string.Join("  ", addresses.Take(half)),
-                    Line2 = addresses.Count > half ? string.Join("  ", addresses.Skip(half)) : string.Empty
-                });
-            }
+            cells.AddRange(BuildImportCells(module.ModuleName, MapParsedModuleType(module.ModuleType),
+                module.StartByte, module.ChannelCount,
+                module.Channels.Select(c => c.Address).ToList(), IsDoubleLine));
         }
 
         if (cells.Count > 0)
             PopulateFromImportedCells(cells);
+    }
+
+    /// <summary>ET200MP: je geparstem Modul ein Streifen ab dem ausgewaehlten Modul
+    /// (Header = Modulname, Adressen ueber den Generator), Seiten bei Bedarf anlegen.
+    /// Frueher landete der Import hier in unsichtbaren SP-Seiten.</summary>
+    private void PopulateMpFromParsedModules(List<ParsedModule> modules)
+    {
+        var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
+        int startPage = _currentPageIndex;
+        int pageIdx = startPage;
+        int modIdx = SelectedMpModule is not null ? MpModules.IndexOf(SelectedMpModule) : 0;
+        if (modIdx < 0) modIdx = 0;
+
+        int imported = 0;
+        foreach (var parsed in modules)
+        {
+            while (pageIdx >= _allMpPages.Count)
+                _allMpPages.Add(CreateEmptyMpPage(familyInfo.ModulesPerPage));
+
+            var target = _allMpPages[pageIdx][modIdx];
+            var type = MapParsedModuleType(parsed.ModuleType);
+            target.HeaderText = parsed.ModuleName;
+            if (type is not null)
+            {
+                if (string.IsNullOrEmpty(target.ArticleNumber))
+                    target.IoType = type.Value;
+                FillMpModuleAddresses(target, type.Value, parsed.StartByte,
+                    ParsedModuleUnits(type.Value, parsed.ChannelCount));
+            }
+            else
+            {
+                var editable = target.AddressCells.Where(c => c.IsEditable).ToList();
+                var addresses = parsed.Channels.Select(c => c.Address).ToList();
+                for (int i = 0; i < editable.Count; i++)
+                    editable[i].Text = i < addresses.Count ? addresses[i] : string.Empty;
+            }
+            imported++;
+
+            modIdx++;
+            if (modIdx >= familyInfo.ModulesPerPage) { modIdx = 0; pageIdx++; }
+        }
+
+        NavigateToPage(startPage);
+        NotifyPageProperties();
+        NotifyMpPreviewChanged();
+        IsDirty = true;
+
+        MessageBox.Show(
+            $"{imported} Module importiert.\nVerteilt auf {_allMpPages.Count} Seite(n).",
+            "Import abgeschlossen", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     // === Selective Print Methods ===
@@ -2129,6 +2327,14 @@ public class MainViewModel : ViewModelBase
     /// <summary>Test-Automation: Aenderungen verwerfen, damit das Fenster ohne
     /// modale Rueckfrage geschlossen werden kann (headless haengt sonst).</summary>
     internal void DiscardChangesForShutdown() => IsDirty = false;
+
+    internal string? CurrentFilePath => _currentFilePath;
+
+    /// <summary>Test-Automation: druckbare Etiketten/Module je Seite (dieselbe
+    /// Entscheidung wie der Druck).</summary>
+    internal int[] PrintablePerPage() => _selectedFormat.IsModuleBased
+        ? _allMpPages.Select(p => p.Count(PrintService.IsPrintable)).ToArray()
+        : _allPages.Select(p => p.Count(PrintService.IsPrintable)).ToArray();
 
     /// <summary>Test-Automation: "Neues Projekt" ohne Rueckfrage.</summary>
     internal void NewProjectWithoutConfirm()

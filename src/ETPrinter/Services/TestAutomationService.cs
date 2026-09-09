@@ -150,6 +150,8 @@ public class TestAutomationService : IDisposable
         ["list-variants"] = new("list-variants", "Alle Modulvarianten (JSON)", (s, _) => s.ListVariants()),
         ["mp-state"] = new("mp-state", "Ausgewaehltes Modul (JSON)", (s, _) => s.GetMpState()),
         ["set-generator"] = new("set-generator <name> <typ> <byte> <n>", "Generator-Felder setzen", (s, a) => s.SetGenerator(a)),
+        ["set-font"] = new("set-font <groesse> <fett 0/1> <kursiv 0/1> [schriftart]", "Schrift-Eingabefelder setzen (Live-Apply)", (s, a) => s.SetFont(a)),
+        ["print-state"] = new("print-state", "Druckentscheidung: Seiten im Dokument + druckbare Etiketten/Module je Seite (JSON)", (s, _) => s.GetPrintState()),
         ["trigger-generate"] = new("trigger-generate", "Generieren + Uebertragen", (s, _) => s.TriggerGenerate()),
         ["save-project"] = new("save-project <pfad.etprint>", "Projekt speichern", (s, a) => s.SaveProject(a)),
         ["load-project"] = new("load-project <pfad.etprint>", "Projekt laden", (s, a) => s.LoadProject(a)),
@@ -199,7 +201,12 @@ public class TestAutomationService : IDisposable
             moduleCount = _viewModel.MpModules.Count,
             selectedModule = _viewModel.SelectedMpModule?.ModuleIndex,
             filledModules = _viewModel.MpModules.Count(m => m.HasText),
+            printableModules = _viewModel.MpModules.Count(m => m.HasPrintableContent),
             isDirty = _viewModel.IsDirty,
+            filePath = _viewModel.CurrentFilePath ?? "",
+            printGridLines = _viewModel.PrintGridLines,
+            availableVariants = _viewModel.AvailableMpVariants.Select(v => v.Variant.ToString()).ToArray(),
+            availableArticles = _viewModel.AvailableMpArticles.Where(e => e.ArticleNo != "").Select(e => e.ArticleNo).ToArray(),
             labelSheet = ProductFamilyDefinitions.Get(_viewModel.SelectedProductFamily).LabelSheetPartNumber
         };
         return Ok(JsonSerializer.Serialize(state));
@@ -358,6 +365,29 @@ public class TestAutomationService : IDisposable
             _viewModel.InputLine1 = parts[0];
         }
         return Ok("Eingabefelder gesetzt");
+    }
+
+    private string SetFont(string arg)
+    {
+        var parts = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 3 || !int.TryParse(parts[0], out int size))
+            return Error("Format: set-font <groesse> <fett 0/1> <kursiv 0/1> [schriftart]");
+        _viewModel.InputFontSize = size;
+        _viewModel.InputIsBold = parts[1] == "1";
+        _viewModel.InputIsItalic = parts[2] == "1";
+        if (parts.Length > 3) _viewModel.InputFontFamily = string.Join(' ', parts.Skip(3));
+        return Ok($"Schrift: {size}pt fett={parts[1]} kursiv={parts[2]}");
+    }
+
+    private string GetPrintState()
+    {
+        var document = _viewModel.BuildPrintDocument();
+        var state = new
+        {
+            pagesInDocument = document.Pages.Count,
+            printablePerPage = _viewModel.PrintablePerPage()
+        };
+        return Ok(JsonSerializer.Serialize(state));
     }
 
     private string RenderPrint(string dir)
@@ -559,6 +589,15 @@ public class TestAutomationService : IDisposable
             cellCount = mod.AddressCells.Count,
             editableCells = mod.AddressCells.Count(c => c.IsEditable),
             filledCells = mod.AddressCells.Count(c => c.HasText),
+            selectedCell = _viewModel.SelectedMpCell?.CellIndex,
+            fontSize = mod.FontSize,
+            isBold = mod.IsBold,
+            isItalic = mod.IsItalic,
+            fontFamily = mod.FontFamily,
+            isPrintEnabled = mod.IsPrintEnabled,
+            hasPrintableContent = mod.HasPrintableContent,
+            // Zelltexte in Zellreihenfolge (fuer Generator-Verifikation)
+            cellTexts = mod.AddressCells.Select(c => c.IsEditable ? c.Text : "#" + c.Label).ToArray(),
             // Struktur-Klemmen als "row:label" (nur beschriftete), z.B. "8:1L+"
             structureLabels = mod.AddressCells
                 .Where(c => !c.IsEditable && !string.IsNullOrEmpty(c.Label))

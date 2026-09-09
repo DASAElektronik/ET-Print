@@ -63,9 +63,14 @@ public class MpModuleViewModel : ViewModelBase
     /// IsSelected/IsChecked loesen den Callback bewusst NICHT aus.</summary>
     public Action? ContentChanged { get; set; }
 
+    /// <summary>Wird nach jedem Neuaufbau der Zell-ViewModels (Variante/Artikel/
+    /// Modultyp/Paste) aufgerufen. MainViewModel loest darueber die ausgewaehlte
+    /// Zelle neu auf — die alte Zell-VM ist nach dem Rebuild abgehaengt.</summary>
+    public Action? CellsRebuilt { get; set; }
+
     private void NotifyContentChanged() => ContentChanged?.Invoke();
 
-    public int ModuleIndex => _module.ModuleIndex;  // = Spalte auf der Seite (0-4)
+    public int ModuleIndex => _module.ModuleIndex;  // Streifen-Position auf der Seite (0..ModulesPerPage-1)
 
     public MpModuleVariant Variant
     {
@@ -75,8 +80,20 @@ public class MpModuleViewModel : ViewModelBase
             if (_module.Variant != value)
             {
                 _module.Variant = value;
+                // Ein Katalog-Artikel gehoert fest zu SEINER Variante. Bleibt er bei
+                // manuellem Variantenwechsel stehen, faellt GetDefinitions still auf
+                // die generische Belegung zurueck, waehrend UI und Projektdatei weiter
+                // den Artikel zeigen — gedruckt wuerde eine falsche Klemmenbelegung.
+                var entry = MpModuleCatalog.Find(_module.ArticleNumber);
+                bool articleCleared = false;
+                if (entry is not null && entry.Variant != value)
+                {
+                    _module.ArticleNumber = null;
+                    articleCleared = true;
+                }
                 RebuildCellViewModels();
                 OnPropertyChanged();
+                if (articleCleared) OnPropertyChanged(nameof(ArticleNumber));
                 OnPropertyChanged(nameof(HasText));
                 NotifyContentChanged();
             }
@@ -166,6 +183,12 @@ public class MpModuleViewModel : ViewModelBase
         set { _module.IsBold = value; OnPropertyChanged(); NotifyContentChanged(); }
     }
 
+    public bool IsItalic
+    {
+        get => _module.IsItalic;
+        set { _module.IsItalic = value; OnPropertyChanged(); NotifyContentChanged(); }
+    }
+
     public bool IsPrintEnabled
     {
         get => _module.IsPrintEnabled;
@@ -177,6 +200,9 @@ public class MpModuleViewModel : ViewModelBase
     public ObservableCollection<MpAddressCellViewModel> AddressCells { get; } = [];
 
     public bool HasText => _module.HasText;
+
+    /// <summary>Druck-Entscheidung (siehe MpModule.HasPrintableContent).</summary>
+    public bool HasPrintableContent => _module.HasPrintableContent;
 
     public bool IsSelected
     {
@@ -209,6 +235,7 @@ public class MpModuleViewModel : ViewModelBase
         _module.FontSize = source.FontSize;
         _module.FontFamily = source.FontFamily;
         _module.IsBold = source.IsBold;
+        _module.IsItalic = source.IsItalic;
         _module.IsPrintEnabled = source.IsPrintEnabled;
 
         // Zelltexte uebertragen (AddressCells-Liste wurde durch Variant-Setter neu angelegt)
@@ -223,6 +250,7 @@ public class MpModuleViewModel : ViewModelBase
         OnPropertyChanged(nameof(FontSize));
         OnPropertyChanged(nameof(FontFamily));
         OnPropertyChanged(nameof(IsBold));
+        OnPropertyChanged(nameof(IsItalic));
         OnPropertyChanged(nameof(IsPrintEnabled));
         OnPropertyChanged(nameof(PrintOpacity));
         OnPropertyChanged(nameof(HasText));
@@ -248,6 +276,13 @@ public class MpModuleViewModel : ViewModelBase
                 _module.AddressCells[i].Text = oldTexts[i];
         }
 
+        // Texte in jetzt gesperrten Struktur-Zellen leeren: sie waeren unsichtbar
+        // (Preview/Druck zeigen das feste Label), liessen HasText aber true —
+        // ein leer aussehendes Modul wuerde gedruckt.
+        for (int i = 0; i < _module.AddressCells.Count && i < definitions.Length; i++)
+            if (!definitions[i].IsEditable)
+                _module.AddressCells[i].Text = string.Empty;
+
         for (int i = 0; i < _module.AddressCells.Count; i++)
         {
             // Closure statt Direktreferenz: ContentChanged wird erst NACH dem
@@ -256,5 +291,7 @@ public class MpModuleViewModel : ViewModelBase
                 _module.AddressCells[i], definitions[i],
                 () => ContentChanged?.Invoke()));
         }
+
+        CellsRebuilt?.Invoke();
     }
 }

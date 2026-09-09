@@ -53,9 +53,14 @@
                 </MenuItem>
                 <Separator/>
                 <MenuItem Header="Importieren">
-                    <MenuItem Header="CSV-Datei..." Command="{Binding ImportCsvCommand}"/>
-                    <MenuItem Header="Excel-Datei (.xlsx)..." Command="{Binding ImportExcelCommand}"/>
-                    <MenuItem Header="PDF-Schaltplan..." Command="{Binding ImportSchematicCommand}"/>
+                    <MenuItem Header="CSV-Datei..." Command="{Binding ImportCsvCommand}"
+                              ToolTipService.ShowOnDisabled="True"
+                              ToolTip="Nur fuer ET 200SP-Etiketten (Kopfzeile / Zeile 1 / Zeile 2). Im ET200MP-Modus nicht verfuegbar."/>
+                    <MenuItem Header="Excel-Datei (.xlsx)..." Command="{Binding ImportExcelCommand}"
+                              ToolTipService.ShowOnDisabled="True"
+                              ToolTip="Nur fuer ET 200SP-Etiketten (Kopfzeile / Zeile 1 / Zeile 2). Im ET200MP-Modus nicht verfuegbar."/>
+                    <MenuItem Header="PDF-Schaltplan..." Command="{Binding ImportSchematicCommand}"
+                              ToolTip="Module und Adressen aus einem Schaltplan-PDF; ET200MP: je Modul ein Streifen ab dem ausgewaehlten Modul."/>
                 </MenuItem>
                 <Separator/>
                 <MenuItem Header="_Drucken..." Command="{Binding PrintCommand}" InputGestureText="Ctrl+P"/>

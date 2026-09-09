@@ -21,16 +21,39 @@ public static class ProjectService
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public static void Save(LabelProject project, string filePath)
+    public static void Save(LabelProject project, string filePath, bool addToRecent = true)
     {
         // Ensure LegacyLabels is null so it won't be serialized in v2 format
         project.LegacyLabels = null;
         var json = JsonSerializer.Serialize(project, JsonOptions);
-        File.WriteAllText(filePath, json);
-        AddRecentFile(filePath);
+        WriteAtomic(filePath, json, keepBackup: true);
+        if (addToRecent) AddRecentFile(filePath);
     }
 
-    public static LabelProject Load(string filePath)
+    /// <summary>
+    /// Atomares Schreiben: erst in eine .tmp-Datei, dann per Move ueber das Ziel.
+    /// Ein Absturz oder eine volle Platte waehrend des Schreibens hinterlaesst so
+    /// nie eine halbe Projektdatei; die vorherige Version bleibt optional als .bak.
+    /// </summary>
+    public static void WriteAtomic(string filePath, string content, bool keepBackup)
+    {
+        var fullPath = Path.GetFullPath(filePath);
+        var dir = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+        var tmpPath = fullPath + ".tmp";
+        File.WriteAllText(tmpPath, content);
+
+        if (keepBackup && File.Exists(fullPath))
+        {
+            var bakPath = fullPath + ".bak";
+            File.Copy(fullPath, bakPath, overwrite: true);
+        }
+
+        File.Move(tmpPath, fullPath, overwrite: true);
+    }
+
+    public static LabelProject Load(string filePath, bool addToRecent = true)
     {
         if (!File.Exists(filePath))
             throw new FileNotFoundException($"Projektdatei nicht gefunden: {filePath}", filePath);
@@ -43,6 +66,11 @@ public static class ProjectService
         var json = File.ReadAllText(filePath);
         var project = JsonSerializer.Deserialize<LabelProject>(json, JsonOptions)
             ?? throw new InvalidDataException("Ungueltige Projektdatei.");
+
+        // Handeditierte/fremd erzeugte Dateien: "Pages": null oder "Settings": null
+        // fuehrten zu einer nichtssagenden NullReferenceException.
+        project.Pages ??= [];
+        project.Settings ??= new LabelSettings();
 
         // v1 migration: flat Labels list -> single LabelPage
         if (project.Version < 2 || (project.Pages.Count == 0 && project.LegacyLabels?.Count > 0))
@@ -72,20 +100,34 @@ public static class ProjectService
             if (project.MpPages is not null)
             {
                 var familyInfo = ProductFamilyDefinitions.Get(project.ProductFamily);
+                // Default-Variante der FAMILIE (25mm: MP25_16), nicht blind DI_DQ_16
+                var defaultVariant = MpModuleLayoutFactory.DefaultVariantFor(project.ProductFamily);
                 foreach (var page in project.MpPages)
                 {
                     while (page.Modules.Count < familyInfo.ModulesPerPage)
                     {
-                        var module = new MpModule { ModuleIndex = page.Modules.Count };
+                        var module = new MpModule { ModuleIndex = page.Modules.Count, Variant = defaultVariant };
                         module.AddressCells = MpModuleLayoutFactory.CreateCells(module.Variant);
                         page.Modules.Add(module);
                     }
-                    // ModuleIndex konsistent zur Listenposition halten
-                    for (int i = 0; i < page.Modules.Count; i++)
-                        page.Modules[i].ModuleIndex = i;
                 }
             }
             project.Version = 5;
+        }
+
+        // ModuleIndex immer konsistent zur Listenposition halten (auch bei v5-Dateien
+        // mit Luecken/Dubletten — sonst rechnet BandOf eine Position ausserhalb des Blatts).
+        if (project.MpPages is not null)
+        {
+            foreach (var page in project.MpPages)
+            {
+                page.Modules ??= [];
+                for (int i = 0; i < page.Modules.Count; i++)
+                {
+                    page.Modules[i].ModuleIndex = i;
+                    page.Modules[i].AddressCells ??= [];
+                }
+            }
         }
 
         // Ensure at least one page exists
@@ -97,7 +139,7 @@ public static class ProjectService
         // Clear legacy data after migration
         project.LegacyLabels = null;
 
-        AddRecentFile(filePath);
+        if (addToRecent) AddRecentFile(filePath);
         return project;
     }
 

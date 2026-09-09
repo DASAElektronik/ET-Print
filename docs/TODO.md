@@ -264,7 +264,7 @@
 
 ## Phase 21+: Abschluss v3.1 (2026-09-09, Plan in ABSCHLUSSPLAN.md)
 - [x] AP0 Testinfrastruktur: render-print/quit/apply/new-project, smoke.ps1, Publish-Profil (24/24 Smoke gruen)
-- [ ] AP1 Kritische Bugs (12)
+- [x] AP1 Kritische Bugs (12, + 2.6/2.10/2.20 vorgezogen; 133 Tests, Smoke 41/41)
 - [ ] AP2 Mittlere Bugs (20 + 2.21 Shrink-to-fit vertikale Slots)
 - [ ] AP3 Geometrie-Klasse Preview = Druck + Tests
 - [ ] AP4 Import-Robustheit

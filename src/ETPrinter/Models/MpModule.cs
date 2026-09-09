@@ -45,16 +45,32 @@ public class MpModule
     public int FontSize { get; set; } = 7;
     public string FontFamily { get; set; } = "Arial";
     public bool IsBold { get; set; }
+    public bool IsItalic { get; set; }
 
     // Selektiver Druck
     public bool IsPrintEnabled { get; set; } = true;
 
+    /// <summary>True wenn der Benutzer irgendetwas eingetragen hat (Header, Adressen,
+    /// Netzadresse, CPU). Feste Struktur-Labels zaehlen NICHT — sonst waere jedes
+    /// leere DI/DQ-16-Modul wegen "L+"/"M" befuellt.</summary>
     public bool HasText =>
         !string.IsNullOrWhiteSpace(HeaderText)
         || AddressCells.Any(c => !string.IsNullOrWhiteSpace(c.Text))
         || !string.IsNullOrWhiteSpace(NetAddress1)
         || !string.IsNullOrWhiteSpace(NetAddress2)
         || !string.IsNullOrWhiteSpace(CpuName);
+
+    /// <summary>True wenn der Streifen gedruckt werden soll: entweder hat der
+    /// Benutzer Text eingetragen, ODER das Modul ist ein reiner Pinout-Streifen
+    /// (alle Zellen fest belegt, z.B. SIWAREX) — dann sind die festen Labels der
+    /// Inhalt. Preview und Druck entscheiden ueber DIESE Methode, nicht ueber HasText,
+    /// sonst zeigt die Vorschau ein Modul, das der Druck stillschweigend auslaesst.</summary>
+    public bool HasPrintableContent => HasText || IsFixedPinout(MpModuleLayoutFactory.GetDefinitions(this));
+
+    public static bool IsFixedPinout(MpCellDefinition[] definitions) =>
+        definitions.Length > 0
+        && definitions.All(d => !d.IsEditable)
+        && definitions.Any(d => !string.IsNullOrEmpty(d.Label));
 
     /// <summary>Kopiert alle Inhalte + Variante in eine neue Instanz.
     /// ModuleIndex wird NICHT kopiert (kommt vom Ziel). AddressCells werden deep-kopiert.</summary>
@@ -71,6 +87,7 @@ public class MpModule
         FontSize = FontSize,
         FontFamily = FontFamily,
         IsBold = IsBold,
+        IsItalic = IsItalic,
         IsPrintEnabled = IsPrintEnabled,
     };
 }
@@ -91,7 +108,8 @@ public class MpAddressCell
 }
 
 /// <summary>
-/// Container fuer eine Seite von ET200MP-Modulen (5 Module pro Seite).
+/// Container fuer eine Seite von ET200MP-Modulen (ModulesPerPage Streifen-Positionen:
+/// 10 bei 35mm, 20 bei 25mm).
 /// </summary>
 public class MpModulePage
 {

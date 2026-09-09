@@ -11,6 +11,52 @@
 
 ## 2026-09-09 - Projekttag 7 (Abschluss v3.1, siehe docs/ABSCHLUSSPLAN.md)
 
+### AP1: Kritische Bugs (falscher/fehlender Druck, Datenverlust)
+- **"Neu" bei aktivem Standardformat war ein No-op**: der Format-Setter kehrte bei
+  gleichem Format sofort zurueck, `InitializeLabels` lief nie, `IsDirty=false` — alte
+  Etiketten galten als gespeichert. Jetzt werden Etiketten/Module immer neu angelegt,
+  PrintGridLines zurueckgesetzt.
+- **SIWAREX-Streifen wurden nicht gedruckt**: `HasText` zaehlte nur editierbare Zellen.
+  Neu `MpModule.HasPrintableContent` (Text ODER reiner Pinout-Streifen ohne editierbare
+  Zellen); einzige Druck-Entscheidung ist `PrintService.IsPrintable` fuer Seite,
+  Schnittkanten und Inhalt. Leere DI/DQ-16-Module (nur "L+"/"M") bleiben ungedruckt.
+- **Variantenwechsel behielt den Katalog-Artikel**: Belegung fiel still auf generisch
+  zurueck, UI/Datei zeigten weiter den Artikel. Der Variant-Setter loescht jetzt einen
+  nicht passenden Artikel.
+- **Leere Seiten wurden gedruckt** (Auto-Advance legt nach dem letzten Etikett immer eine
+  neue Seite an): `BuildDocument`/`BuildMpDocument` ueberspringen Seiten ohne druckbaren
+  Inhalt; bei 0 Seiten Hinweis statt Leerauftrag.
+- **PDF-Import kappte 32-Kanal-Module auf 2 Bytes**: `BuildImportCells` verteilt in
+  Bloecken von `GetEffectiveCount` auf mehrere Etiketten, einzeilige Formate bekommen
+  die Adressen gemerged (`MergeAddressLines` jetzt gemeinsam).
+- **PDF-Import im ET200MP-Modus** fuellt jetzt Module (Header = Modulname, Adressen ueber
+  `FillMpModuleAddresses`, Seiten bei Bedarf); CSV/Excel sind im MP-Modus deaktiviert
+  (Tooltip) statt unsichtbare SP-Seiten zu erzeugen.
+- **Atomares Speichern** (`ProjectService.WriteAtomic`: .tmp + Move, vorherige Version
+  als .bak) fuer Projekt und calibration.json.
+- **Globaler Exception-Handler** (App.xaml.cs): Log + Notfall-Sicherung nach
+  `%LOCALAPPDATA%\ETPrinterecovery.etprint` + Hinweis; beim naechsten Start wird die
+  Wiederherstellung angeboten. `TaskScheduler.UnobservedTaskException` wird geloggt.
+- **Zellauswahl** wird bei Modulwechsel zurueckgesetzt und nach Zell-Neuaufbau
+  (Variante/Artikel/Modultyp/Paste) per CellIndex neu aufgeloest (`CellsRebuilt`).
+- **Schrift-Einstellungen wirken im MP-Modus** (Groesse/fett/kursiv/Schriftart auf das
+  Modul; Modulwechsel laedt die Werte in die Eingabefelder). Neu `MpModule.IsItalic`
+  (additiv, Preview + Druck).
+- **Familienwechsel ueberall gleich** (`ApplyFamilyCore`): Formate, Varianten und
+  Katalog-Artikel; `ApplyLoadedProject` zeigte nach dem Laden eines 25mm-Projekts die
+  35mm-Varianten. Familienwechsel setzt nur noch die Raender zurueck (nicht die
+  Header-Schrift) und markiert das Projekt als geaendert.
+- Texte in gesperrten Struktur-Zellen werden beim Zell-Neuaufbau geleert (Geistertexte).
+- Laden: `Pages`/`Settings` null-sicher, v4-zu-v5-Auffuellung mit Familien-Default-Variante,
+  ModuleIndex immer normalisiert, unvollstaendige MP-Seiten werden aufgefuellt.
+- Erneute Auswahl desselben Etiketts/Moduls loescht die Markierung nicht mehr (2.6);
+  Generator-Statusmeldung bleibt sichtbar (2.10); Log mit Klassenname (Finding 21).
+- Test-Automation: `set-font`, `print-state`; `state` mit Varianten/Artikeln/Dateipfad,
+  `mp-state` mit Schrift/Zellauswahl/Zelltexten.
+- Tests: 133 (24 neu in CriticalFixTests, STA-Helfer fuer FixedDocument-Tests,
+  Testprojekt mit UseWPF + InternalsVisibleTo). Smoke AP1: 41/41 gruen, SIWAREX im
+  Druck-PNG sichtbar.
+
 ### AP0: Testinfrastruktur
 - PrintService in dialogfreie Dokument-Erzeugung (`BuildDocument`, `BuildMpDocument`,
   `BuildCalibrationDocument`) und Dialog (`Print` -> bool) getrennt. Druck und

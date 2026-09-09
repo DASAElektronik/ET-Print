@@ -166,7 +166,7 @@ public partial class MpPreviewControl : UserControl
             DrawCell(cellX, cellY, cellW, cellH,
                 displayText, bg, isCellSelected,
                 fontSize: mod.FontSize * PtToPx, rotate: isVertical && def.IsEditable,
-                isBold: mod.IsBold, fontFamily: mod.FontFamily,
+                isBold: mod.IsBold, isItalic: mod.IsItalic, fontFamily: mod.FontFamily,
                 foreground: def.IsEditable ? null : StructTextBrush,
                 clickAction: def.IsEditable ? () => SelectCell(vm, mod, cellVm) : null);
         }
@@ -184,19 +184,23 @@ public partial class MpPreviewControl : UserControl
         {
             double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
             DrawCell(col2X, dataStartY, col2W, blockH,
-                mod.NetAddress1, NetAddrBgBrush, false, fontSize: fs, rotate: true, fontFamily: mod.FontFamily);
+                mod.NetAddress1, NetAddrBgBrush, false, fontSize: fs, rotate: true,
+                isItalic: mod.IsItalic, fontFamily: mod.FontFamily);
             DrawCell(col2X, dataStartY + blockH, col2W, blockH,
-                mod.NetAddress2, NetAddrBgBrush, false, fontSize: fs, rotate: true, fontFamily: mod.FontFamily);
+                mod.NetAddress2, NetAddrBgBrush, false, fontSize: fs, rotate: true,
+                isItalic: mod.IsItalic, fontFamily: mod.FontFamily);
         }
 
         double col3X = col2X + col2W;
         DrawCell(col3X, dataStartY, col3W, bandDataH,
-            mod.CpuName, CpuNameBgBrush, false, fontSize: fs, rotate: true, fontFamily: mod.FontFamily);
+            mod.CpuName, CpuNameBgBrush, false, fontSize: fs, rotate: true,
+            isItalic: mod.IsItalic, fontFamily: mod.FontFamily);
     }
 
     private void DrawCell(double x, double y, double w, double h,
         string text, Brush background, bool isSelected,
         double fontSize = 5, bool rotate = false, bool isBold = false,
+        bool isItalic = false,
         string fontFamily = "Arial",
         Brush? foreground = null, Action? clickAction = null)
     {
@@ -221,6 +225,7 @@ public partial class MpPreviewControl : UserControl
                 Text = text.Replace("\n", " / "),
                 FontSize = fontSize,
                 FontWeight = isBold ? FontWeights.Bold : FontWeights.Normal,
+                FontStyle = isItalic ? FontStyles.Italic : FontStyles.Normal,
                 FontFamily = new FontFamily(fontFamily),
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Foreground = foreground ?? Brushes.Black,

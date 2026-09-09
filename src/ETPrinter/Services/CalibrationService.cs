@@ -39,9 +39,8 @@ public static class CalibrationService
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
             var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(FilePath, json);
+            ProjectService.WriteAtomic(FilePath, json, keepBackup: false);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

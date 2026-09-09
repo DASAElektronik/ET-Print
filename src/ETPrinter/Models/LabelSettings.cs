@@ -27,7 +27,12 @@ public class LabelSettings
         FontFamily = "Arial";
         HeaderFontSize = 9;
         HeaderIsBold = true;
+        ResetMarginsForFamily(family);
+    }
 
+    /// <summary>Nur die Seitenraender auf die Familien-Defaults (Schrift bleibt).</summary>
+    public void ResetMarginsForFamily(ProductFamily family)
+    {
         var info = ProductFamilyDefinitions.Get(family);
         MarginTop = info.DefaultMarginTop;
         MarginLeft = info.DefaultMarginLeft;

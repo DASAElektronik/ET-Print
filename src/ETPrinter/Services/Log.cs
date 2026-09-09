@@ -15,22 +15,28 @@ public static class Log
     private static readonly object _lock = new();
     private const long RotateSizeBytes = 1 * 1024 * 1024;
 
-    public static void Info(string msg, [CallerMemberName] string caller = "") =>
-        Write("INFO", msg, null, caller);
+    /// <summary>Pfad der Logdatei (fuer Fehlermeldungen an den Benutzer).</summary>
+    public static string FilePath => LogFile;
 
-    public static void Warn(string msg, [CallerMemberName] string caller = "") =>
-        Write("WARN", msg, null, caller);
+    public static void Info(string msg, [CallerMemberName] string caller = "", [CallerFilePath] string file = "") =>
+        Write("INFO", msg, null, caller, file);
 
-    public static void Error(string msg, Exception? ex = null, [CallerMemberName] string caller = "") =>
-        Write("ERROR", msg, ex, caller);
+    public static void Warn(string msg, [CallerMemberName] string caller = "", [CallerFilePath] string file = "") =>
+        Write("WARN", msg, null, caller, file);
 
-    private static void Write(string level, string msg, Exception? ex, string caller)
+    public static void Error(string msg, Exception? ex = null, [CallerMemberName] string caller = "", [CallerFilePath] string file = "") =>
+        Write("ERROR", msg, ex, caller, file);
+
+    private static void Write(string level, string msg, Exception? ex, string caller, string file)
     {
         try
         {
+            // "Load"/"Save" gibt es in mehreren Services — Klassenname (aus dem
+            // Dateinamen) macht die Zeile eindeutig zuordenbar.
+            string cls = Path.GetFileNameWithoutExtension(file);
             var sb = new StringBuilder();
             sb.Append(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"));
-            sb.Append($" [{level}] {caller}: {msg}\n");
+            sb.Append($" [{level}] {cls}.{caller}: {msg}\n");
             if (ex is not null)
                 sb.Append($"{ex}\n");
 

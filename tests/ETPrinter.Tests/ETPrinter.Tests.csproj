@@ -5,6 +5,7 @@
     <IsPackable>false</IsPackable>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +19,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ETPrinter\ETPrinter.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- UseWPF ersetzt die Standard-ImplicitUsings — System.IO explizit -->
+    <Using Include="System.IO" />
   </ItemGroup>
 
 </Project>
