@@ -7,6 +7,7 @@ namespace ETPrinter.Tests;
 
 /// <summary>ABSCHLUSSPLAN AP9b: herausgeloeste Teile des Haupt-ViewModels
 /// (PageDocument, ProjectSession, IDialogService).</summary>
+[Collection("RecentFiles")] // gemeinsame recent.json: nicht parallel
 public class DecompositionTests
 {
     // ---- PageDocument<T> ---------------------------------------------------------
@@ -250,6 +251,7 @@ public class DecompositionTests
 }
 
 /// <summary>AP9b Schritt 3: MpEditorViewModel und ImportCoordinator.</summary>
+[Collection("RecentFiles")] // gemeinsame recent.json: nicht parallel
 public class DecompositionTests2
 {
     private static MainViewModel NewMpVm(SilentDialogService? dialogs = null)

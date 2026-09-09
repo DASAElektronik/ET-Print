@@ -350,6 +350,47 @@ try {
     # --- Kalibrierseite -------------------------------------------------------
     $rp = Invoke-Cmd "render-calibration $OutDir\mp_calibration" | ConvertFrom-Json
     Assert-Eq 1 $rp.pages "Kalibrierseite gerendert"
+
+    # --- Szenario 5: Undo/Redo (AP9c) ----------------------------------------
+    Write-Host "`n[5] Undo/Redo" -ForegroundColor Yellow
+    Invoke-Cmd "new-project" | Out-Null
+    $h = Invoke-Cmd "history-state" | ConvertFrom-Json
+    Assert-True (-not $h.canUndo) "Nach Neu: nichts rueckgaengig"
+    Invoke-Cmd "select-label 0" | Out-Null
+    Invoke-Cmd "set-input Kopf|Zeile 1|Zeile 2" | Out-Null
+    Invoke-Cmd "apply" | Out-Null
+    Invoke-Cmd "select-label 1" | Out-Null
+    Invoke-Cmd "set-generator M1 DI 0 2" | Out-Null
+    Invoke-Cmd "trigger-generate" | Out-Null
+    Assert-Eq 2 (Get-State).filledLabels "Zwei Etiketten befuellt"
+    $h = Invoke-Cmd "undo" | ConvertFrom-Json
+    Assert-Eq "Generieren" $h.nextRedo "Undo 1 = Generieren"
+    Assert-Eq 1 (Get-State).filledLabels "Undo: Generieren zurueckgenommen"
+    $h = Invoke-Cmd "undo" | ConvertFrom-Json
+    Assert-Eq 0 (Get-State).filledLabels "Undo: Uebertragen zurueckgenommen"
+    Assert-True (-not $h.isDirty) "Zurueck auf dem sauberen Stand: nicht dirty"
+    Assert-True (-not $h.canUndo) "Undo-Stapel leer"
+    $h = Invoke-Cmd "redo" | ConvertFrom-Json
+    Assert-Eq 1 (Get-State).filledLabels "Redo: Uebertragen wiederholt"
+    Assert-True $h.isDirty "Nach Redo wieder dirty"
+    Invoke-Cmd "redo" | Out-Null
+    Assert-Eq 2 (Get-State).filledLabels "Redo: Generieren wiederholt"
+    Invoke-Cmd "add-page" | Out-Null
+    Invoke-Cmd "undo" | Out-Null
+    Assert-Eq 1 (Get-State).pageCount "Undo: Seite hinzufuegen"
+    # MP: Tippen im Header wird zusammengefasst, Familienwechsel ist ein Schritt
+    Invoke-Cmd "select-family S71500_ET200MP" | Out-Null
+    Invoke-Cmd "select-module 0" | Out-Null
+    Invoke-Cmd "set-module-header H1" | Out-Null
+    Invoke-Cmd "set-module-header H12" | Out-Null
+    $h = Invoke-Cmd "undo" | ConvertFrom-Json
+    Assert-Eq "Modulinhalt" $h.nextRedo "Undo = Modulinhalt (Tippen zusammengefasst)"
+    Assert-Eq "" (Get-MpState).header "Undo: Header leer"
+    Invoke-Cmd "undo" | Out-Null
+    Assert-Eq "ET200SP" (Get-State).productFamily "Undo: Familienwechsel zurueck zu SP"
+    Assert-Eq 2 (Get-State).filledLabels "Undo: SP-Inhalt wieder da"
+    Invoke-Cmd "redo" | Out-Null
+    Assert-Eq "S71500_ET200MP" (Get-State).productFamily "Redo: wieder MP"
 }
 catch {
     $script:failures.Add("Abbruch: $($_.Exception.Message)")

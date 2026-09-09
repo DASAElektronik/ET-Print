@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -48,6 +49,16 @@ public class MainViewModel : ViewModelBase, IImportTarget
     /// <summary>Import-Ablaeufe CSV/Excel/PDF.</summary>
     public ImportCoordinator Import { get; }
 
+    /// <summary>Undo/Redo-Verlauf (Snapshots des Projektzustands, AP9c). Tippen in
+    /// Modulzellen und Randfeldern wird zu einem Schritt zusammengefasst.</summary>
+    internal UndoHistory<EditorState> History { get; } =
+        new(coalesceKeys: ["Modulinhalt", "Seitenraender", "Kopfzeilen-Schrift", "Schrift"]);
+    private bool _undoSuspended;
+    private int _batchDepth;
+    private string? _batchLabel;
+    private bool _batchChanged;
+    private EditorState? _cleanState;
+
     private readonly IDialogService _dialogs;
 
     public MainViewModel() : this(null) { }
@@ -70,6 +81,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
 
         MpEditor = new MpEditorViewModel(_mpDoc.Visible, Generator, Panel, _selectedProductFamily);
         MpEditor.PropertyChanged += OnMpEditorPropertyChanged;
+        MpEditor.ChangeScope = BeginChange;
 
         Import = new ImportCoordinator(_dialogs, this);
         Import.StatusRequested += msg => StatusMessage = msg;
@@ -85,7 +97,10 @@ public class MainViewModel : ViewModelBase, IImportTarget
         Session.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(ProjectSession.IsDirty))
+            {
+                if (!Session.IsDirty) _cleanState = History.Current;
                 OnPropertyChanged(nameof(IsDirty));
+            }
             if (e.PropertyName is nameof(ProjectSession.IsDirty) or nameof(ProjectSession.CurrentFilePath))
                 OnPropertyChanged(nameof(WindowTitle));
         };
@@ -96,13 +111,15 @@ public class MainViewModel : ViewModelBase, IImportTarget
         AvailableFonts = new ObservableCollection<string> { "Arial" };
         LoadFontsInBackground();
 
-        ApplyCommand = new RelayCommand(ApplyToLabel, () => SelectedLabel is not null || SelectedMpModule is not null);
-        GenerateAndApplyCommand = new RelayCommand(GenerateAndApply, () => SelectedLabel is not null || SelectedMpModule is not null);
+        ApplyCommand = new RelayCommand(Undoable(ApplyToLabel, "Uebertragen"), () => SelectedLabel is not null || SelectedMpModule is not null);
+        GenerateAndApplyCommand = new RelayCommand(Undoable(GenerateAndApply, "Generieren"), () => SelectedLabel is not null || SelectedMpModule is not null);
         GeneratePreviewCommand = new RelayCommand(Generator.UpdatePreview);
-        ClearAllCommand = new RelayCommand(ClearAllLabels);
-        ClearSelectedCommand = new RelayCommand(ClearSelected, () => HasSelection && !TextBoxHasFocus());
-        ResetSettingsCommand = new RelayCommand(ResetSettings);
-        ApplyFontToAllCommand = new RelayCommand(ApplyFontToAll);
+        ClearAllCommand = new RelayCommand(Undoable(ClearAllLabels, "Alle loeschen"));
+        ClearSelectedCommand = new RelayCommand(Undoable(ClearSelected, "Auswahl leeren"), () => HasSelection && !TextBoxHasFocus());
+        ResetSettingsCommand = new RelayCommand(Undoable(ResetSettings, "Seite zuruecksetzen"));
+        ApplyFontToAllCommand = new RelayCommand(Undoable(ApplyFontToAll, "Schrift auf alle"));
+        UndoCommand = new RelayCommand(Undo, () => History.CanUndo && !TextBoxHasFocus());
+        RedoCommand = new RelayCommand(Redo, () => History.CanRedo && !TextBoxHasFocus());
         FitZoomCommand = new RelayCommand(() => FitZoomRequested?.Invoke());
         PrintCommand = new RelayCommand(PrintLabels);
         PrintCurrentPageCommand = new RelayCommand(PrintCurrentPage);
@@ -112,13 +129,13 @@ public class MainViewModel : ViewModelBase, IImportTarget
         SaveAsCommand = new RelayCommand(Session.SaveAs);
         OpenCommand = new RelayCommand(Session.Open);
         OpenRecentCommand = new RelayCommand<string>(Session.OpenRecent);
-        UpdateHeaderCommand = new RelayCommand(UpdateHeader, () => SelectedLabel is not null || SelectedMpModule is not null);
+        UpdateHeaderCommand = new RelayCommand(Undoable(UpdateHeader, "Kopfzeile"), () => SelectedLabel is not null || SelectedMpModule is not null);
 
         // Page navigation commands
         NextPageCommand = new RelayCommand(NextPage, () => CurrentPageIndex < PageCount - 1);
         PrevPageCommand = new RelayCommand(PrevPage, () => CurrentPageIndex > 0);
-        AddPageCommand = new RelayCommand(AddPage);
-        RemovePageCommand = new RelayCommand(RemovePage, () => PageCount > 1);
+        AddPageCommand = new RelayCommand(Undoable(AddPage, "Seite hinzufuegen"));
+        RemovePageCommand = new RelayCommand(Undoable(RemovePage, "Seite entfernen"), () => PageCount > 1);
 
         // Import commands — CSV/Excel liefern Etikettenzeilen (Header/Zeile1/Zeile2),
         // dafuer gibt es im modulbasierten MP-Modus kein Ziel. PDF-Import fuellt
@@ -128,17 +145,18 @@ public class MainViewModel : ViewModelBase, IImportTarget
         ImportSchematicCommand = new RelayCommand(() => _ = Import.ImportSchematicAsync());
 
         // Selective print commands
-        SelectAllForPrintCommand = new RelayCommand(SelectAllForPrint);
-        DeselectAllForPrintCommand = new RelayCommand(DeselectAllForPrint);
-        SelectFilledForPrintCommand = new RelayCommand(SelectFilledForPrint);
-        TogglePrintCommand = new RelayCommand(TogglePrint, () => HasSelection);
+        SelectAllForPrintCommand = new RelayCommand(Undoable(SelectAllForPrint, "Druckauswahl"));
+        DeselectAllForPrintCommand = new RelayCommand(Undoable(DeselectAllForPrint, "Druckauswahl"));
+        SelectFilledForPrintCommand = new RelayCommand(Undoable(SelectFilledForPrint, "Druckauswahl"));
+        TogglePrintCommand = new RelayCommand(Undoable(TogglePrint, "Druckauswahl"), () => HasSelection);
 
         // Copy / Paste
         CopyCommand = new RelayCommand(CopySelection, CanCopy);
-        PasteCommand = new RelayCommand(PasteFromClipboard, CanPaste);
+        PasteCommand = new RelayCommand(Undoable(PasteFromClipboard, "Einfuegen"), CanPaste);
 
         LoadCalibration();
         InitializeLabels();
+        ResetHistory();
     }
 
     public ObservableCollection<ProductFamilyInfo> AvailableProductFamilies { get; }
@@ -172,6 +190,146 @@ public class MainViewModel : ViewModelBase, IImportTarget
     {
         IsDirty = true;
         StatusMessage = status;
+    }
+
+    // === Undo/Redo (AP9c) ===
+
+    /// <summary>Zentrale Aenderungsmeldung: Projekt gilt als geaendert, der neue Zustand
+    /// wandert in den Undo-Verlauf (innerhalb eines <see cref="BeginChange"/>-Blocks
+    /// gesammelt zu einem Schritt). <paramref name="label"/> = Beschriftung des Schritts
+    /// bzw. Zusammenfass-Schluessel.</summary>
+    internal void MarkChanged([CallerMemberName] string label = "")
+    {
+        IsDirty = true;
+        RecordChange(label);
+    }
+
+    /// <summary>Nur Undo-Schritt, ohne Dirty (Format-/Familienwechsel eines leeren,
+    /// ungespeicherten Projekts gilt nicht als Aenderung, soll aber rueckgaengig gehen).</summary>
+    internal void RecordChange(string label)
+    {
+        if (_undoSuspended) return;
+        if (_batchDepth > 0) { _batchChanged = true; return; }
+        History.Record(Capture(), label);
+    }
+
+    /// <summary>Seite/Auswahl im aktuellen Snapshot nachfuehren, damit Undo den Cursor
+    /// von VOR der Aenderung wiederherstellt. Innerhalb eines Batches eingefroren.</summary>
+    private void TouchCursor()
+    {
+        if (_undoSuspended || _batchDepth > 0) return;
+        History.TouchCurrent(s => s with { PageIndex = CurrentPageIndex, SelectedIndex = CurrentSelectedIndex() });
+    }
+
+    private int CurrentSelectedIndex() => _selectedFormat.IsModuleBased
+        ? (SelectedMpModule is null ? -1 : MpModules.IndexOf(SelectedMpModule))
+        : (SelectedLabel?.Index ?? -1);
+
+    /// <summary>Alle Aenderungen bis zum Dispose werden zu EINEM Undo-Schritt.</summary>
+    internal IDisposable BeginChange(string label)
+    {
+        if (_batchDepth++ == 0)
+        {
+            _batchLabel = label;
+            _batchChanged = false;
+        }
+        return new ChangeScope(this);
+    }
+
+    private void EndChange()
+    {
+        if (--_batchDepth > 0) return;
+        if (_batchChanged && !_undoSuspended)
+            History.Record(Capture(), _batchLabel ?? string.Empty);
+        _batchChanged = false;
+    }
+
+    private sealed class ChangeScope(MainViewModel owner) : IDisposable
+    {
+        public void Dispose() => owner.EndChange();
+    }
+
+    private Action Undoable(Action action, string label) => () =>
+    {
+        using (BeginChange(label)) action();
+    };
+
+    private EditorState Capture() =>
+        new(CloneProject(BuildProject()), CurrentPageIndex, CurrentSelectedIndex());
+
+    /// <summary>Tiefe Kopie: BuildProject liefert die LIVE-Modelle der ViewModels;
+    /// ein Undo-Snapshot muss davon entkoppelt sein (und beim Wiederherstellen
+    /// darf der Snapshot nicht selbst zum Live-Modell werden).</summary>
+    internal static LabelProject CloneProject(LabelProject p)
+    {
+        p.Pages = p.Pages.Select(page => new LabelPage
+        {
+            Labels = page.Labels.Select(c =>
+            {
+                var n = c.CloneContent();
+                n.Index = c.Index;
+                return n;
+            }).ToList()
+        }).ToList();
+        p.MpPages = p.MpPages?.Select(page => new MpModulePage
+        {
+            Modules = page.Modules.Select(m =>
+            {
+                var n = m.CloneContent();
+                n.ModuleIndex = m.ModuleIndex;
+                return n;
+            }).ToList()
+        }).ToList();
+        return p;
+    }
+
+    /// <summary>Verlauf neu beginnen (Laden, Neues Projekt): aktueller Zustand = sauber.</summary>
+    private void ResetHistory()
+    {
+        History.Reset(Capture());
+        _cleanState = History.Current;
+    }
+
+    internal void Undo()
+    {
+        var step = History.Undo();
+        if (step is null) return;
+        RestoreState(step.Value.State);
+        StatusMessage = $"Rueckgaengig: {step.Value.Label}";
+    }
+
+    internal void Redo()
+    {
+        var step = History.Redo();
+        if (step is null) return;
+        RestoreState(step.Value.State);
+        StatusMessage = $"Wiederholen: {step.Value.Label}";
+    }
+
+    private void RestoreState(EditorState state)
+    {
+        _undoSuspended = true;
+        try
+        {
+            ApplyProjectState(CloneProject(state.Project));
+            if (state.PageIndex >= 0 && state.PageIndex < PageCount)
+                NavigateToPage(state.PageIndex);
+            if (state.SelectedIndex >= 0)
+            {
+                if (_selectedFormat.IsModuleBased)
+                {
+                    if (state.SelectedIndex < MpModules.Count) SelectedMpModule = MpModules[state.SelectedIndex];
+                }
+                else if (state.SelectedIndex < Labels.Count)
+                {
+                    SelectedLabel = Labels[state.SelectedIndex];
+                }
+            }
+            // Zurueck auf dem gespeicherten Stand = nicht mehr geaendert (Vergleich ueber
+            // den Projekt-Snapshot: TouchCursor erzeugt neue EditorState-Instanzen)
+            IsDirty = !ReferenceEquals(History.Current?.Project, _cleanState?.Project);
+        }
+        finally { _undoSuspended = false; }
     }
 
     /// <summary>
@@ -218,6 +376,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
                     new Action(() => OnPropertyChanged(nameof(SelectedProductFamilyInfo))));
                 return;
             }
+            using var change = BeginChange("Familienwechsel");
             ApplyFamilyCore(value.Family);
 
             // Nur die Raender auf Family-Defaults setzen — Schrift-Einstellungen
@@ -241,6 +400,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             OnPropertyChanged(nameof(IsMultiBand));
             OnPropertyChanged(nameof(WindowTitle));
             // Verworfener Inhalt oder geaenderte Raender = ungespeicherte Aenderung
+            RecordChange("Familienwechsel");
             if (hadContent || Session.CurrentFilePath is not null) IsDirty = true;
         }
     }
@@ -288,6 +448,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
                 OnPropertyChanged(nameof(EditTargetInfo));
                 OnPropertyChanged(nameof(StatusSelectionInfo));
                 OnPropertyChanged(nameof(HasSelection));
+                TouchCursor();
                 break;
             case nameof(MpEditorViewModel.SelectedCell):
                 OnPropertyChanged(nameof(SelectedMpCell));
@@ -322,6 +483,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
                 InputTabIndex = value.IsModuleBased ? 2 : 0;
                 // Verworfener Inhalt = ungespeicherte Aenderung (Laden/Neu setzen danach
                 // selbst IsDirty=false)
+                RecordChange("Formatwechsel");
                 if (hadContent || Session.CurrentFilePath is not null) IsDirty = true;
                 OnPropertyChanged(nameof(IsMarginBottomEditable));
                 OnPropertyChanged(nameof(EditTargetInfo));
@@ -375,6 +537,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
                 OnPropertyChanged(nameof(EditTargetInfo));
                 OnPropertyChanged(nameof(StatusSelectionInfo));
                 OnPropertyChanged(nameof(HasSelection));
+                TouchCursor();
             }
         }
     }
@@ -486,7 +649,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         set
         {
             if (SetProperty(ref _printGridLines, value))
-                IsDirty = true; // wird mitgespeichert -> Aenderung
+                MarkChanged("Rasterlinien"); // wird mitgespeichert -> Aenderung
         }
     }
 
@@ -568,6 +731,8 @@ public class MainViewModel : ViewModelBase, IImportTarget
     public ICommand ClearSelectedCommand { get; }
     public ICommand ResetSettingsCommand { get; }
     public ICommand ApplyFontToAllCommand { get; }
+    public ICommand UndoCommand { get; }
+    public ICommand RedoCommand { get; }
     public ICommand FitZoomCommand { get; }
     public ICommand PrintCommand { get; }
     public ICommand PrintCurrentPageCommand { get; }
@@ -630,7 +795,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             empty.AddressCells = MpModuleLayoutFactory.CreateCells(empty.Variant);
             SelectedMpModule.SetModule(empty);
             NotifyMpPreviewChanged();
-            IsDirty = true;
+            MarkChanged();
             StatusMessage = $"Modul {SelectedMpModule.ModuleIndex + 1} geleert";
             return;
         }
@@ -639,7 +804,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         InputHeader = string.Empty;
         InputLine1 = string.Empty;
         InputLine2 = string.Empty;
-        IsDirty = true;
+        MarkChanged();
         StatusMessage = $"Etikett {SelectedLabel.DisplayPosition} geleert";
     }
 
@@ -654,7 +819,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             count++;
         }
         Panel.StoreFontInSettings();
-        IsDirty = true;
+        MarkChanged();
         NotifyMpPreviewChanged();
         StatusMessage = $"Schrift auf {count} {(IsModuleBased ? "Module" : "Etiketten")} angewendet";
     }
@@ -730,7 +895,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
     private void OnMpContentChanged()
     {
         if (Panel.SuspendLiveApply) return;
-        IsDirty = true;
+        MarkChanged("Modulinhalt");
         NotifyMpPreviewChanged();
     }
 
@@ -743,7 +908,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
     }
 
     private LabelViewModel CreateLabelViewModel(LabelCell cell) =>
-        new(cell) { PrintFlagChanged = () => IsDirty = true };
+        new(cell) { PrintFlagChanged = () => MarkChanged("Druckauswahl") };
 
     private void NavigateToPage(int index)
     {
@@ -777,6 +942,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         OnPropertyChanged(nameof(CurrentPageIndex));
         OnPropertyChanged(nameof(PageCount));
         OnPropertyChanged(nameof(PageIndicator));
+        TouchCursor();
     }
 
     private void NextPage()
@@ -798,7 +964,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         else
             _spDoc.AddPage(CreateEmptyPage(_selectedFormat.LabelsPerPage));
         NavigateToPage(PageCount - 1);
-        IsDirty = true;
+        MarkChanged();
         StatusMessage = $"Seite {PageCount} hinzugefuegt";
     }
 
@@ -818,7 +984,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             : _spDoc.RemovePage(removedIndex);
         if (!removed) return;
         NavigateToPage(CurrentPageIndex); // Auswahl/Markierungen der neuen Seite setzen
-        IsDirty = true;
+        MarkChanged();
         StatusMessage = $"Seite entfernt ({PageCount} Seiten verbleibend)";
     }
 
@@ -830,7 +996,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             SelectedMpModule.HeaderText = InputHeader;
             if (SelectedMpCell is not null && SelectedMpCell.IsEditable)
                 SelectedMpCell.Text = InputLine1;
-            IsDirty = true;
+            MarkChanged();
             NotifyMpPreviewChanged();
             return;
         }
@@ -841,7 +1007,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         SelectedLabel.Line1 = InputLine1;
         SelectedLabel.Line2 = InputLine2;
         ApplyFontToLabel(SelectedLabel);
-        IsDirty = true;
+        MarkChanged();
 
         AdvanceToNextLabel();
     }
@@ -865,7 +1031,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             // Auto-Advance: um die tatsaechlich belegten Bytes/Kanaele weiterschalten
             Generator.AdvanceAfterModule(consumed);
 
-            IsDirty = true;
+            MarkChanged();
             int filledCount = SelectedMpModule.AddressCells.Count(c => c.IsEditable && c.HasText);
             string status = $"Generiert: {Generator.ModuleName} ({Generator.ModuleType.DisplayName}) → {filledCount} Adressen auf Modul {SelectedMpModule.ModuleIndex + 1}";
 
@@ -900,7 +1066,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             SelectedLabel.Line2 = line2;
             ApplyFontToLabel(SelectedLabel);
 
-            IsDirty = true;
+            MarkChanged();
             string status = $"Generiert: {Generator.ModuleName} ({Generator.ModuleType.DisplayName}) ab Byte {Generator.StartByte}";
 
             // Nur um die tatsaechlich aufs Etikett gepasste Anzahl weiterschalten
@@ -1173,7 +1339,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             PasteModules();
         else
             PasteLabels();
-        IsDirty = true;
+        MarkChanged();
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -1243,7 +1409,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             InputLine2 = string.Empty;
         }
         NotifyMpPreviewChanged();
-        IsDirty = true;
+        MarkChanged();
         StatusMessage = _selectedFormat.IsModuleBased ? "Alle Module geloescht" : "Alle Etiketten geloescht";
     }
 
@@ -1266,7 +1432,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
 
         if (SelectedLabel is null) return;
         ApplyFontToLabel(SelectedLabel);
-        IsDirty = true;
+        MarkChanged("Schrift");
     }
 
     private void OnPanelHeaderChanged()
@@ -1275,7 +1441,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         OnPropertyChanged(nameof(HeaderPreviewFontSize));
         OnPropertyChanged(nameof(HeaderPreviewFontWeight));
         NotifyMpPreviewChanged();
-        IsDirty = true;
+        MarkChanged("Kopfzeilen-Schrift");
     }
 
     private void OnPanelMarginsChanged()
@@ -1283,7 +1449,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         OnPropertyChanged(nameof(Settings));
         NotifyPreviewGeometry();
         NotifyMpPreviewChanged();
-        IsDirty = true;
+        MarkChanged("Seitenraender");
     }
 
     private void ResetSettings()
@@ -1295,6 +1461,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         OnPropertyChanged(nameof(HeaderPreviewFontSize));
         OnPropertyChanged(nameof(HeaderPreviewFontWeight));
         NotifyMpPreviewChanged();
+        MarkChanged();
         StatusMessage = "Einstellungen zurueckgesetzt";
     }
 
@@ -1303,7 +1470,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         if (_selectedFormat.IsModuleBased && SelectedMpModule is not null)
         {
             SelectedMpModule.HeaderText = Generator.ModuleName;
-            IsDirty = true;
+            MarkChanged();
             NotifyMpPreviewChanged();
             StatusMessage = $"Kopfzeile von Modul {SelectedMpModule.ModuleIndex + 1} geaendert";
             return;
@@ -1311,7 +1478,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         if (SelectedLabel is null) return;
         SelectedLabel.Header = Generator.ModuleName;
         InputHeader = Generator.ModuleName;
-        IsDirty = true;
+        MarkChanged();
         StatusMessage = $"Kopfzeile von Etikett {SelectedLabel.DisplayPosition} geaendert";
     }
 
@@ -1329,6 +1496,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
     private void ResetWorkspace()
     {
         _suppressContentLossConfirm = true;
+        _undoSuspended = true;
         try
         {
             ApplyFamilyCore(ProductFamily.ET200SP);
@@ -1350,7 +1518,8 @@ public class MainViewModel : ViewModelBase, IImportTarget
             OnPropertyChanged(nameof(BandsPerPage));
             OnPropertyChanged(nameof(IsMultiBand));
         }
-        finally { _suppressContentLossConfirm = false; }
+        finally { _suppressContentLossConfirm = false; _undoSuspended = false; }
+        ResetHistory();
     }
 
     /// <summary>Serialisiert den KOMPLETTEN Projektzustand (alle Seiten aus
@@ -1392,9 +1561,20 @@ public class MainViewModel : ViewModelBase, IImportTarget
     /// Quelle fuer DoOpen und Test-Automation — Gegenstueck zu <see cref="BuildProject"/>.</summary>
     internal void ApplyLoadedProject(LabelProject project, string? filePath)
     {
+        ApplyProjectState(project);
+        ResetHistory();
+        Session.MarkLoaded(filePath);
+    }
+
+    /// <summary>Projektzustand vollstaendig uebernehmen (Laden, Undo/Redo) — ohne
+    /// Datei-/Dirty-Verwaltung.</summary>
+    private void ApplyProjectState(LabelProject project)
+    {
         // Laden ersetzt den gesamten Zustand — der Aufrufer hat via
         // ConfirmDiscardChanges bereits gefragt; kein Inhaltsverlust-Prompt.
         _suppressContentLossConfirm = true;
+        bool wasSuspended = _undoSuspended;
+        _undoSuspended = true;
         try
         {
             // ProductFamily setzen (filtert Formate, Varianten, Katalog)
@@ -1525,10 +1705,9 @@ public class MainViewModel : ViewModelBase, IImportTarget
             }
             PrintGridLines = project.PrintGridLines;
 
-            Session.MarkLoaded(filePath);
             if (Labels.Count > 0) SelectedLabel = Labels[0];
         }
-        finally { _suppressContentLossConfirm = false; }
+        finally { _suppressContentLossConfirm = false; _undoSuspended = wasSuspended; }
     }
 
     /// <summary>Baut das Druckdokument des gesamten Projekts (alle Seiten) — ohne
@@ -1647,6 +1826,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
 
     private void PopulateFromImportedCells(List<LabelCell> cells)
     {
+        using var change = BeginChange("Import");
         int labelsPerPage = _selectedFormat.LabelsPerPage;
         int startIndex = SelectedLabel?.Index ?? 0;
         int startPage = CurrentPageIndex;
@@ -1680,7 +1860,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         // Navigate to the start page to show results
         NavigateToPage(startPage);
         NotifyPageProperties();
-        IsDirty = true;
+        MarkChanged();
 
         if (!_suppressContentLossConfirm) // Automation: keine modale Box
             _dialogs.ShowInfo(
@@ -1693,6 +1873,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
     /// Frueher landete der Import hier in unsichtbaren SP-Seiten.</summary>
     private void PopulateMpFromParsedModules(List<ParsedModule> modules)
     {
+        using var change = BeginChange("Import");
         var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
         int startPage = CurrentPageIndex;
         int pageIdx = startPage;
@@ -1735,7 +1916,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         NavigateToPage(startPage);
         NotifyPageProperties();
         NotifyMpPreviewChanged();
-        IsDirty = true;
+        MarkChanged();
 
         if (!_suppressContentLossConfirm)
             _dialogs.ShowInfo(
@@ -1751,7 +1932,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
             label.IsPrintEnabled = labelRule(label);
         foreach (var mod in _mpDoc.AllItems)
             mod.IsPrintEnabled = moduleRule(mod);
-        IsDirty = true;
+        MarkChanged();
         NotifyMpPreviewChanged();
     }
 
@@ -1786,7 +1967,7 @@ public class MainViewModel : ViewModelBase, IImportTarget
         }
         if (SelectedLabel is null) return;
         SelectedLabel.IsPrintEnabled = !SelectedLabel.IsPrintEnabled;
-        IsDirty = true;
+        MarkChanged();
         StatusMessage = SelectedLabel.IsPrintEnabled
             ? $"Etikett {SelectedLabel.DisplayPosition}: Druck aktiviert"
             : $"Etikett {SelectedLabel.DisplayPosition}: Druck deaktiviert";

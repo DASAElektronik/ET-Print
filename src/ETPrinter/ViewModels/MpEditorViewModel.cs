@@ -33,6 +33,10 @@ public sealed class MpEditorViewModel : ViewModelBase
     /// <summary>Module der sichtbaren Seite.</summary>
     public ObservableCollection<MpModuleViewModel> Modules { get; }
 
+    /// <summary>Fasst Varianten-/Artikelwechsel zu einem Undo-Schritt zusammen
+    /// (vom Haupt-ViewModel gesetzt; null = ohne Verlauf).</summary>
+    public Func<string, IDisposable>? ChangeScope { get; set; }
+
     /// <summary>Layout-Varianten der aktuellen Familie (35mm bzw. 25mm).</summary>
     public ObservableCollection<MpModuleLayout> AvailableVariants { get; }
 
@@ -107,6 +111,7 @@ public sealed class MpEditorViewModel : ViewModelBase
         set
         {
             if (value is null || _selectedModule is null) return;
+            using var change = ChangeScope?.Invoke("Modulvariante");
             // Manuelle Variantenwahl = benutzerdefiniert (Katalog-Artikel abwaehlen)
             _selectedModule.ArticleNumber = null;
             _selectedModule.Variant = value.Variant;
@@ -124,6 +129,7 @@ public sealed class MpEditorViewModel : ViewModelBase
         set
         {
             if (value is null || _selectedModule is null) return;
+            using var change = ChangeScope?.Invoke("Siemens-Modul");
 
             bool isCustom = string.IsNullOrEmpty(value.ArticleNo);
 

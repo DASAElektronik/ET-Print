@@ -6,6 +6,7 @@ using Xunit;
 namespace ETPrinter.Tests;
 
 /// <summary>Tests zu ABSCHLUSSPLAN AP2 (mittlere Bugs).</summary>
+[Collection("RecentFiles")] // gemeinsame recent.json: nicht parallel
 public class MediumFixTests
 {
     private static MainViewModel NewVm() => new() { SuppressContentLossConfirm = true };

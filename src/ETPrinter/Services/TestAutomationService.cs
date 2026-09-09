@@ -165,6 +165,9 @@ public class TestAutomationService : IDisposable
         ["load-project"] = new("load-project <pfad.etprint>", "Projekt laden", (s, a) => s.LoadProject(a)),
         ["list-families"] = new("list-families", "Produktfamilien (JSON)", (s, _) => s.ListFamilies()),
         ["list-formats"] = new("list-formats", "Formate der Familie (JSON)", (s, _) => s.ListFormats()),
+        ["undo"] = new("undo", "Rueckgaengig (wie Ctrl+Z); liefert Verlaufszustand (JSON)", (s, _) => s.Undo()),
+        ["redo"] = new("redo", "Wiederholen (wie Ctrl+Y); liefert Verlaufszustand (JSON)", (s, _) => s.Redo()),
+        ["history-state"] = new("history-state", "Undo/Redo-Verlauf (JSON)", (s, _) => s.HistoryState()),
         ["quit"] = new("quit", "App beenden (verwirft Aenderungen)", (s, _) => s.Quit()),
     };
 
@@ -544,6 +547,32 @@ public class TestAutomationService : IDisposable
         catch (Exception ex) { return Error($"Importfehler: {ex.Message}"); }
         finally { _viewModel.SuppressContentLossConfirm = false; }
     }
+
+    private string Undo()
+    {
+        if (!_viewModel.History.CanUndo) return Error("Nichts rueckgaengig zu machen");
+        _viewModel.Undo();
+        return HistoryState();
+    }
+
+    private string Redo()
+    {
+        if (!_viewModel.History.CanRedo) return Error("Nichts zu wiederholen");
+        _viewModel.Redo();
+        return HistoryState();
+    }
+
+    private string HistoryState() => Ok(JsonSerializer.Serialize(new
+    {
+        canUndo = _viewModel.History.CanUndo,
+        canRedo = _viewModel.History.CanRedo,
+        undoCount = _viewModel.History.UndoCount,
+        redoCount = _viewModel.History.RedoCount,
+        nextUndo = _viewModel.History.NextUndoLabel,
+        nextRedo = _viewModel.History.NextRedoLabel,
+        isDirty = _viewModel.IsDirty,
+        status = _viewModel.StatusMessage
+    }));
 
     private string TogglePrint()
     {

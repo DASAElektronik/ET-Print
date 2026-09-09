@@ -6,6 +6,7 @@ using Xunit;
 namespace ETPrinter.Tests;
 
 /// <summary>ABSCHLUSSPLAN AP3: Migration v1-v3 und vollstaendiger Roundtrip.</summary>
+[Collection("RecentFiles")] // gemeinsame recent.json: nicht parallel
 public class PersistenceTests
 {
     private static string TempPath() =>

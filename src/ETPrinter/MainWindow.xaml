@@ -24,6 +24,8 @@
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}"/>
         <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenCommand}"/>
         <KeyBinding Gesture="Ctrl+P" Command="{Binding PrintCommand}"/>
+        <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoCommand}"/>
+        <KeyBinding Gesture="Ctrl+Y" Command="{Binding RedoCommand}"/>
         <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}"/>
         <KeyBinding Gesture="Ctrl+V" Command="{Binding PasteCommand}"/>
         <KeyBinding Gesture="Ctrl+PageDown" Command="{Binding NextPageCommand}"/>
@@ -80,6 +82,9 @@
                 <MenuItem Header="_Beenden" Click="MenuExit_Click"/>
             </MenuItem>
             <MenuItem Header="_Bearbeiten">
+                <MenuItem Header="_Rueckgaengig" Command="{Binding UndoCommand}" InputGestureText="Ctrl+Z"/>
+                <MenuItem Header="_Wiederholen" Command="{Binding RedoCommand}" InputGestureText="Ctrl+Y"/>
+                <Separator/>
                 <MenuItem Header="Auswahl _leeren" Command="{Binding ClearSelectedCommand}" InputGestureText="Entf"/>
                 <MenuItem Header="Alle _loeschen" Command="{Binding ClearAllCommand}"/>
                 <Separator/>
@@ -106,6 +111,13 @@
             </Button>
             <Button Command="{Binding SaveCommand}" ToolTip="Speichern (Ctrl+S)">
                 <TextBlock Text="Speichern" Margin="5,0"/>
+            </Button>
+            <Separator/>
+            <Button Command="{Binding UndoCommand}" ToolTip="Rueckgaengig (Ctrl+Z)">
+                <TextBlock Text="Rueckgaengig" Margin="5,0"/>
+            </Button>
+            <Button Command="{Binding RedoCommand}" ToolTip="Wiederholen (Ctrl+Y)">
+                <TextBlock Text="Wiederholen" Margin="5,0"/>
             </Button>
             <Separator/>
             <Button Command="{Binding CopyCommand}" ToolTip="Kopieren (Ctrl+C)">

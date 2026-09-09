@@ -6,6 +6,7 @@ using Xunit;
 namespace ETPrinter.Tests;
 
 /// <summary>ABSCHLUSSPLAN AP5: Komfort/UX.</summary>
+[Collection("RecentFiles")] // gemeinsame recent.json: nicht parallel
 public class UxTests
 {
     private static MainViewModel NewVm() => new() { SuppressContentLossConfirm = true };
