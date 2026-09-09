@@ -1773,29 +1773,45 @@ public class MainViewModel : ViewModelBase
             RecentFiles.Add(new RecentFileItem(path, Path.GetFileName(path)));
     }
 
+    /// <summary>Baut das Druckdokument des gesamten Projekts (alle Seiten) — ohne
+    /// Dialog. Gemeinsame Quelle fuer den echten Druck und fuer die Test-Automation
+    /// (render-print), damit beide exakt dieselben Seiten erzeugen.</summary>
+    internal System.Windows.Documents.FixedDocument BuildPrintDocument()
+    {
+        if (_selectedFormat.IsModuleBased)
+        {
+            var mpPrintPages = _allMpPages
+                .Select(page => (IReadOnlyList<MpModuleViewModel>)page.AsReadOnly())
+                .ToList();
+            return PrintService.BuildMpDocument(mpPrintPages, _selectedFormat, _settings, PrintGridLines,
+                CalibrationOffsetX, CalibrationOffsetY);
+        }
+
+        var printPages = _allPages
+            .Select(page => (IReadOnlyList<LabelViewModel>)page.AsReadOnly())
+            .ToList();
+        return PrintService.BuildDocument(printPages, _selectedFormat, _settings, PrintGridLines,
+            CalibrationOffsetX, CalibrationOffsetY);
+    }
+
+    internal System.Windows.Documents.FixedDocument BuildCalibrationDocument() =>
+        PrintService.BuildCalibrationDocument(_selectedFormat, _settings,
+            CalibrationOffsetX, CalibrationOffsetY);
+
     private void PrintLabels()
     {
         try
         {
+            var document = BuildPrintDocument();
+            if (!PrintService.Print(document, PrintService.JobTitleFor(_selectedFormat)))
+            {
+                StatusMessage = "Druck abgebrochen";
+                return;
+            }
+            // Kalibrierung erst nach tatsaechlichem Druck persistieren — ein
+            // abgebrochener Dialog darf keine lokale calibration.json anlegen.
             SaveCalibration();
-
-            if (_selectedFormat.IsModuleBased)
-            {
-                var mpPrintPages = _allMpPages
-                    .Select(page => (IReadOnlyList<MpModuleViewModel>)page.AsReadOnly())
-                    .ToList();
-                PrintService.PrintMp(mpPrintPages, _selectedFormat, _settings, PrintGridLines,
-                    CalibrationOffsetX, CalibrationOffsetY);
-            }
-            else
-            {
-                var printPages = _allPages
-                    .Select(page => (IReadOnlyList<LabelViewModel>)page.AsReadOnly())
-                    .ToList();
-                PrintService.Print(printPages, _selectedFormat, _settings, PrintGridLines,
-                    CalibrationOffsetX, CalibrationOffsetY);
-            }
-            StatusMessage = $"Druckauftrag gesendet ({PageCount} Seiten)";
+            StatusMessage = $"Druckauftrag gesendet ({document.Pages.Count} Seiten)";
         }
         catch (Exception ex)
         {
@@ -1812,9 +1828,13 @@ public class MainViewModel : ViewModelBase
     {
         try
         {
+            var document = BuildCalibrationDocument();
+            if (!PrintService.Print(document, PrintService.CalibrationJobTitleFor(_selectedFormat)))
+            {
+                StatusMessage = "Druck abgebrochen";
+                return;
+            }
             SaveCalibration();
-            PrintService.PrintCalibrationPage(_selectedFormat, _settings,
-                CalibrationOffsetX, CalibrationOffsetY);
             StatusMessage = "Kalibrierungsseite gedruckt";
         }
         catch (Exception ex)
@@ -2104,6 +2124,19 @@ public class MainViewModel : ViewModelBase
     public void SelectLabel(LabelViewModel label)
     {
         SelectedLabel = label;
+    }
+
+    /// <summary>Test-Automation: Aenderungen verwerfen, damit das Fenster ohne
+    /// modale Rueckfrage geschlossen werden kann (headless haengt sonst).</summary>
+    internal void DiscardChangesForShutdown() => IsDirty = false;
+
+    /// <summary>Test-Automation: "Neues Projekt" ohne Rueckfrage.</summary>
+    internal void NewProjectWithoutConfirm()
+    {
+        bool wasDirty = _isDirty;
+        IsDirty = false;
+        try { NewProject(); }
+        finally { if (_isDirty) IsDirty = wasDirty; }
     }
 
     /// <summary>

@@ -1,8 +1,10 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using ETPrinter.Models;
 using ETPrinter.ViewModels;
@@ -18,9 +20,12 @@ public static class PrintService
     private static readonly FontFamily DefaultFont = new("Arial");
 
     /// <summary>
-    /// Multi-page print: each inner list represents one physical page of labels.
+    /// Baut das Druckdokument fuer ET200SP-Seiten (jede innere Liste = eine
+    /// physische A4-Seite). Kein Dialog — dieselbe Quelle fuer den echten Druck
+    /// (<see cref="Print"/>) und fuer die dialogfreie PNG-Ausgabe der
+    /// Test-Automation (<see cref="RenderToPng"/>), damit beide identisch sind.
     /// </summary>
-    public static void Print(
+    public static FixedDocument BuildDocument(
         IReadOnlyList<IReadOnlyList<LabelViewModel>> pages,
         FormatInfo format,
         LabelSettings settings,
@@ -28,25 +33,87 @@ public static class PrintService
         double calibrationOffsetX = 0,
         double calibrationOffsetY = 0)
     {
-        var printDialog = new PrintDialog();
-        if (printDialog.ShowDialog() != true)
-            return;
-
-        var document = new FixedDocument();
-        document.DocumentPaginator.PageSize = new Size(PageWidthWpf, PageHeightWpf);
+        var document = NewDocument();
 
         foreach (var pageLabels in pages)
         {
-            // Skip completely empty pages (no labels with text)
             var page = CreatePage(pageLabels, format, settings, printGridLines,
                 calibrationOffsetX, calibrationOffsetY);
-            var pageContent = new PageContent();
-            ((IAddChild)pageContent).AddChild(page);
-            document.Pages.Add(pageContent);
+            AddPage(document, page);
         }
 
-        string jobTitle = format.Family == ProductFamily.ET200SP ? "ET200SP Etiketten" : "ET200MP Etiketten";
+        return document;
+    }
+
+    private static FixedDocument NewDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new Size(PageWidthWpf, PageHeightWpf);
+        return document;
+    }
+
+    private static void AddPage(FixedDocument document, FixedPage page)
+    {
+        var pageContent = new PageContent();
+        ((IAddChild)pageContent).AddChild(page);
+        document.Pages.Add(pageContent);
+    }
+
+    /// <summary>
+    /// Zeigt den Windows-Druckdialog und druckt das Dokument.
+    /// Liefert false, wenn der Benutzer abgebrochen hat — der Aufrufer darf dann
+    /// weder "gesendet" melden noch die Kalibrierung persistieren.
+    /// </summary>
+    public static bool Print(FixedDocument document, string jobTitle)
+    {
+        var printDialog = new PrintDialog();
+        if (printDialog.ShowDialog() != true)
+            return false;
+
         printDialog.PrintDocument(document.DocumentPaginator, jobTitle);
+        return true;
+    }
+
+    public static string JobTitleFor(FormatInfo format) =>
+        format.Family == ProductFamily.ET200SP ? "ET200SP Etiketten" : "ET200MP Etiketten";
+
+    /// <summary>
+    /// Rendert jede Seite des Dokuments als PNG (page_01.png, ...) in den Ordner.
+    /// Fuer Test-Automation: der Druckpfad wird ohne Drucker und ohne Dialog
+    /// prueffbar, pixelgenau mit dem Preview-Screenshot vergleichbar.
+    /// </summary>
+    public static int RenderToPng(FixedDocument document, string directory, double dpi = 150)
+    {
+        Directory.CreateDirectory(directory);
+        int index = 0;
+        foreach (var pageContent in document.Pages)
+        {
+            var page = pageContent.Child ?? pageContent.GetPageRoot(false);
+            if (page is null) continue;
+            index++;
+
+            page.Measure(new Size(PageWidthWpf, PageHeightWpf));
+            page.Arrange(new Rect(0, 0, PageWidthWpf, PageHeightWpf));
+            page.UpdateLayout();
+
+            var rtb = new RenderTargetBitmap(
+                (int)Math.Round(PageWidthWpf * dpi / 96.0),
+                (int)Math.Round(PageHeightWpf * dpi / 96.0),
+                dpi, dpi, PixelFormats.Pbgra32);
+
+            // Weisser Hintergrund wie Papier — FixedPage selbst ist transparent
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+                dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, PageWidthWpf, PageHeightWpf));
+            rtb.Render(dv);
+            rtb.Render(page);
+
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(rtb));
+            using var fs = File.Create(System.IO.Path.Combine(directory, $"page_{index:00}.png"));
+            encoder.Save(fs);
+        }
+        return index;
     }
 
     private static FixedPage CreatePage(
@@ -319,18 +386,14 @@ public static class PrintService
         }
     }
 
-    public static void PrintCalibrationPage(
+    /// <summary>Kalibrierseite (Fadenkreuze an den Rasterecken) als Dokument — ohne Dialog.</summary>
+    public static FixedDocument BuildCalibrationDocument(
         FormatInfo format,
         LabelSettings settings,
         double calOffsetX,
         double calOffsetY)
     {
-        var printDialog = new PrintDialog();
-        if (printDialog.ShowDialog() != true)
-            return;
-
-        var document = new FixedDocument();
-        document.DocumentPaginator.PageSize = new Size(PageWidthWpf, PageHeightWpf);
+        var document = NewDocument();
 
         var page = new FixedPage { Width = PageWidthWpf, Height = PageHeightWpf };
         var canvas = new Canvas { Width = PageWidthWpf, Height = PageHeightWpf };
@@ -408,13 +471,12 @@ public static class PrintService
         page.Arrange(new Rect(0, 0, PageWidthWpf, PageHeightWpf));
         page.UpdateLayout();
 
-        var pageContent = new PageContent();
-        ((IAddChild)pageContent).AddChild(page);
-        document.Pages.Add(pageContent);
-
-        string calJobTitle = format.Family == ProductFamily.ET200SP ? "ET200SP Kalibrierung" : "ET200MP Kalibrierung";
-        printDialog.PrintDocument(document.DocumentPaginator, calJobTitle);
+        AddPage(document, page);
+        return document;
     }
+
+    public static string CalibrationJobTitleFor(FormatInfo format) =>
+        format.Family == ProductFamily.ET200SP ? "ET200SP Kalibrierung" : "ET200MP Kalibrierung";
 
     private static void DrawCrosshair(Canvas canvas, double cx, double cy, string label)
     {
@@ -486,7 +548,8 @@ public static class PrintService
 
     // === ET200MP Modulbasierter Druck ===
 
-    public static void PrintMp(
+    /// <summary>Baut das Druckdokument fuer ET200MP-Modulseiten (ohne Dialog).</summary>
+    public static FixedDocument BuildMpDocument(
         IReadOnlyList<IReadOnlyList<MpModuleViewModel>> pages,
         FormatInfo format,
         LabelSettings settings,
@@ -494,22 +557,16 @@ public static class PrintService
         double calibrationOffsetX,
         double calibrationOffsetY)
     {
-        var printDialog = new PrintDialog();
-        if (printDialog.ShowDialog() != true) return;
-
-        var document = new FixedDocument();
-        document.DocumentPaginator.PageSize = new Size(PageWidthWpf, PageHeightWpf);
+        var document = NewDocument();
 
         foreach (var pageModules in pages)
         {
             var page = CreateMpPage(pageModules, format, settings, printGridLines,
                 calibrationOffsetX, calibrationOffsetY);
-            var pageContent = new PageContent();
-            ((IAddChild)pageContent).AddChild(page);
-            document.Pages.Add(pageContent);
+            AddPage(document, page);
         }
 
-        printDialog.PrintDocument(document.DocumentPaginator, "ET200MP Etiketten");
+        return document;
     }
 
     private static FixedPage CreateMpPage(

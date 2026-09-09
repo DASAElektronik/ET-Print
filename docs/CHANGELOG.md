@@ -9,6 +9,28 @@
 
 ---
 
+## 2026-09-09 - Projekttag 7 (Abschluss v3.1, siehe docs/ABSCHLUSSPLAN.md)
+
+### AP0: Testinfrastruktur
+- PrintService in dialogfreie Dokument-Erzeugung (`BuildDocument`, `BuildMpDocument`,
+  `BuildCalibrationDocument`) und Dialog (`Print` -> bool) getrennt. Druck und
+  Test-Automation nutzen exakt dieselben Seiten.
+- `PrintService.RenderToPng`: rendert jede Druckseite als PNG (150 dpi) — der Druckpfad
+  ist damit ohne Drucker prueffbar und mit dem Preview-Screenshot vergleichbar.
+- Druck-Abbruch wird erkannt: Status "Druck abgebrochen" statt "gesendet", Kalibrierung
+  wird erst nach tatsaechlichem Druck gespeichert (Review-Finding 2.8/2.18).
+- Test-Automation: Dispatch-Tabelle (Hilfe wird generiert, frueher fehlten 8 Befehle),
+  neue Befehle `render-print`, `render-calibration`, `quit`, `set-input`, `remove-page`;
+  `apply` fuehrt jetzt wirklich den Uebertragen-Command aus, `new-project` ist ein
+  echtes "Neu" ohne Rueckfrage (frueher nur ClearAll).
+- `tools/smoke.ps1`: startet `publish/ET-Printer.exe`, faehrt SP/MP/25mm/Roundtrip durch,
+  legt Screenshots + Druck-PNGs unter `test_results/<Name>/` ab, Exit-Code bei Fehler.
+- Publish-Profil `Properties/PublishProfiles/win-x64.pubxml` (self-contained, single-file).
+- Smoke AP0: 24/24 gruen. Sichtbar bestaetigt: SIWAREX-Modul fehlt im Druck (AP1 1.2),
+  analoge Adressen in vertikalen SP-Slots werden mit "..." gekappt (neu AP2 2.21).
+
+---
+
 ## 2026-08-04 - Projekttag 6 (Katalog-Lueckenschluss + typabhaengige Struktur-Labels)
 
 ### Drei neue Katalog-Eintraege (datenblattverifiziert)

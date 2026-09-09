@@ -100,50 +100,63 @@ public class TestAutomationService : IDisposable
 
         try
         {
-            return cmd switch
-            {
-                "ping" => Ok("pong"),
-                "state" => await RunOnUI(() => GetState()),
-                "screenshot" => await RunOnUI(() => TakeScreenshot(arg)),
-                "zoom" => await RunOnUI(() => SetZoom(arg)),
-                "maximize" => await RunOnUI(() => MaximizeWindow()),
-                "resize" => await RunOnUI(() => ResizeWindow(arg)),
-                "select-family" => await RunOnUI(() => SelectFamily(arg)),
-                "select-format" => await RunOnUI(() => SelectFormat(arg)),
-                "select-label" => await RunOnUI(() => SelectLabel(arg)),
-                "set-text" => await RunOnUI(() => SetText(arg)),
-                "generate" => await RunOnUI(() => Generate(arg)),
-                "apply" => await RunOnUI(() => Apply()),
-                "next-page" => await RunOnUI(() => NavPage("next")),
-                "prev-page" => await RunOnUI(() => NavPage("prev")),
-                "add-page" => await RunOnUI(() => NavPage("add")),
-                "clear-all" => await RunOnUI(() => ClearAll()),
-                "new-project" => await RunOnUI(() => NewProject()),
-                "select-module" => await RunOnUI(() => SelectModule(arg)),
-                "set-module-header" => await RunOnUI(() => SetModuleHeader(arg)),
-                "set-module-net" => await RunOnUI(() => SetModuleNet(arg)),
-                "set-module-cpu" => await RunOnUI(() => SetModuleCpu(arg)),
-                "select-cell" => await RunOnUI(() => SelectMpCell(arg)),
-                "set-cell-text" => await RunOnUI(() => SetMpCellText(arg)),
-                "set-module-variant" => await RunOnUI(() => SetModuleVariant(arg)),
-                "set-module-article" => await RunOnUI(() => SetModuleArticle(arg)),
-                "list-variants" => await RunOnUI(() => ListVariants()),
-                "mp-state" => await RunOnUI(() => GetMpState()),
-                "set-generator" => await RunOnUI(() => SetGenerator(arg)),
-                "trigger-generate" => await RunOnUI(() => TriggerGenerate()),
-                "save-project" => await RunOnUI(() => SaveProject(arg)),
-                "load-project" => await RunOnUI(() => LoadProject(arg)),
-                "list-families" => await RunOnUI(() => ListFamilies()),
-                "list-formats" => await RunOnUI(() => ListFormats()),
-                "help" => Ok(GetHelp()),
-                _ => Error($"Unbekannter Befehl: {cmd}")
-            };
+            if (cmd == "ping") return Ok("pong");
+            if (cmd == "help") return Ok(GetHelp());
+            if (!Commands.TryGetValue(cmd, out var entry))
+                return Error($"Unbekannter Befehl: {cmd}");
+            return await RunOnUI(() => entry.Handler(this, arg));
         }
         catch (Exception ex)
         {
             return Error(ex.Message);
         }
     }
+
+    private sealed record CommandInfo(string Usage, string Description,
+        Func<TestAutomationService, string, string> Handler);
+
+    // Eine Dispatch-Tabelle fuer Ausfuehrung UND Hilfe — frueher listete die
+    // handgepflegte Hilfe 8 Befehle nicht.
+    private static readonly Dictionary<string, CommandInfo> Commands = new()
+    {
+        ["state"] = new("state", "Aktueller App-Zustand (JSON)", (s, _) => s.GetState()),
+        ["screenshot"] = new("screenshot [pfad]", "Screenshot des Fensters als PNG", (s, a) => s.TakeScreenshot(a)),
+        ["render-print"] = new("render-print <ordner>", "Alle Druckseiten ohne Dialog als PNG rendern (page_NN.png)", (s, a) => s.RenderPrint(a)),
+        ["render-calibration"] = new("render-calibration <ordner>", "Kalibrierseite ohne Dialog als PNG rendern", (s, a) => s.RenderCalibration(a)),
+        ["zoom"] = new("zoom <faktor>", "Vorschau-Zoom 0.3-5.0", (s, a) => s.SetZoom(a)),
+        ["maximize"] = new("maximize", "Fenster maximieren", (s, _) => s.MaximizeWindow()),
+        ["resize"] = new("resize <b>x<h>", "Fenstergroesse setzen", (s, a) => s.ResizeWindow(a)),
+        ["select-family"] = new("select-family <name>", "Produktfamilie waehlen", (s, a) => s.SelectFamily(a)),
+        ["select-format"] = new("select-format <name>", "Druckformat waehlen", (s, a) => s.SelectFormat(a)),
+        ["select-label"] = new("select-label <index>", "ET200SP: Etikett per Index (0-basiert)", (s, a) => s.SelectLabel(a)),
+        ["set-text"] = new("set-text <header|z1|z2>", "ET200SP: Text des Etiketts setzen", (s, a) => s.SetText(a)),
+        ["generate"] = new("generate <name> <typ> <byte> <n>", "ET200SP: Adressen direkt ins Etikett", (s, a) => s.Generate(a)),
+        ["apply"] = new("apply", "Uebertragen-Button (Manuell-Tab)", (s, _) => s.Apply()),
+        ["set-input"] = new("set-input <header|z1|z2>", "Manuell-Tab Eingabefelder setzen", (s, a) => s.SetInput(a)),
+        ["next-page"] = new("next-page", "Naechste Seite", (s, _) => s.NavPage("next")),
+        ["prev-page"] = new("prev-page", "Vorherige Seite", (s, _) => s.NavPage("prev")),
+        ["add-page"] = new("add-page", "Seite hinzufuegen", (s, _) => s.NavPage("add")),
+        ["remove-page"] = new("remove-page", "Aktuelle Seite entfernen", (s, _) => s.NavPage("remove")),
+        ["clear-all"] = new("clear-all", "Alle Etiketten/Module loeschen", (s, _) => s.ClearAll()),
+        ["new-project"] = new("new-project", "Neues Projekt (ohne Rueckfrage)", (s, _) => s.NewProject()),
+        ["select-module"] = new("select-module <index>", "ET200MP: Modul per Index", (s, a) => s.SelectModule(a)),
+        ["set-module-header"] = new("set-module-header <text>", "ET200MP: Header setzen", (s, a) => s.SetModuleHeader(a)),
+        ["set-module-net"] = new("set-module-net <n1|n2>", "ET200MP: Netzadresse setzen", (s, a) => s.SetModuleNet(a)),
+        ["set-module-cpu"] = new("set-module-cpu <text>", "ET200MP: CPU-Name setzen", (s, a) => s.SetModuleCpu(a)),
+        ["select-cell"] = new("select-cell <index>", "ET200MP: Adresszelle waehlen", (s, a) => s.SelectMpCell(a)),
+        ["set-cell-text"] = new("set-cell-text <text>", "ET200MP: Zellentext setzen", (s, a) => s.SetMpCellText(a)),
+        ["set-module-variant"] = new("set-module-variant <name>", "ET200MP: Layout-Variante", (s, a) => s.SetModuleVariant(a)),
+        ["set-module-article"] = new("set-module-article <artnr>", "ET200MP: Katalog-Artikel (leer/custom = benutzerdefiniert)", (s, a) => s.SetModuleArticle(a)),
+        ["list-variants"] = new("list-variants", "Alle Modulvarianten (JSON)", (s, _) => s.ListVariants()),
+        ["mp-state"] = new("mp-state", "Ausgewaehltes Modul (JSON)", (s, _) => s.GetMpState()),
+        ["set-generator"] = new("set-generator <name> <typ> <byte> <n>", "Generator-Felder setzen", (s, a) => s.SetGenerator(a)),
+        ["trigger-generate"] = new("trigger-generate", "Generieren + Uebertragen", (s, _) => s.TriggerGenerate()),
+        ["save-project"] = new("save-project <pfad.etprint>", "Projekt speichern", (s, a) => s.SaveProject(a)),
+        ["load-project"] = new("load-project <pfad.etprint>", "Projekt laden", (s, a) => s.LoadProject(a)),
+        ["list-families"] = new("list-families", "Produktfamilien (JSON)", (s, _) => s.ListFamilies()),
+        ["list-formats"] = new("list-formats", "Formate der Familie (JSON)", (s, _) => s.ListFormats()),
+        ["quit"] = new("quit", "App beenden (verwirft Aenderungen)", (s, _) => s.Quit()),
+    };
 
     private Task<string> RunOnUI(Func<string> action)
     {
@@ -319,10 +332,56 @@ public class TestAutomationService : IDisposable
 
     private string Apply()
     {
-        if (_viewModel.SelectedLabel == null)
-            return Error("Kein Label ausgewaehlt");
-        // Trigger apply via the existing input mechanism
-        return Ok("Apply ausgefuehrt");
+        if (!_viewModel.ApplyCommand.CanExecute(null))
+            return Error("Kein Label/Modul ausgewaehlt");
+        _viewModel.ApplyCommand.Execute(null);
+        return Ok(_viewModel.StatusMessage);
+    }
+
+    private string SetInput(string arg)
+    {
+        // Format: "header|line1|line2" oder "line1|line2" oder "line1"
+        var parts = arg.Split('|');
+        if (parts.Length >= 3)
+        {
+            _viewModel.InputHeader = parts[0];
+            _viewModel.InputLine1 = parts[1];
+            _viewModel.InputLine2 = parts[2];
+        }
+        else if (parts.Length == 2)
+        {
+            _viewModel.InputLine1 = parts[0];
+            _viewModel.InputLine2 = parts[1];
+        }
+        else
+        {
+            _viewModel.InputLine1 = parts[0];
+        }
+        return Ok("Eingabefelder gesetzt");
+    }
+
+    private string RenderPrint(string dir)
+    {
+        if (string.IsNullOrWhiteSpace(dir)) return Error("Ordner angeben");
+        var document = _viewModel.BuildPrintDocument();
+        int pages = PrintService.RenderToPng(document, dir);
+        return Ok(JsonSerializer.Serialize(new { pages, dir = Path.GetFullPath(dir) }));
+    }
+
+    private string RenderCalibration(string dir)
+    {
+        if (string.IsNullOrWhiteSpace(dir)) return Error("Ordner angeben");
+        var document = _viewModel.BuildCalibrationDocument();
+        int pages = PrintService.RenderToPng(document, dir);
+        return Ok(JsonSerializer.Serialize(new { pages, dir = Path.GetFullPath(dir) }));
+    }
+
+    private string Quit()
+    {
+        _viewModel.DiscardChangesForShutdown();
+        // Antwort geht vor dem Schliessen raus — Close() erst im naechsten Dispatcher-Durchlauf
+        _mainWindow.Dispatcher.BeginInvoke(new Action(() => _mainWindow.Close()));
+        return Ok("Beende");
     }
 
     private string NavPage(string action)
@@ -342,6 +401,11 @@ public class TestAutomationService : IDisposable
             case "add":
                 _viewModel.AddPageCommand.Execute(null);
                 break;
+            case "remove":
+                if (_viewModel.RemovePageCommand.CanExecute(null))
+                    _viewModel.RemovePageCommand.Execute(null);
+                else return Error("Letzte Seite kann nicht entfernt werden");
+                break;
         }
         return Ok($"Seite {_viewModel.CurrentPageIndex + 1}/{_viewModel.PageCount}");
     }
@@ -354,8 +418,8 @@ public class TestAutomationService : IDisposable
 
     private string NewProject()
     {
-        // Skip ConfirmDiscardChanges for automation
-        _viewModel.ClearAllCommand.Execute(null);
+        // Echtes "Neu" (Familie/Format/Settings/Dateipfad zurueck), ohne Rueckfrage
+        _viewModel.NewProjectWithoutConfirm();
         return Ok("Neues Projekt");
     }
 
@@ -384,31 +448,12 @@ public class TestAutomationService : IDisposable
 
     private static string GetHelp()
     {
-        return """
-            Verfuegbare Befehle:
-            ping                             - Verbindungstest
-            state                            - Aktueller App-Zustand (JSON)
-            screenshot [pfad]                - Screenshot als PNG speichern
-            select-family <name>             - Produktfamilie waehlen
-            select-format <name>             - Druckformat waehlen
-            select-label <index>             - ET200SP: Label per Index auswaehlen
-            set-text <header|line1|line2>     - ET200SP: Text setzen
-            generate <name> <typ> <byte> <n> - Adressen generieren
-            next-page / prev-page / add-page - Seitennavigation
-            clear-all / new-project          - Zuruecksetzen
-            list-families / list-formats     - Auflistungen
-            --- ET200MP Module ---
-            select-module <index>            - Modul per Index auswaehlen (0-9)
-            set-module-header <text>         - Modul-Header setzen
-            set-module-net <net1|net2>       - Netzadresse setzen
-            set-module-cpu <text>            - CPU-Name setzen
-            select-cell <index>              - Adresszelle im Modul auswaehlen
-            set-cell-text <text>             - Zellentext setzen
-            set-module-variant <name>        - Modulvariante aendern
-            list-variants                    - Alle Modulvarianten (JSON)
-            mp-state                         - Ausgewaehltes Modul-Detail (JSON)
-            help                             - Diese Hilfe
-            """;
+        var sb = new System.Text.StringBuilder("Verfuegbare Befehle:\n");
+        sb.Append("ping".PadRight(40)).Append("- Verbindungstest\n");
+        foreach (var (_, info) in Commands.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            sb.Append(info.Usage.PadRight(40)).Append("- ").Append(info.Description).Append('\n');
+        sb.Append("help".PadRight(40)).Append("- Diese Hilfe");
+        return sb.ToString();
     }
 
     // === ET200MP Modul-Befehle ===

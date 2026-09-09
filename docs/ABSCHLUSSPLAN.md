@@ -129,6 +129,7 @@ Dann ohne Laufzeitabhängigkeit:
 | 2.17 | PrintService.cs:564 / MpPreviewControl.cs:221 | Mehrzeiliger MP-Header wird zu „ / “ geflattet, ab ~20 Zeichen „…“. | `TextWrapping.Wrap`, `MaxHeight = HeaderH`, Zeilenumbrüche behalten. |
 | 2.18 | MpPreviewControl.xaml.cs:44 | Jeder Tastendruck = kompletter Canvas-Neuaufbau (1000–1700 Elemente); Seitenwechsel 11–21 Renders; Event-Abo ohne Abmeldung. | `DispatcherTimer`-Debounce 50 ms; Bulk-Replace; Abmeldung in `BindToModules`. |
 | 2.19 | TestAutomationService.cs:320 | `apply` No-op, `new-project` = ClearAll, `help` unvollständig, `set-text` umgeht IsDirty. | Auf VM-Commands umstellen, Help aus Dispatch-Tabelle. |
+| 2.21 | PrintService.cs:277 / MainWindow.xaml:682 | Vertikale SP-Slots (6,4 mm hoch) kappen "EW 10" bei 7 pt mit "…" (im AP0-Druck-PNG sichtbar). | Shrink-to-fit: Text per Viewbox/ScaleTransform auf Slot-Länge verkleinern statt Ellipsis, Preview identisch. |
 | 2.20 | ProjectService.cs:44 / :77 | `Pages:null`/`Settings:null` ergibt NRE; Migration v4-zu-v5 ignoriert Familie (DI_DQ_16 statt MP25_16); ModuleIndex nur im Migrationszweig normalisiert. | Null-Defaults; `DefaultVariantFor(family)`; Normalisierung immer. |
 
 ---
