@@ -104,73 +104,51 @@ public partial class MpPreviewControl : UserControl
         if (!vm.IsModuleBased || vm.MpModules.Count == 0) return;
 
         var format = vm.SelectedFormat;
-        var familyInfo = ProductFamilyDefinitions.Get(format.Family);
         var settings = vm.Settings;
 
-        double printW = (FormatDefinitions.PageWidth - settings.MarginLeft - settings.MarginRight) * PxPerMm;
-        double marginL = settings.MarginLeft * PxPerMm;
-        double marginT = settings.MarginTop * PxPerMm;
-
-        double moduleW = printW / familyInfo.ColumnsPerPage;
-
-        // Spalten-Anteile familienabhaengig (25mm hat keine Net-Address-Spalte)
-        double col0W = moduleW * familyInfo.Col0Ratio;
-        double col1W = moduleW * familyInfo.Col1Ratio;
-        double col2W = moduleW * familyInfo.Col2Ratio;
-        double col3W = moduleW * familyInfo.Col3Ratio;
-        double addrW = col0W + col1W;
-
-        double headerH = familyInfo.EstimatedHeaderHeight * PxPerMm;
-        double band2HeaderH = familyInfo.EstimatedBand2HeaderHeight * PxPerMm;
-        double dataRowH = familyInfo.EstimatedChannelRowHeight * PxPerMm;
-        double bandDataH = familyInfo.RowsPerHalf * dataRowH;
+        // Geometrie ausschliesslich aus SheetGeometry (identisch zum Druck; ohne
+        // Kalibrier-Versatz, die Vorschau zeigt das unverschobene Raster)
+        var geo = SheetGeometry.For(format, settings);
 
         PreviewCanvas.Width = FormatDefinitions.PageWidth * PxPerMm;
         PreviewCanvas.Height = FormatDefinitions.PageHeight * PxPerMm;
 
         foreach (var mod in vm.MpModules)
         {
-            // Positionen: Band 0 oben (hoher Header), Band 1 unten (flacher Header)
-            int band = familyInfo.BandOf(mod.ModuleIndex);
-            int col = familyInfo.ColumnOf(mod.ModuleIndex);
-            double modX = marginL + col * moduleW;
+            int idx = mod.ModuleIndex;
             bool isModSelected = mod == vm.SelectedMpModule;
             _moduleOpacity = mod.PrintOpacity;
 
             // Katalog-Belegung (konkretes Siemens-Modul) oder Varianten-Default
             var definitions = MpModuleLayoutFactory.GetDefinitions(mod.GetModule());
 
-            double modHeaderH = band == 0 ? headerH : band2HeaderH;
-            double headerY = band == 0 ? marginT : marginT + headerH + bandDataH;
-
             // Header — globaler Header-Style aus Settings, mehrzeilig wie im Druck.
+            var header = geo.MpHeaderRect(idx).Scale(PxPerMm);
             double headerFs = settings.HeaderFontSize * PtToPx;
-            DrawCell(modX, headerY, moduleW, modHeaderH,
+            DrawCell(header.X, header.Y, header.Width, header.Height,
                 mod.HeaderText, HeaderBgBrush, isModSelected, fontSize: headerFs,
                 isBold: settings.HeaderIsBold, fontFamily: mod.FontFamily,
                 wrap: true,
                 clickAction: () => SelectModule(vm, mod));
 
-            double dataStartY = headerY + modHeaderH;
-            RenderHalfCells(vm, mod, definitions, 0, modX, dataStartY,
-                col0W, col1W, addrW, dataRowH, format.IsVertical, isModSelected);
-            RenderNetAddrAndCpu(mod, modX + addrW, dataStartY,
-                col2W, col3W, dataRowH, bandDataH, familyInfo.HasNetAddressColumn);
+            RenderHalfCells(vm, mod, definitions, 0, geo, format.IsVertical, isModSelected);
+            RenderNetAddrAndCpu(mod, geo);
 
             // Multi-Selection-Markierung: orange Umrandung ueber die Streifen-Position
             if (mod.IsChecked)
             {
+                var r = geo.MpModuleRect(idx).Scale(PxPerMm);
                 var checkedFrame = new Rectangle
                 {
-                    Width = moduleW,
-                    Height = modHeaderH + bandDataH,
+                    Width = r.Width,
+                    Height = r.Height,
                     Stroke = new SolidColorBrush(Color.FromRgb(255, 149, 0)),
                     StrokeThickness = 2,
                     Fill = Brushes.Transparent,
                     IsHitTestVisible = false
                 };
-                Canvas.SetLeft(checkedFrame, modX);
-                Canvas.SetTop(checkedFrame, headerY);
+                Canvas.SetLeft(checkedFrame, r.X);
+                Canvas.SetTop(checkedFrame, r.Y);
                 PreviewCanvas.Children.Add(checkedFrame);
             }
         }
@@ -178,9 +156,7 @@ public partial class MpPreviewControl : UserControl
     }
 
     private void RenderHalfCells(MainViewModel vm, MpModuleViewModel mod,
-        MpCellDefinition[] definitions, int half,
-        double modX, double dataStartY,
-        double col0W, double col1W, double addrW, double dataRowH,
+        MpCellDefinition[] definitions, int half, SheetGeometry geo,
         bool isVertical, bool isModSelected)
     {
         for (int i = 0; i < mod.AddressCells.Count && i < definitions.Length; i++)
@@ -189,11 +165,8 @@ public partial class MpPreviewControl : UserControl
             if (def.Half != half) continue;
 
             var cellVm = mod.AddressCells[i];
-
-            double cellX = modX + (def.StartCol == 0 ? 0 : col0W);
-            double cellW = def.ColSpan == 2 ? addrW : (def.StartCol == 0 ? col0W : col1W);
-            double cellY = dataStartY + def.StartRow * dataRowH;
-            double cellH = def.RowSpan * dataRowH;
+            var cell = geo.MpCellRect(mod.ModuleIndex, def).Scale(PxPerMm);
+            double cellX = cell.X, cellY = cell.Y, cellW = cell.Width, cellH = cell.Height;
 
             bool isCellSelected = isModSelected && cellVm == vm.SelectedMpCell;
 
@@ -219,27 +192,26 @@ public partial class MpPreviewControl : UserControl
         }
     }
 
-    private void RenderNetAddrAndCpu(MpModuleViewModel mod,
-        double col2X, double dataStartY,
-        double col2W, double col3W, double dataRowH, double bandDataH,
-        bool hasNetAddress)
+    private void RenderNetAddrAndCpu(MpModuleViewModel mod, SheetGeometry geo)
     {
         double fs = mod.FontSize * PtToPx;
+        int idx = mod.ModuleIndex;
 
         // Net-Address-Spalte nur bei 35mm (25mm hat keine)
-        if (hasNetAddress)
+        if (geo.Family.HasNetAddressColumn)
         {
-            double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
-            DrawCell(col2X, dataStartY, col2W, blockH,
+            var n1 = geo.MpNetAddressRect(idx, 0).Scale(PxPerMm);
+            var n2 = geo.MpNetAddressRect(idx, 1).Scale(PxPerMm);
+            DrawCell(n1.X, n1.Y, n1.Width, n1.Height,
                 mod.NetAddress1, NetAddrBgBrush, false, fontSize: fs, rotate: true,
                 isItalic: mod.IsItalic, fontFamily: mod.FontFamily);
-            DrawCell(col2X, dataStartY + blockH, col2W, blockH,
+            DrawCell(n2.X, n2.Y, n2.Width, n2.Height,
                 mod.NetAddress2, NetAddrBgBrush, false, fontSize: fs, rotate: true,
                 isItalic: mod.IsItalic, fontFamily: mod.FontFamily);
         }
 
-        double col3X = col2X + col2W;
-        DrawCell(col3X, dataStartY, col3W, bandDataH,
+        var cpu = geo.MpCpuRect(idx).Scale(PxPerMm);
+        DrawCell(cpu.X, cpu.Y, cpu.Width, cpu.Height,
             mod.CpuName, CpuNameBgBrush, false, fontSize: fs, rotate: true,
             isItalic: mod.IsItalic, fontFamily: mod.FontFamily);
     }

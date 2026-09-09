@@ -232,7 +232,7 @@ public class MainViewModel : ViewModelBase
             }
             finally { _suspendLiveApply = false; }
             OnPropertyChanged(nameof(Settings));
-            OnPropertyChanged(nameof(PreviewMargin));
+            NotifyPreviewGeometry();
             NotifyMpPreviewChanged();
 
             // Erstes Format der neuen Familie waehlen — Inhaltsverlust wurde
@@ -451,6 +451,7 @@ public class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsMarginBottomEditable));
                 OnPropertyChanged(nameof(EditTargetInfo));
                 OnPropertyChanged(nameof(LayoutInfo));
+                NotifyPreviewGeometry();
                 OnPropertyChanged(nameof(HasHeader));
                 OnPropertyChanged(nameof(IsDoubleLine));
                 OnPropertyChanged(nameof(Line2RowHeight));
@@ -830,10 +831,31 @@ public class MainViewModel : ViewModelBase
     public int HeaderPreviewFontSize => (int)Math.Round(_settings.HeaderFontSize * 1.06);
     public FontWeight HeaderPreviewFontWeight => _settings.HeaderIsBold ? FontWeights.Bold : FontWeights.Normal;
 
-    // Seitenraender fuer A4-Preview (3px/mm Skalierung)
+    // Vorschau-Massstab: 3 px je mm (A4 = 630 x 891 px)
+    public const double PreviewPxPerMm = 3.0;
+
+    // Seitenraender fuer A4-Preview — das Etikettenraster fuellt exakt den Druckbereich
     public Thickness PreviewMargin => new(
-        _settings.MarginLeft * 3, _settings.MarginTop * 3,
-        _settings.MarginRight * 3, _settings.MarginBottom * 3);
+        _settings.MarginLeft * PreviewPxPerMm, _settings.MarginTop * PreviewPxPerMm,
+        _settings.MarginRight * PreviewPxPerMm, _settings.MarginBottom * PreviewPxPerMm);
+
+    /// <summary>Breite der Kopfspalte in der SP-Vorschau aus derselben Geometrie wie
+    /// der Druck (20 % der Gruppenbreite) — frueher fest 18 px (~2 % Abweichung).</summary>
+    public GridLength SpHeaderPreviewWidth =>
+        new(SheetGeometry.For(_selectedFormat, _settings).SpHeaderWidth * PreviewPxPerMm);
+
+    /// <summary>Zeilennummern 20..1 im RECHTEN Seitenrand (neben dem Raster), damit sie
+    /// die Rasterbreite nicht mehr verkleinern.</summary>
+    public Thickness RowNumbersMargin => new(
+        (FormatDefinitions.PageWidth - _settings.MarginRight) * PreviewPxPerMm + 2,
+        _settings.MarginTop * PreviewPxPerMm, 0, _settings.MarginBottom * PreviewPxPerMm);
+
+    private void NotifyPreviewGeometry()
+    {
+        OnPropertyChanged(nameof(PreviewMargin));
+        OnPropertyChanged(nameof(SpHeaderPreviewWidth));
+        OnPropertyChanged(nameof(RowNumbersMargin));
+    }
 
     // === Commands ===
     public ICommand ApplyCommand { get; }
@@ -1587,7 +1609,7 @@ public class MainViewModel : ViewModelBase
         _settings.MarginBottom = _inputMarginBottom;
         _settings.MarginRight = _inputMarginRight;
         OnPropertyChanged(nameof(Settings));
-        OnPropertyChanged(nameof(PreviewMargin));
+        NotifyPreviewGeometry();
         NotifyMpPreviewChanged();
         IsDirty = true;
     }
@@ -1611,7 +1633,7 @@ public class MainViewModel : ViewModelBase
         }
         finally { _suspendLiveApply = false; }
         OnPropertyChanged(nameof(Settings));
-        OnPropertyChanged(nameof(PreviewMargin));
+        NotifyPreviewGeometry();
         OnPropertyChanged(nameof(HeaderPreviewFontSize));
         OnPropertyChanged(nameof(HeaderPreviewFontWeight));
         NotifyMpPreviewChanged();
@@ -1632,7 +1654,7 @@ public class MainViewModel : ViewModelBase
         _settings.HeaderFontSize = InputHeaderFontSize;
         _settings.HeaderIsBold = InputHeaderIsBold;
         OnPropertyChanged(nameof(Settings));
-        OnPropertyChanged(nameof(PreviewMargin));
+        NotifyPreviewGeometry();
         OnPropertyChanged(nameof(HeaderPreviewFontSize));
         OnPropertyChanged(nameof(HeaderPreviewFontWeight));
         NotifyMpPreviewChanged();
@@ -1980,7 +2002,7 @@ public class MainViewModel : ViewModelBase
             }
             finally { _suspendLiveApply = false; }
             OnPropertyChanged(nameof(Settings));
-            OnPropertyChanged(nameof(PreviewMargin));
+            NotifyPreviewGeometry();
             OnPropertyChanged(nameof(HeaderPreviewFontSize));
             OnPropertyChanged(nameof(HeaderPreviewFontWeight));
             NotifyMpPreviewChanged();

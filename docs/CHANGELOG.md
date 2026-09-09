@@ -11,6 +11,21 @@
 
 ## 2026-09-09 - Projekttag 7 (Abschluss v3.1, siehe docs/ABSCHLUSSPLAN.md)
 
+### AP3: Geometrie-Klasse — Preview = Druck
+- Neu `Services/SheetGeometry.cs` (mm-basiert, `RectMm`): einzige Quelle fuer SP-Raster
+  (Position 1 = unten rechts, Kopfspalte 20 %), MP-Baender (Header 25,7/20,6 mm, 20 x 5,6 mm),
+  Zellen, Netzadress-/CPU-Spalten und das Kalibrier-Rasterrechteck. Druck (`CreatePage`,
+  `CreateMpPage`, Kalibrierseite) und MP-Vorschau rechnen nur noch hierueber; die
+  Umrechnung (96/25.4 DIP bzw. 3 px je mm) passiert beim Aufrufer.
+- SP-XAML-Vorschau: Kopfspalten-Breite aus der Geometrie (frueher fest 18 px), Zeilennummern
+  im rechten Seitenrand statt im Raster (das Raster fuellt jetzt exakt den Druckbereich),
+  Bindungen fuer ColumnDefinition/RowDefinition ueber den BindingProxy.
+- Toter MP-Zweig in `FormatDefinitions.GetCellSize` (5,44 mm) und in `CreatePage`/
+  Kalibrierseite entfernt; `GetCellSize` ist ein Wrapper um SheetGeometry.
+- Tests: 173 (16 Geometrie: Position 1 unten rechts, Kopfspalte, Baender, Zellen, 25mm,
+  Rand-unten-Unabhaengigkeit; 7 Persistenz: Migration v1/v2/v3, Roundtrip aller v5-Felder,
+  kein Legacy-Feld beim Speichern). Smoke AP3: 48/48 gruen.
+
 ### AP2: Mittlere Bugs + UX
 - **Strg+C/V in Textfeldern**: Window-KeyBindings sind nicht ausfuehrbar, solange eine
   TextBox den Fokus hat — die Taste geht an das Textfeld (frueher wurden Etiketten kopiert).

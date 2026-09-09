@@ -509,17 +509,11 @@
                                     <DropShadowEffect ShadowDepth="3" Opacity="0.3"/>
                                 </Border.Effect>
 
-                                <!-- Etikettenraster: Margin fuer Seitenraender, Grid gespiegelt -->
-                                <!-- Layout wie physisches A4-Blatt 6ES7193-6LA10-0AA0 -->
-                                <Border Margin="{Binding PreviewMargin}">
+                                <!-- Etikettenraster fuellt exakt den Druckbereich (PreviewMargin);
+                                     Zeilennummern liegen daneben im rechten Seitenrand.
+                                     Layout wie physisches A4-Blatt 6ES7193-6LA10-0AA0 -->
                                 <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <!-- Etikettenraster -->
-                                    <ItemsControl Grid.Column="0" ItemsSource="{Binding Labels}">
+                                    <ItemsControl ItemsSource="{Binding Labels}" Margin="{Binding PreviewMargin}">
                                     <!-- Grid spiegeln: unten-rechts = erste Position -->
                                     <ItemsControl.LayoutTransform>
                                         <ScaleTransform ScaleX="-1" ScaleY="-1"/>
@@ -583,21 +577,9 @@
                                                 </Border.Style>
                                                 <Grid ClipToBounds="True">
                                                     <Grid.ColumnDefinitions>
-                                                        <!-- Header-Spalte: sichtbar bei +Header Formaten -->
-                                                        <ColumnDefinition>
-                                                            <ColumnDefinition.Style>
-                                                                <Style TargetType="ColumnDefinition">
-                                                                    <Setter Property="Width" Value="0"/>
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding DataContext.HasHeader,
-                                                                                     RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                     Value="True">
-                                                                            <Setter Property="Width" Value="18"/>
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </ColumnDefinition.Style>
-                                                        </ColumnDefinition>
+                                                        <!-- Header-Spalte: Breite aus SheetGeometry (0 ohne Kopfzeile),
+                                                             Bindung ueber Proxy (ColumnDefinition ist kein Visual) -->
+                                                        <ColumnDefinition Width="{Binding Data.SpHeaderPreviewWidth, Source={StaticResource Proxy}}"/>
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
 
@@ -689,10 +671,8 @@
                                                                 <RowDefinition Height="*"/>
                                                                 <!-- Einzeilige Formate: untere Reihe auf 0 (Druck rendert dort
                                                                      nur bei RowsPerLabel >= 2) — Preview = Druck. Bindung ueber
-                                                                     Application.Current, da RowDefinition kein Visual-Tree-Element
-                                                                     ist und RelativeSource dort nicht traegt. -->
-                                                                <RowDefinition Height="{Binding MainWindow.DataContext.Line2RowHeight,
-                                                                               Source={x:Static Application.Current}}"/>
+                                                                     den Proxy, da RowDefinition kein Visual-Tree-Element ist. -->
+                                                                <RowDefinition Height="{Binding Data.Line2RowHeight, Source={StaticResource Proxy}}"/>
                                                             </Grid.RowDefinitions>
                                                             <!-- Zeile 1: Ungerade Bits / Analog-Adressen -->
                                                             <ItemsControl Grid.Row="0" ItemsSource="{Binding Line1Parts}">
@@ -756,9 +736,10 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                    <!-- Zeilennummern am rechten Rand (wie physisches A4-Blatt) -->
-                                    <ItemsControl Grid.Column="1" ItemsSource="{Binding RowNumbers}"
-                                                  Margin="2,0,0,0">
+                                    <!-- Zeilennummern im rechten Seitenrand (wie physisches A4-Blatt) -->
+                                    <ItemsControl ItemsSource="{Binding RowNumbers}"
+                                                  Margin="{Binding RowNumbersMargin}"
+                                                  HorizontalAlignment="Left" Width="14">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
                                                 <UniformGrid Rows="{Binding TotalVisualRows}" Columns="1"/>
@@ -777,7 +758,6 @@
                                     </ItemsControl>
 
                                 </Grid>
-                                </Border>
                             </Border>
                         </Border>
                     </ScrollViewer>

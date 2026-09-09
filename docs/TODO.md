@@ -266,7 +266,7 @@
 - [x] AP0 Testinfrastruktur: render-print/quit/apply/new-project, smoke.ps1, Publish-Profil (24/24 Smoke gruen)
 - [x] AP1 Kritische Bugs (12, + 2.6/2.10/2.20 vorgezogen; 133 Tests, Smoke 41/41)
 - [x] AP2 Mittlere Bugs (20 + 2.21 Shrink-to-fit; 150 Tests, Smoke 48/48). Offen aus AP2: toter GetCellSize-MP-Zweig -> AP3
-- [ ] AP3 Geometrie-Klasse Preview = Druck + Tests
+- [x] AP3 SheetGeometry fuer Druck/Vorschau/Kalibrierung, Migrations- + Roundtrip-Tests (173 Tests, Smoke 48/48)
 - [ ] AP4 Import-Robustheit
 - [ ] AP5 Komfort/UX
 - [ ] AP6 Doku-Konsolidierung + Version

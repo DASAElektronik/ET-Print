@@ -109,44 +109,14 @@ public static class FormatDefinitions
     };
 
     /// <summary>
-    /// Berechnet die Zellengroessen (mm) basierend auf Druckbereich und Format.
+    /// ET200SP-Zellengroessen (mm). Duenner Wrapper um <see cref="SheetGeometry"/> —
+    /// der fruehere MP-Zweig hier (5,44 mm Zeilenhoehe) war toter Code mit einer
+    /// Geometrie, die der MP-Druck nie erzeugt hat.
     /// </summary>
     public static (double cellWidth, double cellHeight, double headerWidth) GetCellSize(
         FormatInfo format, LabelSettings settings)
     {
-        double printWidth = PageWidth - settings.MarginLeft - settings.MarginRight;
-        double printHeight = PageHeight - settings.MarginTop - settings.MarginBottom;
-
-        double cellWidth, cellHeight, headerWidth = 0;
-
-        if (format.BandsPerPage > 1)
-        {
-            // ET200MP: 2 Baender mit eigenen Header-Zeilen (25.7mm oben, 20.6mm unten)
-            var familyInfo = ProductFamilyDefinitions.Get(format.Family);
-            double totalBandHeight = printHeight - familyInfo.EstimatedHeaderHeight
-                - familyInfo.EstimatedBand2HeaderHeight;
-            double bandHeight = totalBandHeight / format.BandsPerPage;
-            cellHeight = bandHeight / format.ChannelRowsPerBand;
-
-            double groupWidth = printWidth / format.LabelsPerRow;
-            // ET200MP: Header-Spalte ~17% der Modulbreite (804/4570 aus Excel)
-            headerWidth = groupWidth * 0.17;
-            cellWidth = groupWidth - headerWidth;
-        }
-        else if (format.HasHeader)
-        {
-            // ET200SP mit Header: ~20% der Gruppenbreite
-            double groupWidth = printWidth / format.LabelsPerRow;
-            headerWidth = groupWidth * 0.2;
-            cellWidth = groupWidth - headerWidth;
-            cellHeight = printHeight / format.LabelRows;
-        }
-        else
-        {
-            cellWidth = printWidth / format.LabelsPerRow;
-            cellHeight = printHeight / format.LabelRows;
-        }
-
-        return (cellWidth, cellHeight, headerWidth);
+        var geo = SheetGeometry.For(format, settings);
+        return (geo.SpCellWidth, geo.SpCellHeight, geo.SpHeaderWidth);
     }
 }

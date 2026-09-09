@@ -175,58 +175,22 @@ public static class PrintService
             Height = PageHeightWpf
         };
 
-        var (cellWidthMm, cellHeightMm, headerWidthMm) = FormatDefinitions.GetCellSize(format, settings);
-        double cellW = cellWidthMm * MmToWpf;
-        double cellH = cellHeightMm * MmToWpf;
-        double headerW = headerWidthMm * MmToWpf;
-        double groupW = cellW + headerW;
-
-        double marginLeft = (settings.MarginLeft + calOffsetX) * MmToWpf;
-        double marginTop = (settings.MarginTop + calOffsetY) * MmToWpf;
-
-        // ET200MP: Band-Layout berechnen (Band 1 und Band 2 haben eigene Header-Hoehen)
-        var familyInfo = ProductFamilyDefinitions.Get(format.Family);
-        int labelsPerBand = format.LabelsPerBand;
-        double bandHeaderH = familyInfo.EstimatedHeaderHeight * MmToWpf;
-        double band2HeaderH = familyInfo.EstimatedBand2HeaderHeight * MmToWpf;
+        // Geometrie ausschliesslich aus SheetGeometry (Position 1 = unten rechts)
+        var geo = SheetGeometry.For(format, settings, calOffsetX, calOffsetY);
+        double cellW = geo.SpCellWidth * MmToWpf;
+        double cellH = geo.SpCellHeight * MmToWpf;
+        double headerW = geo.SpHeaderWidth * MmToWpf;
+        double groupW = geo.SpGroupWidth * MmToWpf;
 
         foreach (var label in labels)
         {
-            int i = label.Index;
-
-            // Band-Zuordnung (0 = oben, 1 = unten)
-            int band = format.BandsPerPage > 1 ? i / labelsPerBand : 0;
-            int indexInBand = format.BandsPerPage > 1 ? i % labelsPerBand : i;
-
-            int col = indexInBand % format.LabelsPerRow;
-            int row = indexInBand / format.LabelsPerRow;
-
-            // Spiegeln: Index 0 = unten rechts auf dem physischen Blatt
-            int physCol = (format.LabelsPerRow - 1) - col;
-            int physRow = (format.ChannelRowsPerBand - 1) - row;
-
-            double x = marginLeft + physCol * groupW;
-            double y;
-
-            if (format.BandsPerPage > 1)
-            {
-                // ET200MP: Y-Position — Band 1: hoher Header, Band 2: flacher Header
-                double bandStartY = marginTop + band * (bandHeaderH + format.ChannelRowsPerBand * cellH);
-                y = bandStartY + (band == 0 ? bandHeaderH : band2HeaderH) + physRow * cellH;
-            }
-            else
-            {
-                // ET200SP: Einfache Y-Berechnung
-                y = marginTop + physRow * cellH;
-            }
-
             // Schnittkanten + Inhalt nur bei befuellten und druckaktiven Etiketten
-            if (IsPrintable(label))
-            {
-                if (printGridLines)
-                    DrawCellBorder(canvas, x, y, groupW, cellH);
-                RenderLabel(canvas, label, format, settings, x, y, cellW, cellH, headerW, printGridLines);
-            }
+            if (!IsPrintable(label)) continue;
+
+            var r = geo.SpLabelRect(label.Index).Scale(MmToWpf);
+            if (printGridLines)
+                DrawCellBorder(canvas, r.X, r.Y, groupW, cellH);
+            RenderLabel(canvas, label, format, settings, r.X, r.Y, cellW, cellH, headerW, printGridLines);
         }
 
         page.Children.Add(canvas);
@@ -427,51 +391,15 @@ public static class PrintService
         var page = new FixedPage { Width = PageWidthWpf, Height = PageHeightWpf };
         var canvas = new Canvas { Width = PageWidthWpf, Height = PageHeightWpf };
 
-        var (cellWidthMm, cellHeightMm, headerWidthMm) = FormatDefinitions.GetCellSize(format, settings);
-        double cellW = cellWidthMm * MmToWpf;
-        double cellH = cellHeightMm * MmToWpf;
-        double headerW = headerWidthMm * MmToWpf;
-        double groupW = cellW + headerW;
-
-        double marginLeft = (settings.MarginLeft + calOffsetX) * MmToWpf;
-        double marginTop = (settings.MarginTop + calOffsetY) * MmToWpf;
-
-        double gridWidth = format.LabelsPerRow * groupW;
-        var familyInfo = ProductFamilyDefinitions.Get(format.Family);
-        double totalGridHeight;
-        if (format.IsModuleBased)
-        {
-            // Exakt dieselbe Geometrie wie CreateMpPage/MpPreviewControl (feste
-            // Estimated-Masse), NICHT GetCellSize — sonst beschreibt die Kalibrier-
-            // seite ein Raster, das der echte MP-Druck nie erzeugt (~6mm Abweichung).
-            double printWidthMm = FormatDefinitions.PageWidth - settings.MarginLeft - settings.MarginRight;
-            gridWidth = printWidthMm * MmToWpf;
-            double dataRowH = familyInfo.EstimatedChannelRowHeight * MmToWpf;
-            double bandDataH = MpModuleLayoutFactory.RowsPerHalf * dataRowH;
-            totalGridHeight = familyInfo.EstimatedHeaderHeight * MmToWpf + bandDataH
-                + familyInfo.EstimatedBand2HeaderHeight * MmToWpf + bandDataH;
-        }
-        else if (format.BandsPerPage > 1)
-        {
-            // Band 1: hoher Header, Band 2: flacher Header — je 20 Datenzeilen
-            totalGridHeight = familyInfo.EstimatedHeaderHeight * MmToWpf
-                + familyInfo.EstimatedBand2HeaderHeight * MmToWpf
-                + format.BandsPerPage * format.ChannelRowsPerBand * cellH;
-        }
-        else
-        {
-            totalGridHeight = format.LabelRows * cellH;
-        }
+        // Dieselbe Geometrie wie der echte Druck (SP-Raster bzw. MP-Baender) —
+        // die Fadenkreuze sitzen exakt auf den Ecken des Etikettenrasters.
+        var grid = SheetGeometry.For(format, settings, calOffsetX, calOffsetY).GridRect.Scale(MmToWpf);
 
         // Fadenkreuz 1: Ecke unten rechts
-        double x1 = marginLeft + gridWidth;
-        double y1 = marginTop + totalGridHeight;
-        DrawCrosshair(canvas, x1, y1, "unten rechts");
+        DrawCrosshair(canvas, grid.Right, grid.Bottom, "unten rechts");
 
         // Fadenkreuz 2: Ecke oben links
-        double x2 = marginLeft;
-        double y2 = marginTop;
-        DrawCrosshair(canvas, x2, y2, "oben links");
+        DrawCrosshair(canvas, grid.X, grid.Y, "oben links");
 
         // Info-Text in der Mitte
         var info = new TextBlock
@@ -612,25 +540,8 @@ public static class PrintService
         var page = new FixedPage { Width = PageWidthWpf, Height = PageHeightWpf };
         var canvas = new Canvas { Width = PageWidthWpf, Height = PageHeightWpf };
 
-        var familyInfo = ProductFamilyDefinitions.Get(format.Family);
-        double marginLeft = (settings.MarginLeft + calOffsetX) * MmToWpf;
-        double marginTop = (settings.MarginTop + calOffsetY) * MmToWpf;
-
-        double printWidthMm = FormatDefinitions.PageWidth - settings.MarginLeft - settings.MarginRight;
-        double moduleWidthMm = printWidthMm / familyInfo.ColumnsPerPage;
-        double moduleW = moduleWidthMm * MmToWpf;
-
-        // Spalten-Anteile familienabhaengig (25mm hat keine Net-Address-Spalte)
-        double col0W = moduleW * familyInfo.Col0Ratio;
-        double col1W = moduleW * familyInfo.Col1Ratio;
-        double col2W = moduleW * familyInfo.Col2Ratio;
-        double col3W = moduleW * familyInfo.Col3Ratio;
-        double addrW = col0W + col1W;
-
-        double headerH = familyInfo.EstimatedHeaderHeight * MmToWpf;
-        double band2HeaderH = familyInfo.EstimatedBand2HeaderHeight * MmToWpf;
-        double dataRowH = familyInfo.EstimatedChannelRowHeight * MmToWpf;
-        double bandDataH = familyInfo.RowsPerHalf * dataRowH;
+        // Geometrie ausschliesslich aus SheetGeometry (identisch zur MP-Vorschau)
+        var geo = SheetGeometry.For(format, settings, calOffsetX, calOffsetY);
 
         foreach (var mod in modules)
         {
@@ -638,37 +549,29 @@ public static class PrintService
             // Pinout-Streifen (SIWAREX) zaehlen als Inhalt — siehe HasPrintableContent.
             if (!IsPrintable(mod)) continue;
 
-            // 10 Streifen-Positionen pro A4: Band 0 (oben, hoher Header) und
-            // Band 1 (unten, flacher Header) mit je ColumnsPerPage Spalten.
-            int band = familyInfo.BandOf(mod.ModuleIndex);
-            int col = familyInfo.ColumnOf(mod.ModuleIndex);
-            double modX = marginLeft + col * moduleW;
+            int idx = mod.ModuleIndex;
             // Katalog-Belegung (konkretes Siemens-Modul) oder Varianten-Default
             var definitions = MpModuleLayoutFactory.GetDefinitions(mod.GetModule());
-
-            double modHeaderH = band == 0 ? headerH : band2HeaderH;
-            double headerY = band == 0 ? marginTop : marginTop + headerH + bandDataH;
 
             // Header oben im Streifen — globaler Header-Style aus settings.
             // Mehrzeilig (Device / Module / Slot wie im Excel-Template): Zeilenumbrueche
             // bleiben, lange Zeilen werden umbrochen statt mit "..." gekappt; passt es
             // in der Hoehe nicht, verkleinert die FitBox.
+            var header = geo.MpHeaderRect(idx).Scale(MmToWpf);
             if (!string.IsNullOrWhiteSpace(mod.HeaderText))
             {
                 var tb = CreateTextBlock(mod.HeaderText.Replace("\r\n", "\n"),
                     settings.HeaderFontSize, settings.HeaderIsBold, false, mod.FontFamily, fit: true);
-                tb.MaxWidth = moduleW - 2;
+                tb.MaxWidth = header.Width - 2;
                 tb.TextWrapping = TextWrapping.Wrap;
                 tb.TextAlignment = TextAlignment.Center;
-                var container = new Border { Width = moduleW, Height = modHeaderH, Child = FitBox(tb, moduleW - 2, modHeaderH - 1) };
-                Canvas.SetLeft(container, modX);
-                Canvas.SetTop(container, headerY);
+                var container = new Border { Width = header.Width, Height = header.Height, Child = FitBox(tb, header.Width - 2, header.Height - 1) };
+                Canvas.SetLeft(container, header.X);
+                Canvas.SetTop(container, header.Y);
                 canvas.Children.Add(container);
             }
             if (printGridLines)
-                DrawCellBorder(canvas, modX, headerY, moduleW, modHeaderH);
-
-            double dataStartY = headerY + modHeaderH;
+                DrawCellBorder(canvas, header.X, header.Y, header.Width, header.Height);
 
             // Adresszellen (alle Layouts definieren nur Half 0 = ein Band)
             for (int i = 0; i < mod.AddressCells.Count && i < definitions.Length; i++)
@@ -677,13 +580,10 @@ public static class PrintService
                 if (def.Half != 0) continue;
 
                 var cellVm = mod.AddressCells[i];
-                double cellX = modX + (def.StartCol == 0 ? 0 : col0W);
-                double cellW = def.ColSpan == 2 ? addrW : (def.StartCol == 0 ? col0W : col1W);
-                double cellY = dataStartY + def.StartRow * dataRowH;
-                double cellH = def.RowSpan * dataRowH;
+                var cell = geo.MpCellRect(idx, def).Scale(MmToWpf);
 
                 if (printGridLines)
-                    DrawCellBorder(canvas, cellX, cellY, cellW, cellH);
+                    DrawCellBorder(canvas, cell.X, cell.Y, cell.Width, cell.Height);
 
                 string text = def.IsEditable ? cellVm.Text : def.Label;
                 if (!string.IsNullOrWhiteSpace(text))
@@ -698,41 +598,41 @@ public static class PrintService
                     else
                     {
                         tb.TextAlignment = TextAlignment.Center;
-                        tb.Width = cellW - 1;
+                        tb.Width = cell.Width - 1;
                         // Vertikal zentrieren wie die Preview — sonst klebt der
                         // Text an der Zell-Oberkante (bei 4-Zeilen-Analogzellen ~9mm daneben).
                         tb.VerticalAlignment = VerticalAlignment.Center;
                     }
-                    var container = new Border { Width = cellW, Height = cellH };
+                    var container = new Border { Width = cell.Width, Height = cell.Height };
                     container.Child = tb;
-                    Canvas.SetLeft(container, cellX);
-                    Canvas.SetTop(container, cellY);
+                    Canvas.SetLeft(container, cell.X);
+                    Canvas.SetTop(container, cell.Y);
                     canvas.Children.Add(container);
                 }
             }
 
             // Col 2: Net Address (Zeilen 1-10) + Net Name (Zeilen 11-20) — nur 35mm
-            double col2X = modX + addrW;
-            if (familyInfo.HasNetAddressColumn)
+            if (geo.Family.HasNetAddressColumn)
             {
-                double blockH = MpModuleLayoutFactory.NetAddrBlockRows * dataRowH;
-                RenderRotatedText(canvas, mod.NetAddress1, col2X, dataStartY, col2W, blockH,
+                var n1 = geo.MpNetAddressRect(idx, 0).Scale(MmToWpf);
+                var n2 = geo.MpNetAddressRect(idx, 1).Scale(MmToWpf);
+                RenderRotatedText(canvas, mod.NetAddress1, n1.X, n1.Y, n1.Width, n1.Height,
                     mod.FontSize, mod.FontFamily, mod.IsItalic);
-                RenderRotatedText(canvas, mod.NetAddress2, col2X, dataStartY + blockH, col2W, blockH,
+                RenderRotatedText(canvas, mod.NetAddress2, n2.X, n2.Y, n2.Width, n2.Height,
                     mod.FontSize, mod.FontFamily, mod.IsItalic);
                 if (printGridLines)
                 {
-                    DrawCellBorder(canvas, col2X, dataStartY, col2W, blockH);
-                    DrawCellBorder(canvas, col2X, dataStartY + blockH, col2W, blockH);
+                    DrawCellBorder(canvas, n1.X, n1.Y, n1.Width, n1.Height);
+                    DrawCellBorder(canvas, n2.X, n2.Y, n2.Width, n2.Height);
                 }
             }
 
             // Col 3: CPU-Name
-            double col3X = col2X + col2W;
-            RenderRotatedText(canvas, mod.CpuName, col3X, dataStartY, col3W, bandDataH,
+            var cpu = geo.MpCpuRect(idx).Scale(MmToWpf);
+            RenderRotatedText(canvas, mod.CpuName, cpu.X, cpu.Y, cpu.Width, cpu.Height,
                 mod.FontSize, mod.FontFamily, mod.IsItalic);
             if (printGridLines)
-                DrawCellBorder(canvas, col3X, dataStartY, col3W, bandDataH);
+                DrawCellBorder(canvas, cpu.X, cpu.Y, cpu.Width, cpu.Height);
         }
 
         page.Children.Add(canvas);
