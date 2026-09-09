@@ -11,6 +11,28 @@
 
 ## 2026-09-09 - Projekttag 7 (Abschluss v3.1, siehe docs/ABSCHLUSSPLAN.md)
 
+### AP9a: Katalog-Rest (Analogmodule)
+- Vier 35mm-Analogmodule per Modulname waehlbar: AI 8xU/I/RTD/TC ST (6ES7531-7KF00),
+  AI 8xU/I HF (6ES7531-7NF00), AI 8xU/I/R/RTD BA (6ES7531-7QF00), AQ 4xU/I ST
+  (6ES7532-5HD00) — Breite 35 mm laut TED-Datenblatt, Layout AI_AQ_8 bzw. AQ_4, komplett
+  editierbar (keine feste Klemmen-Kanal-Zuordnung). Katalog: 18 Eintraege. Tests: 239.
+
+### AP6: Doku-Konsolidierung + Version
+- ARCHITECTURE.md, FEATURES.md (F01-F20), PRODUCT.md komplett neu auf Codestand v3.1:
+  .NET 9 / C# 13, reale Projektstruktur (Phantomdateien LayoutEngine/ProjectFileService/
+  PagePreviewViewModel entfernt), 10 Formate, alle SP-Formate 5x20, Raender 20,5/27,5,
+  MVVM-Skizze mit beiden Vorschau-Pfaden, SheetGeometry, Persistenz v1-v5, Kalibrierung,
+  Recovery, UiState, Test-Automation-Befehlstabelle, Tastaturkuerzel, Standardwerte.
+- README.md neu (Zweck, Installation, 10 Bedienschritte, Boegen, Kalibrierung,
+  Speicherorte, Entwicklung, Doku-Verweise).
+- PRINT-FORMATS.md: Widerspruch 5 vs. 10 Module aufgeloest (Historie erklaert), 9 Varianten,
+  Katalog-Liste, Zeilenhoehe 5,6 mm fest mit Hinweis auf Stahllineal, Datenblatt-Quellen der
+  25mm-Module, Stand-der-Implementierung aktualisiert.
+- TODO.md: Phase 12 als ueberholt markiert, Abschlusskriterien; CHANGELOG: Versionsplan
+  v2.2-v3.1, Meilensteine bis 2026-09-09; NUL-Bytes aus einem frueheren Eintrag entfernt.
+- Version: csproj 3.1.0, Description mit ET200MP, Info-Dialog aus der Assembly;
+  Code-Kommentare "5 Module pro Seite" korrigiert.
+
 ### AP8: 25mm-Module datenblattverifiziert (Stahllineal-Masse bleiben offen)
 - Blockdiagramme der 25mm-BA-Module ausgewertet (Klemmennummern stehen im Siemens-Diagramm
   UNTER der Klemme): DI 32 BA, DQ 32 BA, DQ 16 BA, DI16/DQ16 BA haben die 40-Klemmen-

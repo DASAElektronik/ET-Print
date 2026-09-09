@@ -272,7 +272,7 @@
 - [x] AP6 Doku-Konsolidierung: ARCHITECTURE/FEATURES/PRODUCT neu, README, PRINT-FORMATS bereinigt, Version 3.1.0
 - [ ] AP7 Release v3.1
 - [x] AP8 25mm-BA-Module datenblattverifiziert, 14 Katalog-Eintraege, MP25-Layouts mit Struktur (Stahllineal bleibt offen)
-- [ ] AP9 Katalog-Rest, MainViewModel-Zerlegung, Undo/Redo, inkrementelles Rendering
+- [ ] AP9 Katalog-Rest [x] (4 Analogmodule, 18 Eintraege), MainViewModel-Zerlegung [ ], Undo/Redo [ ], inkrementelles Rendering [ ]
 
 ## Abschlusskriterien v3.1 (ABSCHLUSSPLAN)
 1. Kein bekannter Bug mit falschem/fehlendem Druck oder stillem Datenverlust (AP1/AP2)
@@ -287,6 +287,6 @@
 - [ ] Feinabstimmung aller 12 ET200MP-Varianten gegen physische Boegen
 
 ## Offen (Komfort, keine neuen Belegungen noetig)
-- [ ] Katalog-Eintraege fuer DQ 16x24VDC/0.5A BA, AI 8xU/I HF, AI 8xU/I/R/RTD BA,
+- [x] (AP8/AP9, 2026-09-09) Katalog-Eintraege fuer DQ 16x24VDC/0.5A BA, AI 8xU/I HF, AI 8xU/I/R/RTD BA,
       AI 8xU/I/RTD/TC ST, AQ 4xU/I ST — Analogmodule ohne feste Klemmenbelegung,
       Nutzen ist nur die Auswahl per Modulnamen statt per Layout-Variante

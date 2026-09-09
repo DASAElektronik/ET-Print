@@ -67,11 +67,13 @@ Beim Typwechsel wird eine ungültige Anzahl auf den ersten gültigen Wert gesetz
 **ET 200MP** (`MainViewModel.FillMpModuleAddresses`):
 - Header = Modulname; der Modultyp wird bei benutzerdefinierten Modulen als `IoType`
   übernommen (bestimmt die Versorgungslabels), Katalog-Artikel behalten ihre Belegung.
-- Digital 35 mm: Bytezahl = editierbare Zellen / 8 (DI_DQ_16 → 2 Bytes, DI_DQ_32 → 4,
-  DQ 8x2A → 1). Adressen `E x.0 … E x.7` sequenziell auf die editierbaren Zellen in
-  Layout-Reihenfolge (spaltenweise: links Byte 0/1, rechts Byte 2/3).
-- Digital 25 mm: Bytezahl = Anzahl-Auswahl (GenCount), begrenzt durch die Slots; ein
-  32-DI füllt 32 von 40 Slots, der Rest bleibt leer.
+- Digital (35 mm und 25 mm): Bytezahl = min(Anzahl-Auswahl, editierbare Zellen / 8)
+  (DI_DQ_16/MP25_16 → max. 2 Bytes, DI_DQ_32/MP25_32 → 4, DQ 8x2A → 1). Adressen
+  `E x.0 … E x.7` sequenziell auf die editierbaren Zellen in Layout-Reihenfolge
+  (spaltenweise: links Byte 0/1, rechts Byte 2/3). Die Katalogwahl setzt die Anzahl auf
+  die volle Bytezahl des Moduls.
+- Gemischtes DI16/DQ16 BA (25 mm): linke Spalte `E`, rechte Spalte `A`, Bytezählung
+  beginnt rechts wieder beim Start-Byte.
 - Analog: GenCount Kanäle spaltenausgeglichen (AI 8 → 4 links, 4 rechts), Restblöcke leer.
 - Danach springt die Auswahl zum nächsten Modul bzw. zur nächsten Seite; am Ende der
   letzten Seite wird **keine** Seite automatisch angelegt.
@@ -111,18 +113,32 @@ Familie gefiltert (35 mm / 25 mm); „Benutzerdefiniert (nur Layout-Variante)“
 |---------------|-------|-----|----------|-----------------|
 | 6ES7521-1BL00-0AB0 | DI 32x24VDC HF | DI | DI_DQ_32 | K19/K20 = 1L+/1M, K39/K40 = 2L+/2M |
 | 6ES7522-1BL01-0AB0 | DQ 32x24VDC/0.5A HF | DO | DI_DQ_32 | K9/10 = 1L+/1M, K19/20 = 2L+/2M, K29/30 = 3L+/3M, K39/40 = 4L+/4M |
-| 6ES7521-1BH10-0AA0 | DI 16x24VDC BA | DI | DI_DQ_16 | K20 = M |
 | 6ES7521-1BH00-0AB0 | DI 16x24VDC HF | DI | DI_DQ_16 | K19/K20 = L+/M |
 | 6ES7522-1BH00-0AB0 | DQ 16x24VDC/0.5A ST | DO | DI_DQ_16 | K9/10 = 1L+/1M, K19/20 = 2L+/2M |
 | 6ES7522-1BF00-0AB0 | DQ 8x24VDC/2A HF | DO | DI_DQ_32 | K1–K8 Kanäle, K9/10 = 1L+/1M, K19/20 = 2L+/2M, Rest gesperrt |
 | 6ES7521-1FH00-0AA0 | DI 16x230VAC BA | DI | DI_230V_16 | Strukturblöcke leer |
+| 6ES7531-7KF00-0AB0 | AI 8xU/I/RTD/TC ST | AI | AI_AQ_8 | keine (modusabhängig, komplett editierbar) |
+| 6ES7531-7NF00-0AB0 | AI 8xU/I HF | AI | AI_AQ_8 | keine (komplett editierbar) |
+| 6ES7531-7QF00-0AB0 | AI 8xU/I/R/RTD BA | AI | AI_AQ_8 | keine (komplett editierbar) |
+| 6ES7532-5HD00-0AB0 | AQ 4xU/I ST | AO | AQ_4 | keine (komplett editierbar) |
 | 7MH4980-1AA01 | SIWAREX WP521 ST (1 Kanal) | DI | SIWAREX_WP52x | fester Pinout, alle Zellen gesperrt |
 | 7MH4980-2AA01 | SIWAREX WP522 ST (2 Kanal) | DI | SIWAREX_WP52x | fester Pinout, alle Zellen gesperrt |
-| 6ES7532-5NB00-0AB0 | AQ 2xU/I ST (25 mm) | AO | MP25_16 | keine (komplett editierbar) |
+| **25 mm** | | | | |
+| 6ES7521-1BH10-0AA0 | DI 16x24VDC BA | DI | MP25_16 | K20 = M |
+| 6ES7522-1BH10-0AA0 | DQ 16x24VDC/0.5A BA | DO | MP25_16 | K9/10 = 1L+/1M, K19/20 = 2L+/2M |
+| 6ES7521-1BL10-0AA0 | DI 32x24VDC BA | DI | MP25_32 | K20 = M, K40 = M |
+| 6ES7522-1BL10-0AA0 | DQ 32x24VDC/0.5A BA | DO | MP25_32 | 1L+/1M … 4L+/4M je Kanalgruppe |
+| 6ES7523-1BL00-0AA0 | DI 16x24VDC / DQ 16x24VDC/0.5A BA | DI | MP25_32 | links Eingänge (K20 = 1M), rechts Ausgänge (K29/30 = 2L+/2M, K39/40 = 3L+/3M); Generator setzt rechts das A-Präfix |
+| 6ES7532-5NB00-0AB0 | AQ 2xU/I ST | AO | MP25_16 | keine (20 freie Zeilen) |
+
+18 Einträge. Die BA-Digitalmodule sind laut Siemens-Datenblatt 25 mm breit und gehören auf
+den 25-mm-Bogen; ein Artikel, der nicht zur Familie passt, wird beim Laden abgewählt.
 
 Varianten (Layouts): DI_DQ_32, DI_DQ_16, DI_230V_16, DQ_230V_8, AI_AQ_8, AQ_4,
-SIWAREX_WP52x, MP25_16, MP25_32. Ohne Katalogartikel hängen die Versorgungslabels von
-DI_DQ_16/DI_DQ_32 am Modultyp (DO: Versorgung je Kanalgruppe).
+SIWAREX_WP52x, MP25_16, MP25_32. MP25_16/MP25_32 haben dieselbe 40-Klemmen-Struktur wie
+DI_DQ_16/DI_DQ_32 (K9/K10 und K19/K20 sind Strukturzeilen). Ohne Katalogartikel hängen die
+Versorgungslabels dieser vier Varianten am Modultyp (DO: Versorgung je Kanalgruppe).
+Die Katalogwahl setzt die Generator-Anzahl auf die volle Bytezahl des Moduls.
 
 ## F07: Einstellungen
 

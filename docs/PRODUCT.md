@@ -41,9 +41,10 @@ die Klemmenbelegungen aus den Siemens Equipment Manuals (siehe `PRINT-FORMATS.md
 3. **SPS-Adressgenerator** – DI/DO/AI/AO, Start-Byte, Anzahl, klemmengerechte Verteilung
    (ET 200SP: 8 Slots je Reihe, ungerade Bits oben; ET 200MP: sequenziell je Byte auf die
    Kanalzellen), automatisches Weiterschalten.
-4. **Modul-Editor und Modul-Katalog** – 9 Layout-Varianten, 10 konkrete Siemens-Module
-   (DI/DQ 16/32, DQ 8x2A, DI 230 V, SIWAREX WP521/522, AQ 2 für 25 mm) mit verifizierten
-   Versorgungs- und Strukturklemmen; mehrzeiliger Header, Netzadresse/Netzname, CPU-Name.
+4. **Modul-Editor und Modul-Katalog** – 9 Layout-Varianten, 18 konkrete Siemens-Module
+   (35 mm: DI/DQ 16/32 HF/ST, DQ 8x2A, DI 230 V, AI 8 ST/HF/BA, AQ 4, SIWAREX WP521/522;
+   25 mm: DI/DQ 16/32 BA, DI16/DQ16 BA, AQ 2) mit datenblattverifizierten Versorgungs- und
+   Strukturklemmen; mehrzeiliger Header, Netzadresse/Netzname, CPU-Name.
 5. **Schrift und Seite** – Schriftart, Größe, fett, kursiv je Etikett/Modul mit
    Live-Vorschau, globale Kopfzeilen-Schrift, Ränder, Blanko-A4-Druck mit Schnittkanten.
 6. **Druck** – Windows-Druckdialog, A4 Hochformat erzwungen, leere Seiten übersprungen,
@@ -75,12 +76,12 @@ die Klemmenbelegungen aus den Siemens Equipment Manuals (siehe `PRINT-FORMATS.md
 
 ## Status
 
-- **v3.1 (2026-09-09)**: Abschluss der Arbeitspakete AP0–AP5 (Testinfrastruktur,
-  kritische und mittlere Bugs, Geometrieklasse, Import-Robustheit, Komfort). 210 Unit-Tests,
-  Smoke-Test 74/74 Prüfungen grün.
+- **v3.1 (2026-09-09)**: Abschluss der Arbeitspakete AP0–AP9 (Testinfrastruktur,
+  kritische und mittlere Bugs, Geometrieklasse, Import-Robustheit, Komfort, Doku, Release,
+  25-mm-Katalog). 239 Unit-Tests, Smoke-Test 82/82 Prüfungen grün.
 - Historie: v1.0 MVP (März 2026), v1.1 Kalibrierung + Projekte, v1.2 Mehrseiten,
   v2.0 PDF-Parser, v2.1 Schriften/Importe, v2.2–2.5 ET 200MP-Grundgerüst und Modul-Layout,
   v3.0 (Juli 2026) 10 Streifen je Bogen, Modul-Katalog, SIWAREX, 25-mm-Template.
+- AP8 (2026-09-09): 25-mm-BA-Module datenblattverifiziert (Katalog 18 Einträge).
 - Offen (hardwareabhängig): exakte Maße der ET 200MP-Bögen per Stahllineal und
-  Feinabstimmung der MP-Varianten gegen die physischen Bögen (`AP8`), Katalog-Rest
-  (weitere Analogmodule) und MainViewModel-Zerlegung (`AP9`).
+  Feinabstimmung der MP-Varianten gegen die physischen Bögen.

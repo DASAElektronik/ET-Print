@@ -11,8 +11,9 @@ und `tests/ETPrinter.Tests`. Historie in `CHANGELOG.md`, Geometrie-Herleitung in
 | Sprache | C# 13 (`Nullable` + `ImplicitUsings` aktiv) |
 | Framework | .NET 9, Zielplattform `net9.0-windows`, WPF (`UseWPF`) |
 | Assembly | `ET-Printer.exe` (AssemblyName in `ETPrinter.csproj`), Company DASA |
-| PDF-Parsing | NuGet `PdfPig` 0.1.13 (UglyToad.PdfPig) |
-| Excel-Import | NuGet `ClosedXML` 0.105.0 |
+| PDF-Parsing | NuGet `PdfPig` 0.1.16 (UglyToad.PdfPig) |
+| Excel-Import | NuGet `ClosedXML` 0.105.1 |
+| Icon | `Assets/ETPrinter.ico` (generiert, `<ApplicationIcon>`) |
 | Serialisierung | `System.Text.Json` (JSON, Enums als Strings) |
 | Druck | WPF `FixedDocument` + `PrintDialog` (System.Printing, PrintTicket A4) |
 | Tests | xUnit 2.9.3, `Microsoft.NET.Test.Sdk` 17.12.0, `xunit.runner.visualstudio` 2.8.2; Testprojekt mit `UseWPF` und `InternalsVisibleTo` |
@@ -45,6 +46,7 @@ Beschriftung/
 │   └── TODO.md
 ├── tools/
 │   ├── smoke.ps1                      # Smoke-Test gegen publish/ET-Printer.exe
+│   ├── register-etprint.ps1           # .etprint-Dateizuordnung (HKCU), manuell ausfuehren
 │   ├── dump-xls.ps1                   # Excel-Vorlagen zellgenau dumpen (COM)
 │   └── extract-wiring.ps1             # Klemmenbelegung aus Datenblatt-PDF ziehen
 ├── src/ETPrinter/
@@ -52,6 +54,7 @@ Beschriftung/
 │   ├── App.xaml / App.xaml.cs         # Startup, globale Exception-Handler, Recovery, Startargument
 │   ├── MainWindow.xaml / .xaml.cs     # Hauptfenster, KeyBindings, Fensterzustand, Drag&Drop, Zoom
 │   ├── AssemblyInfo.cs
+│   ├── Assets/ETPrinter.ico (+ ETPrinter_256.png)
 │   ├── Properties/PublishProfiles/win-x64.pubxml
 │   ├── Models/
 │   │   ├── LabelCell.cs               # ET200SP-Etikett (Header, Line1, Line2, Schrift, IsPrintEnabled)
@@ -76,7 +79,7 @@ Beschriftung/
 │   │   ├── PrintService.cs            # FixedDocument-Erzeugung, Druckdialog, PNG-Rendering
 │   │   ├── AddressGenerator.cs        # SP-Adressgenerator (digital/analog), Kanalzahlen, Auto-Advance
 │   │   ├── MpModuleLayoutFactory.cs   # Zellen-Layouts je Variante, generische Struktur-Labels
-│   │   ├── MpModuleCatalog.cs         # 10 konkrete Siemens-Module mit Datenblatt-Belegung
+│   │   ├── MpModuleCatalog.cs         # 18 konkrete Siemens-Module mit Datenblatt-Belegung (35 mm + 25 mm)
 │   │   ├── ProjectService.cs          # .etprint laden/speichern, Migration v1–v5, WriteAtomic, Recent
 │   │   ├── CalibrationService.cs      # calibration.json (maschinenspezifisch)
 │   │   ├── UiStateService.cs          # ui.json (Fenster, Zoom, Splitter) + Plausibilisierung
@@ -99,6 +102,7 @@ Beschriftung/
     ├── ETPrinter.Tests.csproj
     ├── Sta.cs                         # STA-Helfer für FixedDocument-Tests
     ├── AddressGeneratorTests.cs
+    ├── Catalog25mmTests.cs            # AP8/AP9: 25-mm-BA-Module, Generator-Golden-Tests je Variante
     ├── ClipboardAndCloneTests.cs
     ├── CriticalFixTests.cs            # AP1: Druckentscheidung, Leerseiten, Import-Blöcke, atomares Speichern
     ├── CsvImportServiceTests.cs
@@ -114,7 +118,7 @@ Beschriftung/
     └── UxTests.cs                     # AP5
 ```
 
-Stand der Tests: 210 (CHANGELOG AP5), Smoke-Test 74/74 Prüfungen.
+Stand der Tests: 239 (CHANGELOG AP9), Smoke-Test 82/82 Prüfungen.
 
 ## MVVM-Skizze
 
@@ -316,7 +320,7 @@ bei Fehlern).
 | Streifen je Bogen | 2 Bänder × 10 Spalten = 20 Positionen |
 | Streifenbreite | (210 − 25 − 12) / 10 = 17,3 mm |
 | Spaltenanteile links / rechts / Netzadresse / CPU | 17,7 / 17,7 / 0 / 13,8 von 49,2 (keine Netzadress-Spalte) |
-| Varianten | MP25_16 (20 Zeilen, colspan 2) und MP25_32 (20 × 2 Slots) |
+| Varianten | MP25_16 (20 Zeilen colspan 2, K9/K10/K19/K20 Struktur) und MP25_32 (20 × 2 Zellen, gleiche Struktur je Spalte); Analogmodule 20 freie Zeilen |
 
 ## Schlüsselentscheidungen
 

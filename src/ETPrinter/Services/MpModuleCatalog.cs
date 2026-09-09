@@ -70,6 +70,19 @@ public static class MpModuleCatalog
         new("6ES7521-1FH00-0AA0", "DI 16x230VAC BA", ModuleType.DI, MpModuleVariant.DI_230V_16,
             MpModuleLayoutFactory.GetLayout(MpModuleVariant.DI_230V_16).AddressCells),
 
+        // Analogmodule 35mm (AP9): keine feste Klemmen-Kanal-Zuordnung (U/I/R/RTD/TC
+        // belegen je Modus andere Klemmen, Manuals 59193205 / 59191850) — Eintrag nur
+        // fuer die Auswahl per Modulname; Layout wie die Variante, komplett editierbar.
+        // Breite 35 mm laut TED-Datenblatt (2026-09-09).
+        new("6ES7531-7KF00-0AB0", "AI 8xU/I/RTD/TC ST", ModuleType.AI, MpModuleVariant.AI_AQ_8,
+            MpModuleLayoutFactory.GetLayout(MpModuleVariant.AI_AQ_8).AddressCells),
+        new("6ES7531-7NF00-0AB0", "AI 8xU/I HF", ModuleType.AI, MpModuleVariant.AI_AQ_8,
+            MpModuleLayoutFactory.GetLayout(MpModuleVariant.AI_AQ_8).AddressCells),
+        new("6ES7531-7QF00-0AB0", "AI 8xU/I/R/RTD BA", ModuleType.AI, MpModuleVariant.AI_AQ_8,
+            MpModuleLayoutFactory.GetLayout(MpModuleVariant.AI_AQ_8).AddressCells),
+        new("6ES7532-5HD00-0AB0", "AQ 4xU/I ST", ModuleType.AO, MpModuleVariant.AQ_4,
+            MpModuleLayoutFactory.GetLayout(MpModuleVariant.AQ_4).AddressCells),
+
         // SIWAREX Waegemodule — fester Pinout (Variante liefert die Labels).
         // Verifiziert: Anschlussbelegung A5E36695151A (04/2016).
         new("7MH4980-1AA01", "SIWAREX WP521 ST (1 Kanal)", ModuleType.DI, MpModuleVariant.SIWAREX_WP52x,

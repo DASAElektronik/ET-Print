@@ -40,9 +40,33 @@ public class Catalog25mmTests
     }
 
     [Fact]
-    public void Catalog_Has14Entries()
+    public void Catalog_Has18Entries()
     {
-        Assert.Equal(14, MpModuleCatalog.Entries.Count(e => e.ArticleNo != ""));
+        Assert.Equal(18, MpModuleCatalog.Entries.Count(e => e.ArticleNo != ""));
+    }
+
+    // AP9: Analogmodule per Modulname waehlbar, ohne feste Klemmenbelegung
+    [Theory]
+    [InlineData("6ES7531-7KF00-0AB0", MpModuleVariant.AI_AQ_8, ModuleType.AI, 10)]
+    [InlineData("6ES7531-7NF00-0AB0", MpModuleVariant.AI_AQ_8, ModuleType.AI, 10)]
+    [InlineData("6ES7531-7QF00-0AB0", MpModuleVariant.AI_AQ_8, ModuleType.AI, 10)]
+    [InlineData("6ES7532-5HD00-0AB0", MpModuleVariant.AQ_4, ModuleType.AO, 5)]
+    public void AnalogEntries_FullyEditable35mm(string article, MpModuleVariant variant, ModuleType io, int editable)
+    {
+        var e = MpModuleCatalog.Find(article)!;
+        Assert.Equal(variant, e.Variant);
+        Assert.Equal(io, e.IoType);
+        Assert.Equal(editable, e.Cells.Count(c => c.IsEditable));
+        Assert.Contains(e, MpModuleCatalog.EntriesForFamily(ProductFamily.S71500_ET200MP));
+    }
+
+    [Fact]
+    public void Generator_Analog8_WithArticle_SplitsColumns()
+    {
+        var vm = Module(MpModuleVariant.AI_AQ_8, "6ES7531-7NF00-0AB0", ModuleType.AI);
+        Assert.Equal(8, MainViewModel.FillMpModuleAddresses(vm, ModuleType.AI, 100, 8));
+        Assert.Equal("EW 100", TextAt(vm, 0, 0));
+        Assert.Equal("EW 108", TextAt(vm, 0, 1));
     }
 
     // ---- Klemmenbelegungen --------------------------------------------------------
