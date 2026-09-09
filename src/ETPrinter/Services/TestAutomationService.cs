@@ -329,7 +329,7 @@ public class TestAutomationService : IDisposable
         if (parts.Length < 4)
             return Error("Format: generate <moduleName> <DI|DO|AI|AO> <startByte> <count>");
 
-        var moduleType = _viewModel.AvailableModuleTypes
+        var moduleType = _viewModel.Generator.AvailableModuleTypes
             .FirstOrDefault(m => m.Type.ToString().Equals(parts[1], StringComparison.OrdinalIgnoreCase));
         if (moduleType == null)
             return Error($"Modultyp nicht gefunden: {parts[1]}");
@@ -384,10 +384,10 @@ public class TestAutomationService : IDisposable
         var parts = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length < 3 || !int.TryParse(parts[0], out int size))
             return Error("Format: set-font <groesse> <fett 0/1> <kursiv 0/1> [schriftart]");
-        _viewModel.InputFontSize = size;
-        _viewModel.InputIsBold = parts[1] == "1";
-        _viewModel.InputIsItalic = parts[2] == "1";
-        if (parts.Length > 3) _viewModel.InputFontFamily = string.Join(' ', parts.Skip(3));
+        _viewModel.Panel.FontSize = size;
+        _viewModel.Panel.IsBold = parts[1] == "1";
+        _viewModel.Panel.IsItalic = parts[2] == "1";
+        if (parts.Length > 3) _viewModel.Panel.FontFamily = string.Join(' ', parts.Skip(3));
         return Ok($"Schrift: {size}pt fett={parts[1]} kursiv={parts[2]}");
     }
 
@@ -471,16 +471,16 @@ public class TestAutomationService : IDisposable
             return Error("Format: set-margin <oben|links|unten|rechts> <mm>");
         switch (parts[0].ToLowerInvariant())
         {
-            case "oben": _viewModel.InputMarginTop = mm; break;
-            case "links": _viewModel.InputMarginLeft = mm; break;
-            case "unten": _viewModel.InputMarginBottom = mm; break;
-            case "rechts": _viewModel.InputMarginRight = mm; break;
+            case "oben": _viewModel.Panel.MarginTop = mm; break;
+            case "links": _viewModel.Panel.MarginLeft = mm; break;
+            case "unten": _viewModel.Panel.MarginBottom = mm; break;
+            case "rechts": _viewModel.Panel.MarginRight = mm; break;
             default: return Error("Seite: oben|links|unten|rechts");
         }
         return Ok(JsonSerializer.Serialize(new
         {
-            top = _viewModel.InputMarginTop, left = _viewModel.InputMarginLeft,
-            bottom = _viewModel.InputMarginBottom, right = _viewModel.InputMarginRight,
+            top = _viewModel.Panel.MarginTop, left = _viewModel.Panel.MarginLeft,
+            bottom = _viewModel.Panel.MarginBottom, right = _viewModel.Panel.MarginRight,
             status = _viewModel.StatusMessage
         }));
     }
@@ -770,17 +770,17 @@ public class TestAutomationService : IDisposable
         if (parts.Length < 4)
             return Error("Format: set-generator <moduleName> <DI|DO|AI|AO> <startByte> <count>");
 
-        _viewModel.GenModuleName = parts[0];
-        var moduleType = _viewModel.AvailableModuleTypes
+        _viewModel.Generator.ModuleName = parts[0];
+        var moduleType = _viewModel.Generator.AvailableModuleTypes
             .FirstOrDefault(m => m.Type.ToString().Equals(parts[1], StringComparison.OrdinalIgnoreCase));
         if (moduleType == null)
             return Error($"Modultyp nicht gefunden: {parts[1]}");
-        _viewModel.GenModuleType = moduleType;
+        _viewModel.Generator.ModuleType = moduleType;
 
         if (int.TryParse(parts[2], out int startByte))
-            _viewModel.GenStartByte = startByte;
+            _viewModel.Generator.StartByte = startByte;
         if (int.TryParse(parts[3], out int count))
-            _viewModel.GenCount = count;
+            _viewModel.Generator.Count = count;
 
         return Ok($"Generator: {parts[0]} {parts[1]} Byte={startByte} Count={count}");
     }

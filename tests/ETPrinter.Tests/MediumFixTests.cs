@@ -56,10 +56,10 @@ public class MediumFixTests
         Sta.Run(() =>
         {
             var vm = NewVm();
-            vm.GenCount = 1; // gueltig fuer DI
-            vm.GenModuleType = AddressGenerator.ModuleTypes.First(t => t.Type == ModuleType.AI);
-            Assert.Contains(vm.GenCount, vm.GenTypicalCounts);
-            Assert.Equal(2, vm.GenCount);
+            vm.Generator.Count = 1; // gueltig fuer DI
+            vm.Generator.ModuleType = AddressGenerator.ModuleTypes.First(t => t.Type == ModuleType.AI);
+            Assert.Contains(vm.Generator.Count, vm.Generator.TypicalCounts);
+            Assert.Equal(2, vm.Generator.Count);
         });
     }
 

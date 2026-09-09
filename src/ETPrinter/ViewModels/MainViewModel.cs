@@ -26,32 +26,11 @@ public class MainViewModel : ViewModelBase
     private string _inputLine1 = string.Empty;
     private string _inputLine2 = string.Empty;
 
-    // Adress-Generator Felder
-    private string _genModuleName = string.Empty;
-    private ModuleTypeInfo _genModuleType;
-    private int _genStartByte;
-    private int _genCount = 2;
-    private bool _genAutoAdvanceAddress = true;
-    private string _genPreviewLine1 = string.Empty;
-    private string _genPreviewLine2 = string.Empty;
+    /// <summary>Adress-Generator (Tab "Adress-Generator").</summary>
+    public AddressGeneratorViewModel Generator { get; }
 
-    // Einstellungen Eingabefelder
-    private int _inputFontSize = 7;
-    private bool _inputIsBold;
-    private bool _inputIsItalic;
-    private string _inputFontFamily = "Arial";
-    private int _inputHeaderFontSize = 9;
-    private bool _inputHeaderIsBold = true;
-    // Startwerte = LabelSettings-Defaults (ET200SP), sonst verstellt der erste
-    // Live-Apply drei nicht angefasste Raender auf die abweichenden Input-Werte.
-    private double _inputMarginTop = 20.5;
-    private double _inputMarginLeft = 27.5;
-    private double _inputMarginBottom = 20.5;
-    private double _inputMarginRight = 27.5;
-
-    // Guard: blockiert Auto-Apply waehrend die Input-Felder programmatisch
-    // geladen werden (z.B. beim Label-Wechsel oder Projekt-Laden).
-    private bool _suspendLiveApply;
+    /// <summary>Panels "Seite" und "Schrift" (Live-Apply).</summary>
+    public SettingsPanelViewModel Panel { get; }
 
     private bool _printGridLines;
     private double _calibrationOffsetX;
@@ -69,11 +48,26 @@ public class MainViewModel : ViewModelBase
     private MpModuleViewModel? _selectedMpModule;
     private MpAddressCellViewModel? _selectedMpCell;
 
-    public MainViewModel()
+    private readonly IDialogService _dialogs;
+
+    public MainViewModel() : this(null) { }
+
+    /// <summary>Alle Dialoge laufen ueber <paramref name="dialogs"/> (Tests: SilentDialogService).</summary>
+    public MainViewModel(IDialogService? dialogs)
     {
+        _dialogs = dialogs ?? new WpfDialogService();
         _settings = new LabelSettings();
         _selectedFormat = FormatDefinitions.GetDefaultFormat(ProductFamily.ET200SP);
-        _genModuleType = AddressGenerator.ModuleTypes[0]; // DI
+
+        Generator = new AddressGeneratorViewModel();
+        Generator.ModuleTypeChanged += ApplyIoTypeToSelectedMpModule;
+        Generator.StatusRequested += msg => StatusMessage = msg;
+
+        Panel = new SettingsPanelViewModel(_settings);
+        Panel.FontChanged += ApplyInputFontToSelected;
+        Panel.HeaderChanged += OnPanelHeaderChanged;
+        Panel.MarginsChanged += OnPanelMarginsChanged;
+        Panel.StatusRequested += msg => StatusMessage = msg;
 
         AvailableProductFamilies = new ObservableCollection<ProductFamilyInfo>(ProductFamilyDefinitions.All);
         AvailableFormats = new ObservableCollection<FormatInfo>(FormatDefinitions.GetFormatsForFamily(ProductFamily.ET200SP));
@@ -87,7 +81,7 @@ public class MainViewModel : ViewModelBase
 
         ApplyCommand = new RelayCommand(ApplyToLabel, () => SelectedLabel is not null || SelectedMpModule is not null);
         GenerateAndApplyCommand = new RelayCommand(GenerateAndApply, () => SelectedLabel is not null || SelectedMpModule is not null);
-        GeneratePreviewCommand = new RelayCommand(UpdateGeneratorPreview);
+        GeneratePreviewCommand = new RelayCommand(Generator.UpdatePreview);
         ClearAllCommand = new RelayCommand(ClearAllLabels);
         ClearSelectedCommand = new RelayCommand(ClearSelected, () => HasSelection && !TextBoxHasFocus());
         ResetSettingsCommand = new RelayCommand(ResetSettings);
@@ -140,9 +134,6 @@ public class MainViewModel : ViewModelBase
     public ObservableCollection<string> AvailableFonts { get; }
     public int[] FontSizes { get; }
 
-    // Modultypen fuer ComboBox
-    public ModuleTypeInfo[] AvailableModuleTypes => AddressGenerator.ModuleTypes;
-
     // Unterdrueckt die Inhaltsverlust-Rueckfrage bei programmatischen Wechseln
     // (Projekt laden, Neues Projekt, Test-Automation).
     private bool _suppressContentLossConfirm;
@@ -194,11 +185,10 @@ public class MainViewModel : ViewModelBase
     private bool ConfirmContentLoss()
     {
         if (_suppressContentLossConfirm || !HasAnyContent()) return true;
-        var result = MessageBox.Show(
+        return _dialogs.Confirm(
             "Beim Wechsel von Druckformat oder Produktfamilie werden alle\n" +
             "befuellten Etiketten/Module verworfen.\n\nFortfahren?",
-            "Format wechseln", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        return result == MessageBoxResult.Yes;
+            "Format wechseln");
     }
 
     public ProductFamilyInfo SelectedProductFamilyInfo
@@ -223,15 +213,7 @@ public class MainViewModel : ViewModelBase
             // Guard verhindert, dass der erste Input-Setter via Live-Apply die noch
             // alten Input-Werte der vorherigen Familie zurueckschreibt.
             _settings.ResetMarginsForFamily(_selectedProductFamily);
-            _suspendLiveApply = true;
-            try
-            {
-                InputMarginTop = _settings.MarginTop;
-                InputMarginLeft = _settings.MarginLeft;
-                InputMarginBottom = _settings.MarginBottom;
-                InputMarginRight = _settings.MarginRight;
-            }
-            finally { _suspendLiveApply = false; }
+            Panel.LoadMargins();
             OnPropertyChanged(nameof(Settings));
             NotifyPreviewGeometry();
             NotifyMpPreviewChanged();
@@ -307,18 +289,8 @@ public class MainViewModel : ViewModelBase
 
     /// <summary>Schrift-Eingabefelder aus dem Modul laden (wie bei SP-Etiketten),
     /// ohne dass Live-Apply das Modul sofort mit seinen eigenen Werten ueberschreibt.</summary>
-    private void LoadFontInputsFromMpModule(MpModuleViewModel module)
-    {
-        _suspendLiveApply = true;
-        try
-        {
-            InputFontSize = module.FontSize;
-            InputIsBold = module.IsBold;
-            InputIsItalic = module.IsItalic;
-            InputFontFamily = module.FontFamily;
-        }
-        finally { _suspendLiveApply = false; }
-    }
+    private void LoadFontInputsFromMpModule(MpModuleViewModel module) =>
+        Panel.LoadFont(module.FontSize, module.IsBold, module.IsItalic, module.FontFamily);
 
     /// <summary>Nach Zell-Neuaufbau (Variante/Artikel/Modultyp/Paste) die ausgewaehlte
     /// Zelle per CellIndex neu aufloesen — die alte VM ist abgehaengt, Eingaben
@@ -391,7 +363,7 @@ public class MainViewModel : ViewModelBase
 
             // Modultyp vor dem Artikel setzen — bei "Benutzerdefiniert" bestimmt er
             // die generischen Struktur-Labels, die der Zellen-Neuaufbau liest.
-            _selectedMpModule.IoType = isCustom ? GenModuleType.Type : value.IoType;
+            _selectedMpModule.IoType = isCustom ? Generator.ModuleType.Type : value.IoType;
             _selectedMpModule.ArticleNumber = isCustom ? null : value.ArticleNo;
 
             // Generator-Modultyp am Katalogeintrag vorbelegen (DI/DO/AI/AO) und die
@@ -399,16 +371,11 @@ public class MainViewModel : ViewModelBase
             // Zellen / 8, gemischt: je Spalte), damit "Generieren" das Modul komplett fuellt.
             if (!isCustom)
             {
-                var typeInfo = AddressGenerator.ModuleTypes.FirstOrDefault(t => t.Type == value.IoType);
-                if (typeInfo is not null)
+                Generator.SelectType(value.IoType);
+                if (Generator.ModuleType.IsBitAddressed)
                 {
-                    GenModuleType = typeInfo;
-                    if (typeInfo.IsBitAddressed)
-                    {
-                        int editable = _selectedMpModule.AddressCells.Count(c => c.IsEditable);
-                        int bytes = Math.Max(1, (value.MixedOutputRightColumn ? editable / 2 : editable) / 8);
-                        GenCount = bytes;
-                    }
+                    int editable = _selectedMpModule.AddressCells.Count(c => c.IsEditable);
+                    Generator.Count = Math.Max(1, (value.MixedOutputRightColumn ? editable / 2 : editable) / 8);
                 }
             }
 
@@ -425,7 +392,7 @@ public class MainViewModel : ViewModelBase
     {
         if (_selectedMpModule is null) return;
         if (!string.IsNullOrEmpty(_selectedMpModule.ArticleNumber)) return;
-        _selectedMpModule.IoType = GenModuleType.Type;
+        _selectedMpModule.IoType = Generator.ModuleType.Type;
     }
 
     public string SelectedMpModuleInfo
@@ -503,18 +470,10 @@ public class MainViewModel : ViewModelBase
                     InputHeader = value.Header;
                     InputLine1 = value.Line1;
                     InputLine2 = value.Line2;
-                    GenModuleName = value.Header; // Kopfzeile auch im Generator laden
+                    Generator.ModuleName = value.Header; // Kopfzeile auch im Generator laden
                     // Schrift-Einstellungen des Etiketts laden — Live-Apply aussetzen,
                     // sonst wuerde das Label sofort auf seine eigenen Werte "ueberschrieben".
-                    _suspendLiveApply = true;
-                    try
-                    {
-                        InputFontSize = value.CellFontSize;
-                        InputIsBold = value.CellIsBold;
-                        InputIsItalic = value.CellIsItalic;
-                        InputFontFamily = value.CellFontFamily;
-                    }
-                    finally { _suspendLiveApply = false; }
+                    Panel.LoadFont(value.CellFontSize, value.CellIsBold, value.CellIsItalic, value.CellFontFamily);
                     StatusMessage = $"Etikett {value.DisplayPosition}/{Labels.Count} (Seite {_currentPageIndex + 1}/{PageCount})";
                 }
                 OnPropertyChanged(nameof(SelectedLabelInfo));
@@ -638,191 +597,6 @@ public class MainViewModel : ViewModelBase
         set => SetProperty(ref _inputLine2, value);
     }
 
-    // === Adress-Generator Felder ===
-    public string GenModuleName
-    {
-        get => _genModuleName;
-        set { if (SetProperty(ref _genModuleName, value)) UpdateGeneratorPreview(); }
-    }
-
-    public ModuleTypeInfo GenModuleType
-    {
-        get => _genModuleType;
-        set
-        {
-            if (SetProperty(ref _genModuleType, value))
-            {
-                OnPropertyChanged(nameof(GenCountLabel));
-                OnPropertyChanged(nameof(GenTypicalCounts));
-                // DI (1/2/4 Bytes) -> AI (2/4/8 Kanaele): ein nicht mehr gueltiger
-                // Wert liess die ComboBox leer, der Generator rechnete still weiter.
-                if (!GenTypicalCounts.Contains(GenCount))
-                    GenCount = GenTypicalCounts[0];
-                ApplyIoTypeToSelectedMpModule();
-                UpdateGeneratorPreview();
-            }
-        }
-    }
-
-    public int GenStartByte
-    {
-        get => _genStartByte;
-        set
-        {
-            if (value < 0) { StatusMessage = "Start-Byte darf nicht negativ sein"; value = 0; }
-            if (SetProperty(ref _genStartByte, value)) UpdateGeneratorPreview();
-        }
-    }
-
-    public int GenCount
-    {
-        get => _genCount;
-        set { if (SetProperty(ref _genCount, value)) UpdateGeneratorPreview(); }
-    }
-
-    public bool GenAutoAdvanceAddress
-    {
-        get => _genAutoAdvanceAddress;
-        set => SetProperty(ref _genAutoAdvanceAddress, value);
-    }
-
-    public string GenPreviewLine1
-    {
-        get => _genPreviewLine1;
-        private set => SetProperty(ref _genPreviewLine1, value);
-    }
-
-    public string GenPreviewLine2
-    {
-        get => _genPreviewLine2;
-        private set => SetProperty(ref _genPreviewLine2, value);
-    }
-
-    public string GenCountLabel => AddressGenerator.GetCountLabel(_genModuleType.Type);
-    public int[] GenTypicalCounts => AddressGenerator.GetTypicalCounts(_genModuleType.Type);
-
-    // === Einstellungen ===
-    // Alle Input-Setter triggern Live-Preview: Aenderungen werden sofort angewendet,
-    // ohne dass "Uebernehmen" geklickt werden muss.
-    public int InputFontSize
-    {
-        get => _inputFontSize;
-        set
-        {
-            if (SetProperty(ref _inputFontSize, value))
-                ApplyInputFontToSelected();
-        }
-    }
-
-    public bool InputIsBold
-    {
-        get => _inputIsBold;
-        set
-        {
-            if (SetProperty(ref _inputIsBold, value))
-                ApplyInputFontToSelected();
-        }
-    }
-
-    public bool InputIsItalic
-    {
-        get => _inputIsItalic;
-        set
-        {
-            if (SetProperty(ref _inputIsItalic, value))
-                ApplyInputFontToSelected();
-        }
-    }
-
-    public string InputFontFamily
-    {
-        get => _inputFontFamily;
-        set
-        {
-            if (SetProperty(ref _inputFontFamily, value))
-                ApplyInputFontToSelected();
-        }
-    }
-
-    public int InputHeaderFontSize
-    {
-        get => _inputHeaderFontSize;
-        set
-        {
-            if (SetProperty(ref _inputHeaderFontSize, value))
-                ApplyHeaderStyleToSettings();
-        }
-    }
-
-    public bool InputHeaderIsBold
-    {
-        get => _inputHeaderIsBold;
-        set
-        {
-            if (SetProperty(ref _inputHeaderIsBold, value))
-                ApplyHeaderStyleToSettings();
-        }
-    }
-
-    // Wertebereiche: Raender 0-60 mm (darueber laeuft das Raster aus dem Blatt),
-    // Kalibrierung +/-10 mm, Start-Byte >= 0. Ausserhalb liegende Eingaben werden
-    // begrenzt und in der Statusleiste gemeldet.
-    public const double MarginMinMm = 0, MarginMaxMm = 60, CalibrationMaxMm = 10;
-
-    private double ClampMargin(double v, string name)
-    {
-        double c = Math.Clamp(double.IsNaN(v) ? 0 : v, MarginMinMm, MarginMaxMm);
-        if (c != v) StatusMessage = $"Rand {name}: Wert auf {MarginMinMm:0}-{MarginMaxMm:0} mm begrenzt";
-        return c;
-    }
-
-    private double ClampCalibration(double v)
-    {
-        double c = Math.Clamp(double.IsNaN(v) ? 0 : v, -CalibrationMaxMm, CalibrationMaxMm);
-        if (c != v) StatusMessage = $"Kalibrierung: Wert auf +/-{CalibrationMaxMm:0} mm begrenzt";
-        return c;
-    }
-
-    public double InputMarginTop
-    {
-        get => _inputMarginTop;
-        set
-        {
-            if (SetProperty(ref _inputMarginTop, ClampMargin(value, "oben")))
-                ApplyMarginsToSettings();
-        }
-    }
-
-    public double InputMarginLeft
-    {
-        get => _inputMarginLeft;
-        set
-        {
-            if (SetProperty(ref _inputMarginLeft, ClampMargin(value, "links")))
-                ApplyMarginsToSettings();
-        }
-    }
-
-    public double InputMarginBottom
-    {
-        get => _inputMarginBottom;
-        set
-        {
-            if (SetProperty(ref _inputMarginBottom, ClampMargin(value, "unten")))
-                ApplyMarginsToSettings();
-        }
-    }
-
-    public double InputMarginRight
-    {
-        get => _inputMarginRight;
-        set
-        {
-            if (SetProperty(ref _inputMarginRight, ClampMargin(value, "rechts")))
-                ApplyMarginsToSettings();
-        }
-    }
-
     public bool PrintGridLines
     {
         get => _printGridLines;
@@ -836,6 +610,16 @@ public class MainViewModel : ViewModelBase
     /// <summary>Der MP-Druck rastert von oben (Header + 2 x 20 Zeilen mit festen Hoehen);
     /// "Rand unten" hat dort keine Wirkung und wird in der UI gesperrt.</summary>
     public bool IsMarginBottomEditable => !IsModuleBased;
+
+    // Kalibrierung +/-10 mm; ausserhalb liegende Eingaben werden begrenzt und gemeldet.
+    public const double CalibrationMaxMm = 10;
+
+    private double ClampCalibration(double v)
+    {
+        double c = Math.Clamp(double.IsNaN(v) ? 0 : v, -CalibrationMaxMm, CalibrationMaxMm);
+        if (c != v) StatusMessage = $"Kalibrierung: Wert auf +/-{CalibrationMaxMm:0} mm begrenzt";
+        return c;
+    }
 
     public double CalibrationOffsetX
     {
@@ -985,13 +769,10 @@ public class MainViewModel : ViewModelBase
         foreach (var page in _allMpPages)
             foreach (var m in page)
             {
-                m.FontSize = _inputFontSize; m.IsBold = _inputIsBold; m.IsItalic = _inputIsItalic; m.FontFamily = _inputFontFamily;
+                m.FontSize = Panel.FontSize; m.IsBold = Panel.IsBold; m.IsItalic = Panel.IsItalic; m.FontFamily = Panel.FontFamily;
                 count++;
             }
-        _settings.FontSize = _inputFontSize;
-        _settings.IsBold = _inputIsBold;
-        _settings.IsItalic = _inputIsItalic;
-        _settings.FontFamily = _inputFontFamily;
+        Panel.StoreFontInSettings();
         IsDirty = true;
         NotifyMpPreviewChanged();
         StatusMessage = $"Schrift auf {count} {(IsModuleBased ? "Module" : "Etiketten")} angewendet";
@@ -1094,7 +875,7 @@ public class MainViewModel : ViewModelBase
     // haengen deshalb am ContentChanged-Callback der Modul-VMs.
     private void OnMpContentChanged()
     {
-        if (_suspendLiveApply) return;
+        if (Panel.SuspendLiveApply) return;
         IsDirty = true;
         NotifyMpPreviewChanged();
     }
@@ -1237,7 +1018,7 @@ public class MainViewModel : ViewModelBase
 
     private void GenerateAndApply()
     {
-        var result = AddressGenerator.Generate(GenModuleName, GenModuleType.Type, GenStartByte, GenCount);
+        var result = Generator.Generate();
 
         if (_selectedFormat.IsModuleBased && SelectedMpModule is not null)
         {
@@ -1249,16 +1030,14 @@ public class MainViewModel : ViewModelBase
             // damit die Menge der editierbaren Zellen.
             ApplyIoTypeToSelectedMpModule();
 
-            var info = AddressGenerator.ModuleTypes.First(m => m.Type == GenModuleType.Type);
-            int consumed = FillMpModuleAddresses(SelectedMpModule, GenModuleType.Type, GenStartByte, GenCount);
+            int consumed = FillMpModuleAddresses(SelectedMpModule, Generator.ModuleType.Type, Generator.StartByte, Generator.Count);
 
             // Auto-Advance: um die tatsaechlich belegten Bytes/Kanaele weiterschalten
-            if (GenAutoAdvanceAddress)
-                GenStartByte += info.IsBitAddressed ? consumed : consumed * 2;
+            Generator.AdvanceAfterModule(consumed);
 
             IsDirty = true;
             int filledCount = SelectedMpModule.AddressCells.Count(c => c.IsEditable && c.HasText);
-            string status = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) → {filledCount} Adressen auf Modul {SelectedMpModule.ModuleIndex + 1}";
+            string status = $"Generiert: {Generator.ModuleName} ({Generator.ModuleType.DisplayName}) → {filledCount} Adressen auf Modul {SelectedMpModule.ModuleIndex + 1}";
 
             NotifyMpPreviewChanged();
 
@@ -1292,15 +1071,11 @@ public class MainViewModel : ViewModelBase
             ApplyFontToLabel(SelectedLabel);
 
             IsDirty = true;
-            string status = $"Generiert: {GenModuleName} ({GenModuleType.DisplayName}) ab Byte {GenStartByte}";
+            string status = $"Generiert: {Generator.ModuleName} ({Generator.ModuleType.DisplayName}) ab Byte {Generator.StartByte}";
 
-            if (GenAutoAdvanceAddress)
-            {
-                // Nur um die tatsaechlich aufs Etikett gepasste Anzahl weiterschalten
-                // (Generator kappt Digital bei 2 Bytes) — sonst gehen Adressen verloren.
-                int effective = AddressGenerator.GetEffectiveCount(GenModuleType.Type, GenCount);
-                GenStartByte = AddressGenerator.GetNextStartByte(GenModuleType.Type, GenStartByte, effective);
-            }
+            // Nur um die tatsaechlich aufs Etikett gepasste Anzahl weiterschalten
+            // (Generator kappt Digital bei 2 Bytes) — sonst gehen Adressen verloren.
+            Generator.AdvanceAfterLabel();
 
             AdvanceToNextLabel();
             StatusMessage = status; // nach dem Advance, sonst ueberschreibt der Setter die Meldung
@@ -1400,26 +1175,6 @@ public class MainViewModel : ViewModelBase
             if (i < odd.Length && !string.IsNullOrWhiteSpace(odd[i])) merged.Add(odd[i]);
         }
         return string.Join("  ", merged);
-    }
-
-    private void UpdateGeneratorPreview()
-    {
-        if (GenCount <= 0) return;
-
-        try
-        {
-            var result = AddressGenerator.Generate(
-                string.IsNullOrWhiteSpace(GenModuleName) ? "..." : GenModuleName,
-                GenModuleType.Type, GenStartByte, GenCount);
-
-            GenPreviewLine1 = result.Line1;
-            GenPreviewLine2 = result.Line2;
-        }
-        catch
-        {
-            GenPreviewLine1 = string.Empty;
-            GenPreviewLine2 = string.Empty;
-        }
     }
 
     private void AdvanceToNextLabel()
@@ -1656,8 +1411,7 @@ public class MainViewModel : ViewModelBase
     private bool ConfirmDestructive(string message, string title)
     {
         if (_suppressContentLossConfirm) return true;
-        return MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)
-            == MessageBoxResult.Yes;
+        return _dialogs.Confirm(message, title);
     }
 
     private void ClearAllLabels()
@@ -1724,34 +1478,26 @@ public class MainViewModel : ViewModelBase
 
     private void ApplyInputFontToSelected()
     {
-        if (_suspendLiveApply) return;
-
         // ET200MP: Schrift wirkt auf das ausgewaehlte Modul (Setter melden
         // ContentChanged -> Dirty + Preview-Refresh). Frueher waren die vier
         // Schrift-Bedienelemente im MP-Modus komplett wirkungslos.
         if (_selectedFormat.IsModuleBased)
         {
             if (SelectedMpModule is null) return;
-            SelectedMpModule.FontSize = _inputFontSize;
-            SelectedMpModule.IsBold = _inputIsBold;
-            SelectedMpModule.IsItalic = _inputIsItalic;
-            SelectedMpModule.FontFamily = _inputFontFamily;
+            SelectedMpModule.FontSize = Panel.FontSize;
+            SelectedMpModule.IsBold = Panel.IsBold;
+            SelectedMpModule.IsItalic = Panel.IsItalic;
+            SelectedMpModule.FontFamily = Panel.FontFamily;
             return;
         }
 
         if (SelectedLabel is null) return;
-        SelectedLabel.CellFontSize = _inputFontSize;
-        SelectedLabel.CellIsBold = _inputIsBold;
-        SelectedLabel.CellIsItalic = _inputIsItalic;
-        SelectedLabel.CellFontFamily = _inputFontFamily;
+        ApplyFontToLabel(SelectedLabel);
         IsDirty = true;
     }
 
-    private void ApplyHeaderStyleToSettings()
+    private void OnPanelHeaderChanged()
     {
-        if (_suspendLiveApply) return;
-        _settings.HeaderFontSize = _inputHeaderFontSize;
-        _settings.HeaderIsBold = _inputHeaderIsBold;
         OnPropertyChanged(nameof(Settings));
         OnPropertyChanged(nameof(HeaderPreviewFontSize));
         OnPropertyChanged(nameof(HeaderPreviewFontWeight));
@@ -1759,13 +1505,8 @@ public class MainViewModel : ViewModelBase
         IsDirty = true;
     }
 
-    private void ApplyMarginsToSettings()
+    private void OnPanelMarginsChanged()
     {
-        if (_suspendLiveApply) return;
-        _settings.MarginTop = _inputMarginTop;
-        _settings.MarginLeft = _inputMarginLeft;
-        _settings.MarginBottom = _inputMarginBottom;
-        _settings.MarginRight = _inputMarginRight;
         OnPropertyChanged(nameof(Settings));
         NotifyPreviewGeometry();
         NotifyMpPreviewChanged();
@@ -1775,21 +1516,7 @@ public class MainViewModel : ViewModelBase
     private void ResetSettings()
     {
         _settings.ResetForFamily(_selectedProductFamily);
-        _suspendLiveApply = true;
-        try
-        {
-            InputFontSize = _settings.FontSize;
-            InputIsBold = _settings.IsBold;
-            InputIsItalic = _settings.IsItalic;
-            InputFontFamily = _settings.FontFamily;
-            InputHeaderFontSize = _settings.HeaderFontSize;
-            InputHeaderIsBold = _settings.HeaderIsBold;
-            InputMarginTop = _settings.MarginTop;
-            InputMarginLeft = _settings.MarginLeft;
-            InputMarginBottom = _settings.MarginBottom;
-            InputMarginRight = _settings.MarginRight;
-        }
-        finally { _suspendLiveApply = false; }
+        Panel.LoadFromSettings();
         OnPropertyChanged(nameof(Settings));
         NotifyPreviewGeometry();
         OnPropertyChanged(nameof(HeaderPreviewFontSize));
@@ -1802,25 +1529,25 @@ public class MainViewModel : ViewModelBase
     {
         if (_selectedFormat.IsModuleBased && SelectedMpModule is not null)
         {
-            SelectedMpModule.HeaderText = GenModuleName;
+            SelectedMpModule.HeaderText = Generator.ModuleName;
             IsDirty = true;
             NotifyMpPreviewChanged();
             StatusMessage = $"Kopfzeile von Modul {SelectedMpModule.ModuleIndex + 1} geaendert";
             return;
         }
         if (SelectedLabel is null) return;
-        SelectedLabel.Header = GenModuleName;
-        InputHeader = GenModuleName;
+        SelectedLabel.Header = Generator.ModuleName;
+        InputHeader = Generator.ModuleName;
         IsDirty = true;
         StatusMessage = $"Kopfzeile von Etikett {SelectedLabel.DisplayPosition} geaendert";
     }
 
     private void ApplyFontToLabel(LabelViewModel label)
     {
-        label.CellFontSize = InputFontSize;
-        label.CellIsBold = InputIsBold;
-        label.CellIsItalic = InputIsItalic;
-        label.CellFontFamily = InputFontFamily;
+        label.CellFontSize = Panel.FontSize;
+        label.CellIsBold = Panel.IsBold;
+        label.CellIsItalic = Panel.IsItalic;
+        label.CellFontFamily = Panel.FontFamily;
     }
 
     private void NewProject()
@@ -1834,9 +1561,7 @@ public class MainViewModel : ViewModelBase
             ApplyFamilyCore(ProductFamily.ET200SP);
             _settings.Reset();
             ResetSettings();
-            GenModuleName = string.Empty;
-            GenStartByte = 0;
-            GenCount = 2;
+            Generator.Reset();
             PrintGridLines = false;
 
             // Etiketten IMMER neu anlegen: der Format-Setter kehrt bei unveraendertem
@@ -1866,14 +1591,10 @@ public class MainViewModel : ViewModelBase
 
     private void SaveProjectAs()
     {
-        var dialog = new Microsoft.Win32.SaveFileDialog
-        {
-            Filter = "ET-Printer Projekt (*.etprint)|*.etprint",
-            DefaultExt = ".etprint",
-            FileName = Path.GetFileNameWithoutExtension(_currentFilePath ?? "Projekt")
-        };
-        if (dialog.ShowDialog() == true)
-            DoSave(dialog.FileName);
+        var path = _dialogs.SaveFile(ProjectFileFilter, ".etprint",
+            Path.GetFileNameWithoutExtension(_currentFilePath ?? "Projekt"));
+        if (path is not null)
+            DoSave(path);
     }
 
     /// <summary>Serialisiert den KOMPLETTEN Projektzustand (alle Seiten aus
@@ -1927,9 +1648,7 @@ public class MainViewModel : ViewModelBase
             StatusMessage = $"Speicherfehler: {ex.Message}";
             // Modal melden: beim Schliessen/Neu/Oeffnen ist die Statusleiste nicht
             // (mehr) sichtbar — ohne Dialog wuerden Daten kommentarlos verworfen.
-            MessageBox.Show(
-                $"Das Projekt konnte nicht gespeichert werden:\n{ex.Message}",
-                "Speicherfehler", MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialogs.ShowError($"Das Projekt konnte nicht gespeichert werden:\n{ex.Message}", "Speicherfehler");
             return false;
         }
     }
@@ -1937,13 +1656,9 @@ public class MainViewModel : ViewModelBase
     private void OpenProject()
     {
         if (!ConfirmDiscardChanges()) return;
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Filter = "ET-Printer Projekt (*.etprint)|*.etprint",
-            DefaultExt = ".etprint"
-        };
-        if (dialog.ShowDialog() == true)
-            DoOpen(dialog.FileName);
+        var path = _dialogs.OpenFile(ProjectFileFilter, "Projekt oeffnen");
+        if (path is not null)
+            DoOpen(path);
     }
 
     private void OpenRecentFile(string? filePath)
@@ -1952,10 +1667,9 @@ public class MainViewModel : ViewModelBase
         if (!File.Exists(filePath))
         {
             // Toter Eintrag: anbieten, ihn aus der Liste zu entfernen
-            var result = MessageBox.Show(
+            if (_dialogs.Confirm(
                 $"Die Datei wurde nicht gefunden:\n{filePath}\n\nEintrag aus der Liste entfernen?",
-                "Datei nicht gefunden", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (result == MessageBoxResult.Yes)
+                "Datei nicht gefunden"))
             {
                 ProjectService.RemoveRecentFile(filePath);
                 RefreshRecentFiles();
@@ -1982,9 +1696,7 @@ public class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusMessage = $"Ladefehler: {ex.Message}";
-            MessageBox.Show(
-                $"Das Projekt konnte nicht geladen werden:\n{filePath}\n\n{ex.Message}",
-                "Ladefehler", MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialogs.ShowError($"Das Projekt konnte nicht geladen werden:\n{filePath}\n\n{ex.Message}", "Ladefehler");
         }
     }
 
@@ -2118,21 +1830,7 @@ public class MainViewModel : ViewModelBase
             _settings.FontFamily = project.Settings.FontFamily;
             _settings.HeaderFontSize = project.Settings.HeaderFontSize;
             _settings.HeaderIsBold = project.Settings.HeaderIsBold;
-            _suspendLiveApply = true;
-            try
-            {
-                InputMarginTop = project.Settings.MarginTop;
-                InputMarginLeft = project.Settings.MarginLeft;
-                InputMarginBottom = project.Settings.MarginBottom;
-                InputMarginRight = project.Settings.MarginRight;
-                InputFontSize = project.Settings.FontSize;
-                InputIsBold = project.Settings.IsBold;
-                InputIsItalic = project.Settings.IsItalic;
-                InputFontFamily = project.Settings.FontFamily;
-                InputHeaderFontSize = project.Settings.HeaderFontSize;
-                InputHeaderIsBold = project.Settings.HeaderIsBold;
-            }
-            finally { _suspendLiveApply = false; }
+            Panel.LoadFromSettings();
             OnPropertyChanged(nameof(Settings));
             NotifyPreviewGeometry();
             OnPropertyChanged(nameof(HeaderPreviewFontSize));
@@ -2217,10 +1915,9 @@ public class MainViewModel : ViewModelBase
             if (document.Pages.Count == 0)
             {
                 StatusMessage = "Nichts zu drucken";
-                MessageBox.Show(
+                _dialogs.ShowInfo(
                     "Es gibt keine befuellten, druckaktiven Etiketten bzw. Module.\n" +
-                    "Leere Seiten werden nicht gedruckt.",
-                    "Drucken", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "Leere Seiten werden nicht gedruckt.", "Drucken");
                 return;
             }
             if (!PrintService.Print(document, PrintService.JobTitleFor(_selectedFormat)))
@@ -2239,11 +1936,7 @@ public class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusMessage = $"Druckfehler: {ex.Message}";
-            System.Windows.MessageBox.Show(
-                $"Fehler beim Drucken:\n{ex.Message}",
-                "Druckfehler",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Error);
+            _dialogs.ShowError($"Fehler beim Drucken:\n{ex.Message}", "Druckfehler");
         }
     }
 
@@ -2296,14 +1989,14 @@ public class MainViewModel : ViewModelBase
     /// (Wartecursor statt eingefrorener UI), Ergebnis auf dem UI-Thread uebernehmen.</summary>
     private async void ImportCellsAsync(string filter, string title, string kind, Func<string, List<LabelCell>> parser)
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog { Filter = filter, Title = title };
-        if (dlg.ShowDialog() != true) return;
+        var file = _dialogs.OpenFile(filter, title);
+        if (file is null) return;
 
         try
         {
             List<LabelCell> cells;
             using (new WaitCursorScope())
-                cells = await Task.Run(() => parser(dlg.FileName));
+                cells = await Task.Run(() => parser(file));
 
             if (cells.Count == 0)
             {
@@ -2317,25 +2010,20 @@ public class MainViewModel : ViewModelBase
         {
             Log.Error($"{kind}-Import", ex);
             StatusMessage = $"{kind}-Importfehler: {ex.Message}";
-            MessageBox.Show($"Fehler beim {kind}-Import:\n{ex.Message}", "Importfehler",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialogs.ShowError($"Fehler beim {kind}-Import:\n{ex.Message}", "Importfehler");
         }
     }
 
     private async void ImportSchematic()
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog
-        {
-            Filter = "PDF-Dateien|*.pdf|Alle Dateien|*.*",
-            Title = "PDF-Schaltplan importieren"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var file = _dialogs.OpenFile("PDF-Dateien|*.pdf|Alle Dateien|*.*", "PDF-Schaltplan importieren");
+        if (file is null) return;
 
         try
         {
             SchematicParseResult result;
             using (new WaitCursorScope())
-                result = await Task.Run(() => SchematicParserService.Parse(dlg.FileName));
+                result = await Task.Run(() => SchematicParserService.Parse(file));
 
             var importVm = new PdfImportViewModel();
             importVm.LoadFromResult(result);
@@ -2359,8 +2047,7 @@ public class MainViewModel : ViewModelBase
         {
             Log.Error("PDF-Import", ex);
             StatusMessage = $"PDF-Importfehler: {ex.Message}";
-            MessageBox.Show($"Fehler beim PDF-Import:\n{ex.Message}", "Importfehler",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialogs.ShowError($"Fehler beim PDF-Import:\n{ex.Message}", "Importfehler");
         }
     }
 
@@ -2416,12 +2103,9 @@ public class MainViewModel : ViewModelBase
         IsDirty = true;
 
         if (!_suppressContentLossConfirm) // Automation: keine modale Box
-            MessageBox.Show(
-                $"{cells.Count} Etiketten importiert.\n" +
-                $"Verteilt auf {_allPages.Count} Seite(n).",
-                "Import abgeschlossen",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            _dialogs.ShowInfo(
+                $"{cells.Count} Etiketten importiert.\nVerteilt auf {_allPages.Count} Seite(n).",
+                "Import abgeschlossen");
     }
 
     /// <summary>Test-Automation: CSV/Excel-Datei ohne Dialog importieren.</summary>
@@ -2581,9 +2265,9 @@ public class MainViewModel : ViewModelBase
         IsDirty = true;
 
         if (!_suppressContentLossConfirm)
-            MessageBox.Show(
+            _dialogs.ShowInfo(
                 $"{imported} Module importiert.\nVerteilt auf {_allMpPages.Count} Seite(n).",
-                "Import abgeschlossen", MessageBoxButton.OK, MessageBoxImage.Information);
+                "Import abgeschlossen");
     }
 
     /// <summary>Test-Automation: geparste Module (Textzeilen eines Schaltplans) ohne
@@ -2680,33 +2364,24 @@ public class MainViewModel : ViewModelBase
     {
         if (!_isDirty) return true;
 
-        var result = MessageBox.Show(
+        return _dialogs.ConfirmSave(
             "Es gibt ungespeicherte Aenderungen.\nMoechten Sie diese speichern?",
-            "Ungespeicherte Aenderungen",
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Warning);
-
-        return result switch
+            "Ungespeicherte Aenderungen") switch
         {
-            MessageBoxResult.Yes => DoSaveAndConfirm(),
-            MessageBoxResult.No => true,
+            SaveDecision.Save => DoSaveAndConfirm(),
+            SaveDecision.Discard => true,
             _ => false // Cancel
         };
     }
+
+    internal const string ProjectFileFilter = "ET-Printer Projekt (*.etprint)|*.etprint";
 
     private bool DoSaveAndConfirm()
     {
         if (_currentFilePath is null)
         {
-            var dialog = new Microsoft.Win32.SaveFileDialog
-            {
-                Filter = "ET-Printer Projekt (*.etprint)|*.etprint",
-                DefaultExt = ".etprint",
-                FileName = "Projekt"
-            };
-            if (dialog.ShowDialog() != true)
-                return false;
-            return DoSave(dialog.FileName);
+            var path = _dialogs.SaveFile(ProjectFileFilter, ".etprint", "Projekt");
+            return path is not null && DoSave(path);
         }
 
         return DoSave(_currentFilePath);

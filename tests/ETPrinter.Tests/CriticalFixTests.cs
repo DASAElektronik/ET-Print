@@ -278,9 +278,9 @@ public class CriticalFixTests
             var mod = vm.MpModules[2];
             vm.SelectedMpModule = mod;
 
-            vm.InputFontSize = 9;
-            vm.InputIsBold = true;
-            vm.InputIsItalic = true;
+            vm.Panel.FontSize = 9;
+            vm.Panel.IsBold = true;
+            vm.Panel.IsItalic = true;
 
             Assert.Equal(9, mod.FontSize);
             Assert.True(mod.IsBold);
@@ -289,8 +289,8 @@ public class CriticalFixTests
 
             // Modulwechsel laedt die Werte des neuen Moduls in die Eingabefelder
             vm.SelectedMpModule = vm.MpModules[3];
-            Assert.Equal(7, vm.InputFontSize);
-            Assert.False(vm.InputIsBold);
+            Assert.Equal(7, vm.Panel.FontSize);
+            Assert.False(vm.Panel.IsBold);
             Assert.Equal(7, vm.MpModules[3].FontSize); // Laden darf nicht zurueckschreiben
         });
     }

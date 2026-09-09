@@ -21,13 +21,13 @@ public class UxTests
         Sta.Run(() =>
         {
             var vm = NewVm();
-            vm.InputMarginTop = 99;
-            Assert.Equal(60, vm.InputMarginTop);
+            vm.Panel.MarginTop = 99;
+            Assert.Equal(60, vm.Panel.MarginTop);
             Assert.Equal(60, vm.Settings.MarginTop);
-            vm.InputMarginLeft = -5;
-            Assert.Equal(0, vm.InputMarginLeft);
-            vm.InputMarginRight = double.NaN;
-            Assert.Equal(0, vm.InputMarginRight);
+            vm.Panel.MarginLeft = -5;
+            Assert.Equal(0, vm.Panel.MarginLeft);
+            vm.Panel.MarginRight = double.NaN;
+            Assert.Equal(0, vm.Panel.MarginRight);
             Assert.Contains("begrenzt", vm.StatusMessage);
         });
     }
@@ -51,8 +51,8 @@ public class UxTests
         Sta.Run(() =>
         {
             var vm = NewVm();
-            vm.GenStartByte = -3;
-            Assert.Equal(0, vm.GenStartByte);
+            vm.Generator.StartByte = -3;
+            Assert.Equal(0, vm.Generator.StartByte);
         });
     }
 
@@ -81,8 +81,8 @@ public class UxTests
         {
             var vm = NewVm();
             vm.AddPageCommand.Execute(null);
-            vm.InputFontSize = 9;
-            vm.InputIsBold = true;
+            vm.Panel.FontSize = 9;
+            vm.Panel.IsBold = true;
             vm.ApplyFontToAllCommand.Execute(null);
 
             var project = vm.BuildProject();
@@ -103,8 +103,8 @@ public class UxTests
         {
             var vm = NewVm();
             SelectFamily(vm, ProductFamily.S71500_ET200MP);
-            vm.InputFontFamily = "Consolas";
-            vm.InputIsItalic = true;
+            vm.Panel.FontFamily = "Consolas";
+            vm.Panel.IsItalic = true;
             vm.ApplyFontToAllCommand.Execute(null);
             Assert.All(vm.MpModules, m => { Assert.Equal("Consolas", m.FontFamily); Assert.True(m.IsItalic); });
         });

@@ -179,7 +179,7 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox Grid.Column="0" Text="{Binding GenModuleName, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Grid.Column="0" Text="{Binding Generator.ModuleName, UpdateSourceTrigger=PropertyChanged}"/>
                                     <Button Grid.Column="1" Content="Aendern"
                                             Command="{Binding UpdateHeaderCommand}"
                                             ToolTip="Nur Kopfzeile des ausgewaehlten Etiketts aendern"
@@ -188,8 +188,8 @@
 
                                 <!-- Modultyp -->
                                 <Label Content="Modultyp:" Padding="0" Margin="0,8,0,2"/>
-                                <ComboBox ItemsSource="{Binding AvailableModuleTypes}"
-                                          SelectedItem="{Binding GenModuleType}"
+                                <ComboBox ItemsSource="{Binding Generator.AvailableModuleTypes}"
+                                          SelectedItem="{Binding Generator.ModuleType}"
                                           DisplayMemberPath="DisplayName"/>
 
                                 <!-- Startadresse -->
@@ -201,7 +201,7 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
                                         <Label Content="Start-Byte:" Padding="0" Margin="0,0,0,2"/>
-                                        <TextBox Text="{Binding GenStartByte, UpdateSourceTrigger=PropertyChanged}"
+                                        <TextBox Text="{Binding Generator.StartByte, UpdateSourceTrigger=PropertyChanged}"
                                                  ToolTip="Enter = Generieren + Uebertragen">
                                             <TextBox.InputBindings>
                                                 <KeyBinding Key="Enter" Command="{Binding GenerateAndApplyCommand}"/>
@@ -209,15 +209,15 @@
                                         </TextBox>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                        <Label Content="{Binding GenCountLabel}" Padding="0" Margin="0,0,0,2"/>
-                                        <ComboBox ItemsSource="{Binding GenTypicalCounts}"
-                                                  SelectedItem="{Binding GenCount}"/>
+                                        <Label Content="{Binding Generator.CountLabel}" Padding="0" Margin="0,0,0,2"/>
+                                        <ComboBox ItemsSource="{Binding Generator.TypicalCounts}"
+                                                  SelectedItem="{Binding Generator.Count}"/>
                                     </StackPanel>
                                 </Grid>
 
                                 <!-- Auto-Weiterschalten -->
                                 <CheckBox Content="Startadresse automatisch weiterschalten"
-                                          IsChecked="{Binding GenAutoAdvanceAddress}"
+                                          IsChecked="{Binding Generator.AutoAdvance}"
                                           Margin="0,8,0,0" FontSize="11"/>
 
                                 <!-- Vorschau -->
@@ -225,9 +225,9 @@
                                         CornerRadius="3" Margin="0,8,0,0" Padding="5">
                                     <StackPanel>
                                         <TextBlock Text="Vorschau:" FontWeight="SemiBold" FontSize="10" Foreground="Gray"/>
-                                        <TextBlock Text="{Binding GenPreviewLine1}" FontSize="10"
+                                        <TextBlock Text="{Binding Generator.PreviewLine1}" FontSize="10"
                                                    Foreground="#1A237E" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                                        <TextBlock Text="{Binding GenPreviewLine2}" FontSize="10"
+                                        <TextBlock Text="{Binding Generator.PreviewLine2}" FontSize="10"
                                                    Foreground="#37474F" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Border>
@@ -367,8 +367,8 @@
                                            ToolTip="Schriftgroesse der Kopfzeile (SP) bzw. des Modul-Headers (MP), Punkt"/>
                                 <ComboBox Grid.Column="1"
                                           ItemsSource="{Binding FontSizes}"
-                                          SelectedItem="{Binding InputHeaderFontSize}"/>
-                                <CheckBox Grid.Column="2" Content="fett" IsChecked="{Binding InputHeaderIsBold}"
+                                          SelectedItem="{Binding Panel.HeaderFontSize}"/>
+                                <CheckBox Grid.Column="2" Content="fett" IsChecked="{Binding Panel.HeaderIsBold}"
                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </Grid>
 
@@ -387,13 +387,13 @@
                                     <RowDefinition/>
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Oben:" VerticalAlignment="Center" Margin="0,2"/>
-                                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding InputMarginTop, StringFormat={}{0:0.0}}" Margin="5,2"/>
+                                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Panel.MarginTop, StringFormat={}{0:0.0}}" Margin="5,2"/>
                                 <TextBlock Grid.Row="0" Grid.Column="3" Text="Rechts:" VerticalAlignment="Center" Margin="0,2"/>
-                                <TextBox Grid.Row="0" Grid.Column="4" Text="{Binding InputMarginRight, StringFormat={}{0:0.0}}" Margin="5,2"/>
+                                <TextBox Grid.Row="0" Grid.Column="4" Text="{Binding Panel.MarginRight, StringFormat={}{0:0.0}}" Margin="5,2"/>
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Links:" VerticalAlignment="Center" Margin="0,2"/>
-                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding InputMarginLeft, StringFormat={}{0:0.0}}" Margin="5,2"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Panel.MarginLeft, StringFormat={}{0:0.0}}" Margin="5,2"/>
                                 <TextBlock Grid.Row="1" Grid.Column="3" Text="Unten:" VerticalAlignment="Center" Margin="0,2"/>
-                                <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding InputMarginBottom, StringFormat={}{0:0.0}}" Margin="5,2"
+                                <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding Panel.MarginBottom, StringFormat={}{0:0.0}}" Margin="5,2"
                                          IsEnabled="{Binding IsMarginBottomEditable}"
                                          ToolTipService.ShowOnDisabled="True"
                                          ToolTip="ET200MP: Der Streifenbogen wird von oben gerastert (feste Zeilenhoehen), der untere Rand ergibt sich daraus."/>
@@ -446,7 +446,7 @@
                             <TextBlock Text="Aenderungen wirken sofort auf das ausgewaehlte Etikett bzw. Modul."
                                        FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
                             <ComboBox ItemsSource="{Binding AvailableFonts}"
-                                      SelectedItem="{Binding InputFontFamily}"
+                                      SelectedItem="{Binding Panel.FontFamily}"
                                       MaxDropDownHeight="300"
                                       Margin="0,0,0,5"
                                       ToolTip="Schriftart (alle installierten Windows-Schriften)">
@@ -471,9 +471,9 @@
                                 <TextBlock Text="Groesse:" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="Schriftgroesse der Adressen in Punkt"/>
                                 <ComboBox Grid.Column="1"
                                           ItemsSource="{Binding FontSizes}"
-                                          SelectedItem="{Binding InputFontSize}"/>
-                                <CheckBox Grid.Column="2" Content="fett" IsChecked="{Binding InputIsBold}" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                                <CheckBox Grid.Column="3" Content="kursiv" IsChecked="{Binding InputIsItalic}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                          SelectedItem="{Binding Panel.FontSize}"/>
+                                <CheckBox Grid.Column="2" Content="fett" IsChecked="{Binding Panel.IsBold}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                <CheckBox Grid.Column="3" Content="kursiv" IsChecked="{Binding Panel.IsItalic}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </Grid>
                             <Button Content="Auf alle Etiketten/Module anwenden" Padding="10,4" FontSize="11"
                                     Command="{Binding ApplyFontToAllCommand}"
