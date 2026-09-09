@@ -7,14 +7,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <AssemblyName>ET-Printer</AssemblyName>
-    <Version>2.3.0</Version>
+    <Version>3.1.0</Version>
     <Company>DASA</Company>
-    <Description>Beschriftungsstreifen fuer Siemens ET 200SP auf A4 drucken</Description>
+    <Description>Beschriftungsstreifen fuer Siemens ET 200SP und S7-1500/ET 200MP auf A4 drucken</Description>
+    <ApplicationIcon>Assets/ETPrinter.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="PdfPig" Version="0.1.13" />
-    <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
   </ItemGroup>
 
   <ItemGroup>

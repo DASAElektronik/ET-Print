@@ -49,9 +49,9 @@ public static class FormatDefinitions
             LabelsPerRow: 5, LabelRows: 20),
 
         // === S7-1500 / ET 200MP Standard (35mm Module) ===
-        // 2 Baender pro Seite, 5 Module pro Band, 20 Kanalzeilen pro Band
-        // Jedes Modul: 2 Adress-Spalten + Header (Netzadresse/CPU)
-        // Geschaetzte Masse — werden spaeter per Stahllineal korrigiert
+        // 2 Baender pro Seite x 5 Spalten = 10 Streifen-Positionen (je 1 Modul),
+        // 20 Kanalzeilen pro Band. Geometrie: SheetGeometry / ProductFamilyInfo.
+        // Masse aus dem Excel-Template — Stahllineal-Verifikation offen (AP8).
 
         [LabelFormat.MP_Horizontal] = new FormatInfo(
             LabelFormat.MP_Horizontal,

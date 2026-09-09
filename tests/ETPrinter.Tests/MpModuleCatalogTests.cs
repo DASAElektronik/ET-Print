@@ -207,8 +207,8 @@ public class MpModuleCatalogTests
         // nicht ueberschrieben werden.
         var module = new MpModule
         {
-            Variant = MpModuleVariant.DI_DQ_16,
-            ArticleNumber = "6ES7521-1BH10-0AA0",   // DI 16 BA: nur K20 = M
+            Variant = MpModuleVariant.MP25_16,
+            ArticleNumber = "6ES7521-1BH10-0AA0",   // DI 16 BA (25mm): nur K20 = M
             IoType = ModuleType.DO
         };
         var defs = MpModuleLayoutFactory.GetDefinitions(module);

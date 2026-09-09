@@ -12,7 +12,11 @@ public record MpCatalogEntry(
     string DisplayName,
     ModuleType IoType,
     MpModuleVariant Variant,
-    MpCellDefinition[] Cells);
+    MpCellDefinition[] Cells,
+    /// <summary>Gemischtes DI/DQ-Modul: linke Spalte Eingaenge (E), rechte Spalte
+    /// Ausgaenge (A) — der Generator setzt rechts das Ausgangs-Praefix und beginnt
+    /// die Bytezaehlung neu (Ein- und Ausgangsbytes sind frei zuweisbar).</summary>
+    bool MixedOutputRightColumn = false);
 
 /// <summary>
 /// Katalog konkreter S7-1500/ET200MP-Module. Belegungen sind an den
@@ -47,10 +51,6 @@ public static class MpModuleCatalog
                 k9: "1L+", k10: "1M", k19: "2L+", k20: "2M",
                 k29: "3L+", k30: "3M", k39: "4L+", k40: "4M")),
 
-        // Verifiziert: Blockdiagramm im Equipment Manual (83501190)
-        new("6ES7521-1BH10-0AA0", "DI 16x24VDC BA", ModuleType.DI, MpModuleVariant.DI_DQ_16,
-            MpModuleLayoutFactory.CreateLayout_DI_DQ_16(k9: "", k10: "", k19: "", k20: "M")),
-
         // Verifiziert: Manual A5E03485952 ("supply voltage to terminals 19 and 20")
         new("6ES7521-1BH00-0AB0", "DI 16x24VDC HF", ModuleType.DI, MpModuleVariant.DI_DQ_16,
             MpModuleLayoutFactory.CreateLayout_DI_DQ_16(k9: "", k10: "", k19: "L+", k20: "M")),
@@ -77,16 +77,57 @@ public static class MpModuleCatalog
         new("7MH4980-2AA01", "SIWAREX WP522 ST (2 Kanal)", ModuleType.DI, MpModuleVariant.SIWAREX_WP52x,
             MpModuleLayoutFactory.GetLayout(MpModuleVariant.SIWAREX_WP52x).AddressCells),
 
-        // === 25mm-Module ===
+        // === 25mm-Module (Bogen 6ES7592-2AX00-0AA0) ===
+        // Die "BA"-Digitalmodule sind laut TED-Datenblatt 25 mm breit (2026-09-09
+        // geprueft) und gehoeren damit auf den 25mm-Bogen. Klemmenstruktur wie die
+        // 35mm-Module (Blockdiagramme, Nummern stehen UNTER der Klemme).
+
+        // Verifiziert: Blockdiagramm Manual 83501190 — K1-8 CH0-7, K9/K10 unbelegt,
+        // K11-18 CH8-15, K19 unbelegt, K20 = M. Rechte Klemmenreihe unbelegt.
+        new("6ES7521-1BH10-0AA0", "DI 16x24VDC BA", ModuleType.DI, MpModuleVariant.MP25_16,
+            MpModuleLayoutFactory.CreateLayout_DI_DQ_16(k9: "", k10: "", k19: "", k20: "M")),
+
+        // Verifiziert: Blockdiagramm Manual 83500415 — K9/K10 = 1L+/1M, K19/K20 = 2L+/2M,
+        // rechte Klemmenreihe K21-40 unbelegt.
+        new("6ES7522-1BH10-0AA0", "DQ 16x24VDC/0.5A BA", ModuleType.DO, MpModuleVariant.MP25_16,
+            MpModuleLayoutFactory.CreateLayout_DI_DQ_16(k9: "1L+", k10: "1M", k19: "2L+", k20: "2M")),
+
+        // Verifiziert: Blockdiagramm Manual 83499481 — links CH0-15 (K1-8, K11-18),
+        // rechts CH16-31 (K21-28, K31-38), K20 und K40 = M, uebrige Struktur-Klemmen leer.
+        new("6ES7521-1BL10-0AA0", "DI 32x24VDC BA", ModuleType.DI, MpModuleVariant.MP25_32,
+            MpModuleLayoutFactory.CreateLayout_DI_DQ_32(
+                k9: "", k10: "", k19: "", k20: "M",
+                k29: "", k30: "", k39: "", k40: "M")),
+
+        // Verifiziert: Blockdiagramm Manual 83500404 — Versorgung je Kanalgruppe wie DQ 32 HF.
+        new("6ES7522-1BL10-0AA0", "DQ 32x24VDC/0.5A BA", ModuleType.DO, MpModuleVariant.MP25_32,
+            MpModuleLayoutFactory.CreateLayout_DI_DQ_32(
+                k9: "1L+", k10: "1M", k19: "2L+", k20: "2M",
+                k29: "3L+", k30: "3M", k39: "4L+", k40: "4M")),
+
+        // Verifiziert: Blockdiagramm Manual 83501523 — links Eingaenge (K1-8 CH0-7,
+        // K11-18 CH8-15, K20 = 1M), rechts Ausgaenge (K21-28 CH0-7, K29/K30 = 2L+/2M,
+        // K31-38 CH8-15, K39/K40 = 3L+/3M). Generator: rechte Spalte mit A-Praefix.
+        new("6ES7523-1BL00-0AA0", "DI 16x24VDC / DQ 16x24VDC/0.5A BA", ModuleType.DI, MpModuleVariant.MP25_32,
+            MpModuleLayoutFactory.CreateLayout_DI_DQ_32(
+                k9: "", k10: "", k19: "", k20: "1M",
+                k29: "2L+", k30: "2M", k39: "3L+", k40: "3M"),
+            MixedOutputRightColumn: true),
+
         // Verifiziert: Blockdiagramme Figure 3-1/3-2 (91688388). Wie alle
         // Analogmodule OHNE feste Klemmen-Kanal-Zuordnung: Spannungsausgang
         // (2-/4-Draht) und Stromausgang belegen unterschiedliche Klemmen
         // (QV/QI auf K1, MANA auf K3; bei 4-Draht zusaetzlich S+/S- auf K5/K6).
         // Deshalb keine Struktur-Labels — der Streifen bleibt komplett editierbar.
-        // Belegt sind nur K1-K7, der 20-zeilige MP25_16-Streifen reicht dafuer.
+        // Belegt sind nur K1-K7, der 20-zeilige Streifen reicht dafuer.
         new("6ES7532-5NB00-0AB0", "AQ 2xU/I ST", ModuleType.AO, MpModuleVariant.MP25_16,
-            MpModuleLayoutFactory.GetLayout(MpModuleVariant.MP25_16).AddressCells),
+            MpModuleLayoutFactory.CreateLayout_MP25_Plain20()),
     ];
+
+    /// <summary>True wenn der Artikel zur Familie passt (25mm-Artikel nur auf dem 25mm-Bogen).</summary>
+    public static bool FitsFamily(MpCatalogEntry entry, ProductFamily family) =>
+        entry == CustomEntry
+        || MpModuleLayoutFactory.Is25mmVariant(entry.Variant) == (family == ProductFamily.S71500_ET200MP_25mm);
 
     public static MpCatalogEntry? Find(string? articleNo) =>
         string.IsNullOrEmpty(articleNo)
@@ -95,11 +136,6 @@ public static class MpModuleCatalog
 
     /// <summary>Katalog-Eintraege, die zur Familie passen — ueber die Variante des
     /// Eintrags gefiltert (25mm-Varianten vs. 35mm). "Benutzerdefiniert" ist immer dabei.</summary>
-    public static IReadOnlyList<MpCatalogEntry> EntriesForFamily(ProductFamily family)
-    {
-        bool is25 = family == ProductFamily.S71500_ET200MP_25mm;
-        return Entries
-            .Where(e => e == CustomEntry || MpModuleLayoutFactory.Is25mmVariant(e.Variant) == is25)
-            .ToList();
-    }
+    public static IReadOnlyList<MpCatalogEntry> EntriesForFamily(ProductFamily family) =>
+        Entries.Where(e => FitsFamily(e, family)).ToList();
 }

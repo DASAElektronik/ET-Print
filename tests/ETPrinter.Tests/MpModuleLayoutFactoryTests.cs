@@ -53,25 +53,39 @@ public class MpModuleLayoutFactoryTests
         Assert.Equal(9, MpModuleLayoutFactory.All.Count);
     }
 
-    // 25mm-Varianten: keine M/L+-Struktur, alle Zeilen editierbar.
+    // 25mm-Varianten (AP8, Blockdiagramme der 25mm-BA-Module): dieselbe
+    // 40-Klemmen-Struktur wie 35mm — K9/K10 und K19/K20 sind Struktur (unbeschriftet).
     [Fact]
-    public void MP25_16_Has20EditableColspan2Rows()
+    public void MP25_16_Has16EditableRows_StructureAt8_9_18_19()
     {
         var cells = MpModuleLayoutFactory.GetLayout(MpModuleVariant.MP25_16).AddressCells;
         Assert.Equal(20, cells.Length);
-        Assert.All(cells, c => Assert.True(c.IsEditable));
+        Assert.Equal(16, cells.Count(c => c.IsEditable));
         Assert.All(cells, c => Assert.Equal(2, c.ColSpan));
-        Assert.All(cells, c => Assert.Equal(1, c.RowSpan));
+        Assert.All(cells.Where(c => !c.IsEditable), c => Assert.Contains(c.StartRow, new[] { 8, 9, 18, 19 }));
+        Assert.All(cells.Where(c => !c.IsEditable), c => Assert.Equal("", c.Label));
     }
 
     [Fact]
-    public void MP25_32_Has40EditableTwoColumnRows()
+    public void MP25_32_Has32EditableCells_ByteOrderLikeDiDq32()
     {
         var cells = MpModuleLayoutFactory.GetLayout(MpModuleVariant.MP25_32).AddressCells;
         Assert.Equal(40, cells.Length);
-        Assert.All(cells, c => Assert.True(c.IsEditable));
+        Assert.Equal(32, cells.Count(c => c.IsEditable));
         Assert.Equal(20, cells.Count(c => c.StartCol == 0));
         Assert.Equal(20, cells.Count(c => c.StartCol == 1));
+        // Reihenfolge: Spalte 0 komplett, dann Spalte 1 -> Byte 2 landet rechts
+        var editable = cells.Where(c => c.IsEditable).ToList();
+        Assert.All(editable.Take(16), c => Assert.Equal(0, c.StartCol));
+        Assert.All(editable.Skip(16), c => Assert.Equal(1, c.StartCol));
+    }
+
+    [Fact]
+    public void MP25_Plain20_AllEditable()
+    {
+        var cells = MpModuleLayoutFactory.CreateLayout_MP25_Plain20();
+        Assert.Equal(20, cells.Length);
+        Assert.All(cells, c => Assert.True(c.IsEditable));
     }
 
     [Fact]

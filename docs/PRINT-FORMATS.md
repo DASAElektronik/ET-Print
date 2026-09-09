@@ -161,9 +161,12 @@
 ### Seitengeometrie ET200MP
 - **Papier:** A4 Hochformat, 210 x 297 mm
 - **Papiersorte:** Mittleres Gewicht 96-110g
-- **5 Spalten pro A4** (jede Spalte = 1 physischer Beschriftungsstreifen/Modul)
-- Jede Spalte hat **2 Haelften** (obere + untere), beide gehoeren zum SELBEN Modul
-- **5 Module pro Seite** (NICHT 10 — Band 1+2 derselben Spalte = 1 Modul)
+- **2 Baender x 5 Spalten = 10 Streifen-Positionen pro A4** (35mm); jede Position ist
+  EIN eigener Beschriftungsstreifen/Modul (Band 1 mit hohem Header 25,7 mm, Band 2 mit
+  flachem Header 20,6 mm). 25mm-Bogen: 2 Baender x 10 Spalten = 20 Positionen.
+- Historie: bis v2.5 wurden Band 1+2 derselben Spalte als EIN Modul behandelt (5 Module
+  pro Seite). Seit v3.0 (Phase 19) gilt die 10-Positionen-Architektur; Projektdateien
+  v4 werden beim Laden auf 10 Positionen aufgefuellt.
 
 ### Standard-Seitenraender (aus Siemens-Doku)
 | Rand   | Wert   |
@@ -176,10 +179,10 @@
 ### Modulstruktur (4 Spalten pro Modul)
 | Spalte | Excel-Breite (pt / mm) | Anteil | Inhalt |
 |--------|------------------------|--------|--------|
-| Col 0  | 31.5 / 11.11           | 32.7%  | Klemmen links (linke Modulseite) |
-| Col 1  | 31.5 / 11.11           | 32.7%  | Klemmen rechts (rechte Modulseite) |
-| Col 2  | 17.1 / 6.03            | 17.8%  | Net Address (Zeilen 1-10) + Net Name (11-20), 90 Grad |
-| Col 3  | 16.2 / 5.71            | 16.8%  | CPU-Name (90 Grad, merged 20 Zeilen) |
+| Col 0  | 31.5 / 11.11           | 32.8% (1499/4570) | Klemmen links (linke Modulseite) |
+| Col 1  | 31.5 / 11.11           | 32.8% (1499/4570) | Klemmen rechts (rechte Modulseite) |
+| Col 2  | 17.1 / 6.03            | 17.6% (804/4570)  | Net Address (Zeilen 1-10) + Net Name (11-20), 90 Grad |
+| Col 3  | 16.2 / 5.71            | 16.8% (768/4570)  | CPU-Name (90 Grad, merged 20 Zeilen) |
 
 Streifenbreite laut Excel: 96.3pt = **33.97mm** (App rechnet aktuell (210-25-12)/5 = 34.6mm).
 Die PageSetup-Raender des Excel (L:35 R:22 O:25 U:20) sind unbrauchbar — der Inhalt
@@ -195,12 +198,15 @@ Endgueltige Breite/Pitch bei Lieferung der Boegen per Stahllineal verifizieren.
 | 11-18  | 15.8   | 5.6  | K11-18 / K31-38: Kanalgruppe b bzw. d |
 | 19     | 15.8   | 5.6  | K19 / K39: L+ (Power) |
 | 20     | 15.8   | 5.6  | K20 / K40: M (Ground) |
-| 21     | 58.5   | 20.6 | Header des ZWEITEN Bandes (eigener Streifen) |
+| 21     | 58.5   | 20.6 | Header des ZWEITEN Bandes (eigener Streifen, eigenes Modul) |
 | 22-41  | 15.8   | 5.6  | Band 2: gleiche Struktur wie Zeilen 1-20 |
 
-Hinweis: Jede 5. Klemmenzeile (5, 10, 15, 20 innerhalb eines Bandes) ist 16.5 Punkte
-(~5.8mm) statt 15.8 hoch. Im Excel hat jedes Band eigene Header-, Net-Address-,
-Net-Name- und CPU-Name-Bloecke (Net Address = Zeilen 1-10, Net Name = Zeilen 11-20).
+Hinweis: Jede 5. Klemmenzeile (5, 10, 15, 20 innerhalb eines Bandes) ist im Excel 16.5
+Punkte (~5.8mm) statt 15.8 hoch. Die App rastert ALLE 20 Zeilen mit festen 5,6 mm
+(SheetGeometry.DataRowHeight) — die Abweichung von 0,2 mm je 5. Zeile bleibt bis zur
+Stahllineal-Vermessung der Boegen offen (ABSCHLUSSPLAN AP8). Im Excel hat jedes Band
+eigene Header-, Net-Address-, Net-Name- und CPU-Name-Bloecke (Net Address = Zeilen 1-10,
+Net Name = Zeilen 11-20).
 
 ### Physische Klemmenbelegung (Quelle: Siemens Equipment Manual)
 
@@ -353,35 +359,53 @@ den Streifen deshalb komplett editierbar (Variante MP25_16, 20 Zeilen).
 Das Excel-Template zeigt Q 0.1 bis Q 0.7 — das ist FALSCH/ein Platzhalter.
 Korrekte Adressen starten bei .0 (z.B. E 0.0, E 0.1, ..., E 0.7).
 
-### 6 Modultyp-Varianten (Zellen-Merges im Excel)
-| Variante | Col 0+1 | Zeilen/Adresse | Kanaele | Bytes | Beschreibung |
+### 9 Layout-Varianten (MpModuleVariant, Zellen-Merges im Excel)
+| Variante (Enum) | Col 0+1 | Zeilen/Adresse | Kanaele | Bytes | Beschreibung |
 |----------|---------|---------------|---------|-------|--------------|
-| 32 DI/DQ | getrennt | 1 | 32 | 4 | 8 CH links + 8 CH rechts pro Haelfte, M/L+ Zeilen |
-| 16 DI/DQ | gemergt | 1 | 16 | 2 | 1 breite Spalte, 1 Zeile pro Kanal |
-| 16 DI 230V | getrennt | 2 | 16 | 2 | 2 Spalten, 2 Zeilen pro Kanal-Paar (Schutzleiter) |
-| 8 DQ 230V | getrennt | 2 | 8 | 1 | 2 Spalten, 2 Zeilen + Versorgungszellen |
-| 8 AI/AQ | getrennt | 4 | 8 | 16 | 2 Spalten, 4 Zeilen pro Analogkanal (2 Worte/Kanal) |
-| 4 AQ | gemergt | 4 | 4 | 8 | 1 breite Spalte, 4 Zeilen pro Analogkanal |
+| DI_DQ_32 | getrennt | 1 | 32 | 4 | 8 CH links + 8 CH rechts pro Haelfte, M/L+ Zeilen (typabhaengig) |
+| DI_DQ_16 | gemergt | 1 | 16 | 2 | 1 breite Spalte, 1 Zeile pro Kanal |
+| DI_230V_16 | getrennt | 2 | 16 | 2 | 2 Spalten, 2 Zeilen pro Kanal-Paar (xN = AC-Neutral auf K8/K18) |
+| DQ_230V_8 | getrennt | 2 | 8 | 1 | 2 Spalten, 2 Zeilen (Relaiskontakte) + Luecken-Bloecke |
+| AI_AQ_8 | getrennt | 4 | 8 | 16 | 2 Spalten, 5 editierbare 4-Zeilen-Bloecke je Spalte (modusabhaengig, kein MANA-Label) |
+| AQ_4 | gemergt | 4 | 4 | 8 | 5 gemergte 4-Zeilen-Bloecke |
+| SIWAREX_WP52x | getrennt | 1 | - | - | fester Pinout (EXC/SIG/SEN/D +/-, DQ, DI, L+/M), alle 40 Zellen fest, wird als reiner Pinout-Streifen gedruckt |
+| MP25_16 | gemergt | 1 | 16 | 2 | 25mm: 20 editierbare Zeilen, keine Strukturzeilen |
+| MP25_32 | getrennt | 1 | 32 | 4 | 25mm: 20 Zeilen x 2 Spalten, alle editierbar |
 
-Jede Variante existiert horizontal (0 Grad) und vertikal (90 Grad) = 12 Formate.
+Die Variante ist eine Eigenschaft des Moduls (nicht des Formats): es gibt nur die Formate
+MP_Horizontal / MP_Vertical (35mm) und MP25_Horizontal / MP25_Vertical (25mm); vertikal
+dreht die editierbaren Adresszellen um 90 Grad. Struktur-Klemmen (M/L+) kommen bei
+Katalog-Artikeln aus dem Katalog, sonst typabhaengig (DI: Versorgung nur am Gruppenende,
+DO: je Kanalgruppe) aus MpModuleLayoutFactory.GetGenericDefinitions.
 
-### Unterstuetzte S7-1500 / ET200MP Modultypen
+### Modul-Katalog (MpModuleCatalog.cs, datenblattverifiziert) und weitere Modultypen
+
+Im Katalog (Auswahl per Artikelnummer, exakte Klemmenbelegung) sind 14 Eintraege:
+35mm: DI 32x24VDC HF, DQ 32x24VDC/0.5A HF, DI 16x24VDC HF, DQ 16x24VDC/0.5A ST,
+DQ 8x24VDC/2A HF, DI 16x230VAC BA, SIWAREX WP521 ST, SIWAREX WP522 ST.
+25mm (BA-Module, Breite laut TED-Datenblatt 25 mm): DI 16x24VDC BA, DQ 16x24VDC/0.5A BA,
+DI 32x24VDC BA, DQ 32x24VDC/0.5A BA, DI 16x24VDC/DQ 16x24VDC/0.5A BA, AQ 2xU/I ST.
+Alle uebrigen Module der Tabellen unten werden ueber die Layout-Variante beschriftet
+(Analogmodule haben keine feste Klemmen-Kanal-Zuordnung, siehe ABSCHLUSSPLAN AP9).
 
 #### Digital Input (DI) — 6ES7521
 | Modul | Artikel-Nr | Kanäle | Breite | Excel-Mappe |
 |---|---|---|---|---|
-| DI 16x24VDC HF | 6ES7521-1BH00-0AB0 | 16 | 35mm | horizontal/vertical_16_DI_DQ |
-| DI 16x24VDC BA | 6ES7521-1BH10-0AA0 | 16 | 35mm | horizontal/vertical_16_DI_DQ |
-| DI 32x24VDC HF | 6ES7521-1BL00-0AB0 | 32 | 35mm | horizontal/vertical_32_DI_DQ |
-| DI 16x230VAC BA | 6ES7521-1FH00-0AA0 | 16 | 35mm | horizontal/vertical_16_DI_230V |
+| DI 16x24VDC HF | 6ES7521-1BH00-0AB0 | 16 | 35mm | horizontal/vertical_16_DI_DQ (Katalog) |
+| DI 16x24VDC BA | 6ES7521-1BH10-0AA0 | 16 | **25mm** | 25mm-Template 16_DI (Katalog, K20 = M) |
+| DI 32x24VDC HF | 6ES7521-1BL00-0AB0 | 32 | 35mm | horizontal/vertical_32_DI_DQ (Katalog) |
+| DI 32x24VDC BA | 6ES7521-1BL10-0AA0 | 32 | **25mm** | 25mm-Template 32_DI (Katalog, K20/K40 = M) |
+| DI 16x230VAC BA | 6ES7521-1FH00-0AA0 | 16 | 35mm | horizontal/vertical_16_DI_230V (Katalog) |
 
 #### Digital Output (DQ) — 6ES7522
 | Modul | Artikel-Nr | Kanäle | Breite | Excel-Mappe |
 |---|---|---|---|---|
 | DQ 8x24VDC/2A HF | 6ES7522-1BF00-0AB0 | 8 | 35mm | horizontal/vertical_32_DI_DQ (*) — Katalog sperrt K11-40 |
-| DQ 16x24VDC/0.5A ST | 6ES7522-1BH00-0AB0 | 16 | 35mm | horizontal/vertical_16_DI_DQ |
-| DQ 16x24VDC/0.5A BA | 6ES7522-1BH10-0AA0 | 16 | 35mm | horizontal/vertical_16_DI_DQ |
-| DQ 32x24VDC/0.5A HF | 6ES7522-1BL01-0AB0 | 32 | 35mm | horizontal/vertical_32_DI_DQ |
+| DQ 16x24VDC/0.5A ST | 6ES7522-1BH00-0AB0 | 16 | 35mm | horizontal/vertical_16_DI_DQ (Katalog) |
+| DQ 16x24VDC/0.5A BA | 6ES7522-1BH10-0AA0 | 16 | **25mm** | 25mm-Template 16_DQ (Katalog, 1L+/1M, 2L+/2M) |
+| DQ 32x24VDC/0.5A HF | 6ES7522-1BL01-0AB0 | 32 | 35mm | horizontal/vertical_32_DI_DQ (Katalog) |
+| DQ 32x24VDC/0.5A BA | 6ES7522-1BL10-0AA0 | 32 | **25mm** | 25mm-Template 32_DQ (Katalog, 4 Versorgungsgruppen) |
+| DI 16x24VDC / DQ 16x24VDC/0.5A BA | 6ES7523-1BL00-0AA0 | 16+16 | **25mm** | 25mm-Template 16_DI_16_DQ (Katalog, links E / rechts A) |
 | DQ 8x230VAC/5A | 6ES7522-5HF00-0AB0 | 8 | 35mm | horizontal/vertical_8_DQ_230V |
 
 #### Analog Input (AI) — 6ES7531
@@ -411,17 +435,28 @@ Jede Variante existiert horizontal (0 Grad) und vertikal (90 Grad) = 12 Formate.
 - DQ 32x24VDC HF: https://cache.industry.siemens.com/dl/files/716/109480716/att_902641/v1/s71500_dq_32x24vdc_0_5a_hf_manual_en-US_en-US.pdf
 - DQ 8x24VDC/2A HF: https://cache.industry.siemens.com/dl/files/089/59193089/att_902698/v1/s71500_dq_8x24vdc_2a_hf_manual_en-US_en-US.pdf
 - DI 16x230VAC BA: https://cache.industry.siemens.com/dl/files/398/59193398/att_897452/v1/s71500_di_16x230vac_ba_manual_en-US_en-US.pdf
+- DI 32x24VDC BA (25mm): https://cache.industry.siemens.com/dl/files/481/83499481/att_905045/v1/s71500_di_32x24vdc_ba_manual_en-US_en-US.pdf
+- DQ 32x24VDC/0.5A BA (25mm): https://cache.industry.siemens.com/dl/files/404/83500404/att_902696/v1/s71500_dq_32x24vdc_0_5a_ba_manual_en-US_en-US.pdf
+- DQ 16x24VDC/0.5A BA (25mm): https://cache.industry.siemens.com/dl/files/415/83500415/att_902638/v1/s71500_dq_16x24vdc_0_5a_ba_manual_en-US_en-US.pdf
+- DI 16x24VDC/DQ 16x24VDC/0.5A BA (25mm): https://cache.industry.siemens.com/dl/files/523/83501523/att_897447/v1/s71500_di_16x24vdc_dq_16x24vdc_0.5a_ba_manual_en-US_en-US.pdf
+- Modulbreiten: TED-Datenblaetter https://apim.industry.siemens.cloud/ted/datasheet?format=pdf&mlfbs=<MLFB>&language=en
 - AQ 2xU/I ST (25mm): https://cache.industry.siemens.com/dl/files/388/91688388/att_75101/v1/s71500_aq_2xu_i_st_manual_en-US_en-US.pdf
 - AI 8xU/I/RTD/TC ST: https://cache.industry.siemens.com/dl/files/205/59193205/att_112065/v1/s71500_ai_8xu_i_rtd_tc_st_manual_en-US_en-US.pdf
 - AQ 4xU/I ST: https://cache.industry.siemens.com/dl/files/850/59191850/att_63218/v1/s71500_aq_4xu_i_st_manual_en-US_en-US.pdf
 - SIWAREX WP521/522: https://support.industry.siemens.com/cs/attachments/109736583/Manual_SIWAREX_WP521_WP522_en_en-US.pdf
 
-### Aktueller Stand der Implementierung (TODO)
-- [ ] Architektur-Fix: 5 Module pro Seite (statt 10), Band 1+2 = ein Modul
-- [ ] Klemmenbelegung pro Modultyp: Zeilen-Mapping mit M/L+/leer Positionen
-- [ ] Adress-Generator: 0-basierte Kanaele, korrekte Byte-Verteilung auf Haelften
-- [ ] Datenblatt-PDFs herunterladen und Klemmenbelegungen extrahieren
-- [ ] Exakte Masse: Beschriftungsboegen mit Stahllineal nachmessen
+### Stand der Implementierung (2026-09)
+- [x] 10 Streifen-Positionen pro A4 (v3.0), 25mm mit 20 Positionen
+- [x] Klemmenbelegung pro Modul: Katalog (MpModuleCatalog) + typabhaengige generische Belegung
+- [x] Adress-Generator: 0-basierte Kanaele, Byte 0 -> K1-8, Byte 1 -> K11-18, Byte 2 -> K21-28, Byte 3 -> K31-38
+- [x] Datenblaetter fuer alle Katalog-Eintraege verifiziert (Quellen oben)
+- [x] Geometrie zentral in SheetGeometry (Druck = Vorschau = Kalibrierseite)
+- [ ] Exakte Masse: Beschriftungsboegen 6ES7592-1AX00 / -2AX00 mit Stahllineal nachmessen (AP8)
+- [x] 25mm-Module (AP8, 2026-09-09): Blockdiagramme DI 32 BA (83499481), DQ 32 BA (83500404),
+      DQ 16 BA (83500415), DI16/DQ16 BA (83501523) ausgewertet — 40-Klemmen-Struktur wie 35mm,
+      Zellenreihenfolge Spalte 0 komplett, dann Spalte 1 (Byte 2 -> K21-28). Die generischen
+      Layouts MP25_16/MP25_32 haben deshalb Strukturzeilen K9/K10/K19/K20 (unbeschriftet);
+      Analogmodule (AQ 2) nutzen weiterhin 20 freie Zeilen.
 
 ---
 

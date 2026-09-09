@@ -105,12 +105,12 @@ public static class MpModuleLayoutFactory
 
         return variant switch
         {
-            // wie DQ 16x24VDC/0.5A ST (6ES7522-1BH00-0AB0)
-            MpModuleVariant.DI_DQ_16 => CreateLayout_DI_DQ_16(
+            // wie DQ 16x24VDC/0.5A ST (6ES7522-1BH00-0AB0) bzw. DQ 16 BA (25mm, 6ES7522-1BH10-0AA0)
+            MpModuleVariant.DI_DQ_16 or MpModuleVariant.MP25_16 => CreateLayout_DI_DQ_16(
                 k9: "1L+", k10: "1M", k19: "2L+", k20: "2M"),
 
-            // wie DQ 32x24VDC/0.5A HF (6ES7522-1BL01-0AB0)
-            MpModuleVariant.DI_DQ_32 => CreateLayout_DI_DQ_32(
+            // wie DQ 32x24VDC/0.5A HF (6ES7522-1BL01-0AB0) bzw. DQ 32 BA (25mm, 6ES7522-1BL10-0AA0)
+            MpModuleVariant.DI_DQ_32 or MpModuleVariant.MP25_32 => CreateLayout_DI_DQ_32(
                 k9: "1L+", k10: "1M", k19: "2L+", k20: "2M",
                 k29: "3L+", k30: "3M", k39: "4L+", k40: "4M"),
 
@@ -333,11 +333,21 @@ public static class MpModuleLayoutFactory
     }
 
     // =================================================================
-    // 25mm 16 Kanal (16_DI, 16_DQ) — verifiziert gegen Excel 25mm-Template.
-    // 20 Zeilen, je 1 Adresse ueber die volle Adressbreite (colspan 2),
-    // alle editierbar, KEINE M/L+-Strukturzeilen (im 25mm-Template nicht vorhanden).
+    // 25mm 16 Kanal (16_DI, 16_DQ). Das Excel-25mm-Template zeigt 20 gleiche Zeilen;
+    // die 25mm-BA-Module (DI 16 BA 6ES7521-1BH10, DQ 16 BA 6ES7522-1BH10) haben
+    // laut Blockdiagramm (Manuals 83501190 / 83500415) aber dieselbe Klemmen-
+    // struktur wie die 35mm-Module: K1-8 und K11-18 Kanaele, K9/K10 und K19/K20
+    // Struktur (DI: nur K20 = M; DQ: 1L+/1M, 2L+/2M). Das generische Layout ist
+    // deshalb DI_DQ_16 ohne Labels — sonst laufen Byte-1-Adressen in die
+    // Versorgungsklemmen. Rein editierbare 20 Zeilen gibt es fuer Analogmodule
+    // (CreateLayout_MP25_Plain20, z.B. AQ 2xU/I ST).
     // =================================================================
-    private static MpCellDefinition[] CreateLayout_MP25_16()
+    private static MpCellDefinition[] CreateLayout_MP25_16() =>
+        CreateLayout_DI_DQ_16(k9: "", k10: "", k19: "", k20: "");
+
+    /// <summary>25mm: 20 editierbare Zeilen ohne Strukturzeilen (Analogmodule ohne
+    /// feste Klemmen-Kanal-Zuordnung).</summary>
+    internal static MpCellDefinition[] CreateLayout_MP25_Plain20()
     {
         var cells = new List<MpCellDefinition>();
         for (int row = 0; row < RowsPerHalf; row++)
@@ -346,16 +356,15 @@ public static class MpModuleLayoutFactory
     }
 
     // =================================================================
-    // 25mm 32 Kanal / DI+DQ gemischt (32_DI, 32_DQ, 16_DI_16_DQ) — Excel-verifiziert.
-    // 20 Zeilen x 2 Spalten = 40 Adress-Slots, alle editierbar. Linke Spalte zuerst
-    // (Generator fuellt spaltenweise: links Bytes 0/1, rechts Bytes 2/3 bzw. DI|DQ).
+    // 25mm 32 Kanal / DI+DQ gemischt (32_DI, 32_DQ, 16_DI_16_DQ). Die 25mm-Module
+    // DI 32 BA (6ES7521-1BL10), DQ 32 BA (6ES7522-1BL10) und DI16/DQ16 BA
+    // (6ES7523-1BL00) haben laut Blockdiagramm (Manuals 83499481 / 83500404 /
+    // 83501523) die 40-Klemmen-Struktur der 35mm-Module: je Spalte K1-8 + K11-18
+    // Kanaele, K9/K10 + K19/K20 Struktur. Zellenreihenfolge = DI_DQ_32 (Spalte 0
+    // komplett, dann Spalte 1): Byte 0 -> K1-8, Byte 1 -> K11-18, Byte 2 -> K21-28,
+    // Byte 3 -> K31-38. Frueher waren alle 40 Zellen editierbar und Byte 2 lief in
+    // K17-20 der linken Spalte (Review-Finding AP8).
     // =================================================================
-    private static MpCellDefinition[] CreateLayout_MP25_32()
-    {
-        var cells = new List<MpCellDefinition>();
-        for (int col = 0; col < 2; col++)
-            for (int row = 0; row < RowsPerHalf; row++)
-                cells.Add(new(Half: 0, StartRow: row, RowSpan: 1, StartCol: col, ColSpan: 1, IsEditable: true));
-        return cells.ToArray();
-    }
+    private static MpCellDefinition[] CreateLayout_MP25_32() =>
+        CreateLayout_DI_DQ_32(k9: "", k10: "", k19: "", k20: "", k29: "", k30: "", k39: "", k40: "");
 }

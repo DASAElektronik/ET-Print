@@ -1,112 +1,346 @@
-# ET-Printer - Technische Architektur
+# ET-Printer – Technische Architektur
+
+Stand: 2026-09-09 (v3.1). Beschreibt den tatsächlichen Code unter `src/ETPrinter`
+und `tests/ETPrinter.Tests`. Historie in `CHANGELOG.md`, Geometrie-Herleitung in
+`PRINT-FORMATS.md`, Features in `FEATURES.md`.
 
 ## Technologie-Stack
-- **Sprache:** C# 12
-- **UI-Framework:** WPF (.NET 8)
-- **IDE:** Visual Studio 2022
-- **Druck:** System.Printing / System.Drawing.Printing
-- **Serialisierung:** System.Text.Json
-- **Build:** MSBuild / dotnet CLI
+
+| Bereich | Wahl |
+|---------|------|
+| Sprache | C# 13 (`Nullable` + `ImplicitUsings` aktiv) |
+| Framework | .NET 9, Zielplattform `net9.0-windows`, WPF (`UseWPF`) |
+| Assembly | `ET-Printer.exe` (AssemblyName in `ETPrinter.csproj`), Company DASA |
+| PDF-Parsing | NuGet `PdfPig` 0.1.13 (UglyToad.PdfPig) |
+| Excel-Import | NuGet `ClosedXML` 0.105.0 |
+| Serialisierung | `System.Text.Json` (JSON, Enums als Strings) |
+| Druck | WPF `FixedDocument` + `PrintDialog` (System.Printing, PrintTicket A4) |
+| Tests | xUnit 2.9.3, `Microsoft.NET.Test.Sdk` 17.12.0, `xunit.runner.visualstudio` 2.8.2; Testprojekt mit `UseWPF` und `InternalsVisibleTo` |
+| Publish | `Properties/PublishProfiles/win-x64.pubxml`: Release, `win-x64`, self-contained, single-file, ReadyToRun, eingebettete PDB, Ausgabe nach `publish/` |
+| Build | `dotnet build` / `dotnet test` / `dotnet publish` (VS2022-Solution `ET-Printer.sln`) |
+
+Versionsnummer: `<Version>` in `ETPrinter.csproj` ist die einzige Quelle. Der
+Info-Dialog liest sie zur Laufzeit aus der Assembly (`MainWindow.MenuAbout_Click`).
 
 ## Projektstruktur
+
 ```
-ET-Printer/
+Beschriftung/
 ├── ET-Printer.sln
-├── src/
-│   └── ETPrinter/
-│       ├── ETPrinter.csproj
-│       ├── App.xaml / App.xaml.cs
-│       ├── MainWindow.xaml / MainWindow.xaml.cs
-│       ├── Models/
-│       │   ├── LabelProject.cs          # Projekt-Datenmodell
-│       │   ├── LabelFormat.cs           # Enum der 6 Formate
-│       │   ├── LabelSettings.cs         # Einstellungen (Schrift, Raender)
-│       │   ├── LabelCell.cs             # Einzelne Beschriftungszelle
-│       │   └── LabelPage.cs             # Seitenmodell mit Zellen
-│       ├── ViewModels/
-│       │   ├── MainViewModel.cs         # Hauptlogik, Kommandos
-│       │   ├── LabelViewModel.cs        # Einzelnes Etikett (Text, IsSelected, HasText)
-│       │   └── PagePreviewViewModel.cs  # A4-Seiten-Vorschau mit Etiketten-Liste
-│       ├── Services/
-│       │   ├── PrintService.cs          # Drucklogik (FixedDocument)
-│       │   ├── LayoutEngine.cs          # Berechnung Zellengroessen/Positionen
-│       │   ├── ProjectFileService.cs    # Speichern/Laden
-│       │   └── FormatDefinitions.cs     # Definition der 6 Druckformate
-│       └── Converters/
-│           └── NullToBoolConverter.cs   # Fuer IsEnabled-Bindings
-├── tests/
-│   └── ETPrinter.Tests/
-│       └── ETPrinter.Tests.csproj
-└── docs/
-    └── *.md
+├── README.md
+├── test-send.ps1                      # Einzelbefehl an die Test-Automation-Pipe
+├── publish/ET-Printer.exe             # Deploy-Ziel (gitignored)
+├── Excel_Template_ET200SP .xls        # Siemens-Vorlagen (Referenz)
+├── Excel_Template_S71500_ET200MP.xls
+├── Excel_Template_S71500_ET200MP_25mm.xls
+├── excel_template_et200sp_d.pdf
+├── excel_template_s71500_et200mp_d.pdf
+├── docs/
+│   ├── ABSCHLUSSPLAN.md               # AP0–AP9 des Release-Durchlaufs
+│   ├── ARCHITECTURE.md                # dieses Dokument
+│   ├── CHANGELOG.md
+│   ├── FEATURES.md
+│   ├── PRINT-FORMATS.md               # Geometrie + Klemmenbelegungen (Datenblatt-verifiziert)
+│   ├── PRODUCT.md
+│   └── TODO.md
+├── tools/
+│   ├── smoke.ps1                      # Smoke-Test gegen publish/ET-Printer.exe
+│   ├── dump-xls.ps1                   # Excel-Vorlagen zellgenau dumpen (COM)
+│   └── extract-wiring.ps1             # Klemmenbelegung aus Datenblatt-PDF ziehen
+├── src/ETPrinter/
+│   ├── ETPrinter.csproj
+│   ├── App.xaml / App.xaml.cs         # Startup, globale Exception-Handler, Recovery, Startargument
+│   ├── MainWindow.xaml / .xaml.cs     # Hauptfenster, KeyBindings, Fensterzustand, Drag&Drop, Zoom
+│   ├── AssemblyInfo.cs
+│   ├── Properties/PublishProfiles/win-x64.pubxml
+│   ├── Models/
+│   │   ├── LabelCell.cs               # ET200SP-Etikett (Header, Line1, Line2, Schrift, IsPrintEnabled)
+│   │   ├── LabelFormat.cs             # Enum der 10 Formate + FormatInfo-Record
+│   │   ├── LabelPage.cs               # Liste von LabelCell
+│   │   ├── LabelProject.cs            # Projektdatei (Version 5, Pages, MpPages, Settings, Kalibrierung)
+│   │   ├── LabelSettings.cs           # Adress-/Header-Schrift, Ränder, Familien-Defaults
+│   │   ├── MpModule.cs                # ET200MP-Modul, MpAddressCell, MpModulePage, HasPrintableContent
+│   │   ├── MpModuleType.cs            # MpModuleVariant (9 Varianten), MpCellDefinition, MpModuleLayout
+│   │   ├── ProductFamily.cs           # Enum + ProductFamilyInfo (Ränder, Bänder, Spaltenanteile, Bogen-Nr)
+│   │   └── SchematicParseResult.cs    # ParsedModule / ParsedChannel des PDF-Parsers
+│   ├── ViewModels/
+│   │   ├── ViewModelBase.cs           # INotifyPropertyChanged + SetProperty
+│   │   ├── RelayCommand.cs            # RelayCommand und RelayCommand<T>
+│   │   ├── MainViewModel.cs           # Gesamte Anwendungslogik (Seiten, Generator, Import, Druck, Persistenz)
+│   │   ├── LabelViewModel.cs          # SP-Etikett: Slots, Display-Strings, Auswahl/Markierung
+│   │   ├── MpModuleViewModel.cs       # MP-Modul + MpAddressCellViewModel, Zell-Neuaufbau, ContentChanged
+│   │   └── PdfImportViewModel.cs      # Modulauswahl im PDF-Import-Dialog
+│   ├── Services/
+│   │   ├── SheetGeometry.cs           # EINZIGE Geometriequelle (mm, RectMm) für Druck + Vorschau
+│   │   ├── FormatDefinitions.cs       # Die 10 FormatInfo-Einträge, Default-Format je Familie
+│   │   ├── PrintService.cs            # FixedDocument-Erzeugung, Druckdialog, PNG-Rendering
+│   │   ├── AddressGenerator.cs        # SP-Adressgenerator (digital/analog), Kanalzahlen, Auto-Advance
+│   │   ├── MpModuleLayoutFactory.cs   # Zellen-Layouts je Variante, generische Struktur-Labels
+│   │   ├── MpModuleCatalog.cs         # 10 konkrete Siemens-Module mit Datenblatt-Belegung
+│   │   ├── ProjectService.cs          # .etprint laden/speichern, Migration v1–v5, WriteAtomic, Recent
+│   │   ├── CalibrationService.cs      # calibration.json (maschinenspezifisch)
+│   │   ├── UiStateService.cs          # ui.json (Fenster, Zoom, Splitter) + Plausibilisierung
+│   │   ├── ClipboardService.cs        # App-interner Copy-Puffer (Etiketten ODER Module)
+│   │   ├── CsvImportService.cs        # Zeichenweiser CSV-Parser, Encoding-Erkennung
+│   │   ├── ExcelImportService.cs      # ClosedXML-Import (erstes sichtbares Blatt)
+│   │   ├── SchematicParserService.cs  # PDF-Schaltplan-Parser (PdfPig + Regex)
+│   │   ├── TestAutomationService.cs   # Named-Pipe-Server mit Dispatch-Tabelle
+│   │   └── Log.cs                     # Datei-Logger mit Rotation
+│   ├── Controls/
+│   │   ├── MpPreviewControl.xaml      # Canvas
+│   │   └── MpPreviewControl.xaml.cs   # Entprellte MP-Vorschau, Klick-Selektion
+│   ├── Views/
+│   │   ├── PdfImportDialog.xaml       # DataGrid mit Modulauswahl + Warnungen
+│   │   └── PdfImportDialog.xaml.cs
+│   └── Converters/
+│       ├── BindingProxy.cs            # Freezable-Brücke für ContextMenu/RowDefinition
+│       └── NullToBoolConverter.cs     # NullToBool, BoolToVisibility, InverseBoolToVisibility
+└── tests/ETPrinter.Tests/
+    ├── ETPrinter.Tests.csproj
+    ├── Sta.cs                         # STA-Helfer für FixedDocument-Tests
+    ├── AddressGeneratorTests.cs
+    ├── ClipboardAndCloneTests.cs
+    ├── CriticalFixTests.cs            # AP1: Druckentscheidung, Leerseiten, Import-Blöcke, atomares Speichern
+    ├── CsvImportServiceTests.cs
+    ├── ImportRobustnessTests.cs       # AP4: CSV/Excel/PDF-Parser, SuggestVariant
+    ├── MediumFixTests.cs              # AP2
+    ├── MpModuleCatalogTests.cs
+    ├── MpModuleLayoutFactoryTests.cs
+    ├── MpModuleTests.cs
+    ├── PersistenceTests.cs            # Roundtrip v5, Migration v1/v2/v3
+    ├── ProductFamilyTests.cs
+    ├── ProjectMigrationTests.cs       # v4 → v5
+    ├── SheetGeometryTests.cs          # AP3
+    └── UxTests.cs                     # AP5
 ```
 
-## MVVM-Architektur (wie GravurApp)
-```
-MainWindow.xaml
-├── Links: Eingabe-Panel (ScrollViewer > StackPanel > GroupBoxen)
-│   ├── Format-Auswahl (ComboBox)
-│   ├── Etikett-Eingabe (TextBoxen, gebunden an SelectedLabel)
-│   ├── Einstellungen (Schrift, Raender)
-│   └── Aktions-Buttons (Uebertragen, Loeschen, Drucken)
-│
-├── GridSplitter
-│
-└── Rechts: A4-Vorschau (ScrollViewer > Viewbox > Canvas)
-    ├── Zoom-Slider
-    ├── A4-Blatt (weisser Border mit Schatten)
-    └── Etikettenraster (ItemsControl > UniformGrid)
-        └── Einzelnes Etikett (Border, klickbar, farbkodiert)
+Stand der Tests: 210 (CHANGELOG AP5), Smoke-Test 74/74 Prüfungen.
 
-View (XAML) ──bindet──> ViewModel (C#) ──nutzt──> Model (C#)
+## MVVM-Skizze
+
+```
+MainWindow.xaml  (DataContext = MainViewModel)
+├── Menü / Toolbar / Statusleiste
+├── LINKS (ScrollViewer, Spalte "LeftPanelColumn", Splitter 200–800 px)
+│   ├── GroupBox "Bearbeite: …"           EditTargetInfo, LayoutInfo
+│   ├── GroupBox Produktfamilie / Druckformat
+│   ├── TabControl (IsEnabled = HasSelection, SelectedIndex = InputTabIndex)
+│   │   ├── Tab 0 "Adress-Generator"      Modulname, Modultyp, Start-Byte, Anzahl, Vorschau
+│   │   ├── Tab 1 "Manuell"               nur SP (Kopfzeile, Zeile 1, Zeile 2); im MP-Modus ausgeblendet
+│   │   └── Tab 2 "MP Modul"              Siemens-Modul (Katalog), Variante, Header, Netzadresse,
+│   │                                     Netzname, CPU-Name, "Modul drucken", Adresszelle
+│   ├── GroupBox "Seite (gilt für alle Etiketten)"
+│   │       Kopfzeilen-Schrift, Ränder, Kalibrierung + Testseite, Blanko A4, Seite zurücksetzen
+│   ├── GroupBox "Schrift: <Auswahl>"     Schriftart/Größe/fett/kursiv (Live-Apply), "Auf alle anwenden"
+│   └── Buttons "Auswahl leeren" / "Alle löschen"
+└── RECHTS (PreviewHost)
+    ├── Zoom-Slider 0,3–4 + "Ganze Seite", Seitennavigation (◀ ▶ + Seite − Seite)
+    ├── SpScrollViewer  (sichtbar wenn !IsModuleBased)
+    │   └── A4-Border 630×891 px (3 px/mm), ScaleTransform(Zoom)
+    │       ├── ItemsControl(Labels) in UniformGrid, doppelt gespiegelt (Position 1 = unten rechts)
+    │       │   └── Etikett-Border: Kopfspalte (Breite aus SheetGeometry via BindingProxy),
+    │       │       horizontal: Line1Display/Line2Display in Viewbox (DownOnly),
+    │       │       vertikal:   Line1Parts / EffectiveLine2Parts als rotierte Slots
+    │       └── Zeilennummern 20..1 im rechten Seitenrand
+    └── MpScrollViewer  (sichtbar wenn IsModuleBased)
+        └── A4-Border → MpPreviewControl (Canvas, DispatcherTimer 40 ms Debounce)
+
+View (XAML) ──bindet──> MainViewModel ──nutzt──> Models
                               │
-                              └──> Services (Druck, Layout, IO)
+                              └──> Services (SheetGeometry, PrintService, ProjectService, Importe, …)
 ```
 
-## Druckformat-Definitionen (aus Excel-Analyse)
+Zwei Vorschau-Pfade, ein Druckpfad:
 
-### Seitengeometrie (A4 Hochformat)
-- **Papier:** 210 x 297 mm
-- **Standard-Raender:** Oben 20mm, Links 30mm, Unten 21mm, Rechts 25mm
-- **Druckbereich:** 155 x 256 mm
+- **ET 200SP**: rein deklarativ in XAML. Das `ItemsControl` ist per `ScaleTransform(-1,-1)`
+  gespiegelt und jedes Etikett zurückgespiegelt, damit Index 0 unten rechts liegt.
+  Rasterränder (`PreviewMargin`), Kopfspaltenbreite (`SpHeaderPreviewWidth`) und
+  Zeilennummern-Versatz (`RowNumbersMargin`) kommen aus dem ViewModel; `ColumnDefinition`
+  und `RowDefinition` hängen nicht im Visual Tree und werden über den `BindingProxy` gebunden.
+- **ET 200MP**: `MpPreviewControl` zeichnet Rechtecke und Textblöcke manuell auf einen Canvas.
+  Es hört auf `MpModules.CollectionChanged` sowie auf `SelectedMpModule`, `SelectedMpCell`,
+  `MpPreviewRefreshToken` und `IsModuleBased`; jede Änderung startet den 40-ms-Timer neu
+  (Bulk-Neuaufbau statt eines pro Tastendruck). `FlushRender` erzwingt den Aufbau für Screenshots.
+  Beim DataContext-Wechsel werden alte Handler abgemeldet.
+- **Druck**: `PrintService` baut aus denselben ViewModels ein `FixedDocument`; die Vorschau
+  zeigt das unverschobene Raster, der Druck addiert den Kalibrier-Versatz.
 
-### Zellengroessen pro Format
+Beide Modi teilen sich `MainViewModel`: `IsModuleBased` (aus `FormatInfo`) ist die Weiche,
+`HasSelection` deckt `SelectedLabel` und `SelectedMpModule` ab.
 
-| Format                            | Spalten | Zeilen | Zellen/Seite | Spaltenbreite    | Zeilenhoehe |
-|-----------------------------------|---------|--------|--------------|------------------|-------------|
-| Horizontal zweizeilig + Header    | 5x2     | 20     | 100          | ~6.6 + 26.7 mm  | ~6.6 mm     |
-| Horizontal zweizeilig             | 5       | 20     | 100          | ~31.0 mm         | ~6.6 mm     |
-| Horizontal einzeilig              | 7       | 20     | 140          | ~22.1 mm         | ~12.8 mm    |
-| Vertikal zweizeilig + Header      | 5x2     | 20     | 100          | ~6.6 + 26.7 mm  | ~6.6 mm     |
-| Vertikal zweizeilig               | 5       | 20     | 100          | ~31.0 mm         | ~6.6 mm     |
-| Vertikal einzeilig                | 7       | 20     | 140          | ~22.1 mm         | ~12.8 mm    |
+## Schlüsselkonzepte
 
-> Hinweis: Die exakten Masse werden aus den Excel-Spaltenwerten berechnet und muessen
-> beim Testdruck kalibriert werden. Drucker-Einzugsabweichungen koennen ueber die
-> Seitenraender kompensiert werden.
+### SheetGeometry – die einzige Geometriequelle
+`Services/SheetGeometry.cs` rechnet ausschließlich in Millimetern (`RectMm` mit `X, Y, W, H`,
+`Right`, `Bottom`). `SheetGeometry.For(format, settings, calX, calY)` liefert:
 
-### Textausrichtung
-- **Horizontal-Formate:** Text normal (0 Grad)
-- **Vertikal-Formate:** Text 90 Grad gedreht
-- **Header-Spalten:** Immer 90 Grad gedreht, zentriert
+- SP: `SpGroupWidth = PrintWidth / LabelsPerRow`, `SpHeaderWidth = 20 %` der Gruppenbreite bei
+  Formaten mit Kopfzeile, `SpCellHeight = PrintHeight / LabelRows`, `SpPosition(index)` spiegelt
+  (Index 0 = unten rechts), `SpLabelRect / SpHeaderRect / SpContentRect`.
+- MP: `ModuleWidth = PrintWidth / ColumnsPerPage`, Spaltenbreiten aus den Familien-Ratios,
+  `MpHeaderRect`, `MpModuleRect`, `MpCellRect(def)`, `MpNetAddressRect(block)`, `MpCpuRect`;
+  Bänder werden von oben mit festen Höhen gerastert, "Rand unten" ist wirkungslos.
+- `GridRect` für die Fadenkreuze der Kalibrierseite.
 
-## UI-Konzept (analog GravurApp)
-Das Layout orientiert sich am bestehenden Gravur-Programm (C:\claude\Gravur):
+Die Umrechnung in Geräteeinheiten macht der Aufrufer über `RectMm.Scale(factor)`:
+Druck `96 / 25.4` DIP je mm, Vorschau `3 px` je mm. `FormatDefinitions.GetCellSize` ist
+nur noch ein Wrapper.
 
-| Element              | GravurApp                    | ET-Printer                        |
-|----------------------|------------------------------|-----------------------------------|
-| Linke Spalte         | Schildformat + Text-Editor   | Format-Auswahl + Etikett-Editor   |
-| Rechte Spalte        | Magazin-Raster (klickbar)    | A4-Blatt-Vorschau (klickbar)      |
-| Einzelelement        | Schild in Canvas             | Etikett als Border mit Text       |
-| Auswahl              | Blau markiert                | Blau markiert                     |
-| Befuellt             | Gruen                        | Gruen                             |
-| Zoom                 | Slider 0.5x - 4.0x          | Slider 0.5x - 4.0x               |
-| Uebertragen-Button   | Ja                           | Ja                                |
+### PrintService
+- `BuildDocument(pages, …)` (SP) und `BuildMpDocument(pages, …)` (MP) erzeugen ein
+  `FixedDocument` ohne Dialog; Seiten ohne druckbaren Inhalt werden übersprungen.
+- `BuildCalibrationDocument` zeichnet zwei Fadenkreuze (Rasterecke oben links, unten rechts)
+  plus Infotext mit Format, Rändern und Versatz.
+- `Print(document, jobTitle)` zeigt den Windows-Druckdialog, erzwingt danach
+  `PageMediaSize = ISOA4` und `Portrait` im PrintTicket und liefert `false` bei Abbruch.
+- `IsPrintable(LabelViewModel)` = `HasText && IsPrintEnabled`;
+  `IsPrintable(MpModuleViewModel)` = `IsPrintEnabled && HasPrintableContent`.
+  Das ist die einzige Druckentscheidung (Seite, Schnittkanten, Inhalt, Test-Automation).
+- `RenderToPng(document, dir, dpi = 150)` rendert jede Seite als `page_NN.png` auf weißem Grund.
+- `FitBox`: Viewbox mit `StretchDirection.DownOnly` – Text wird verkleinert statt mit „…“
+  gekappt; die XAML-Vorschau nutzt dieselbe Konstruktion.
+- Schriftgrößen sind Punkt; der Druck rechnet `pt × 96/72` in DIP um, die Vorschau
+  `pt × 3 × 25.4/72` in px.
 
-## Schluessel-Entscheidungen
-1. **WPF statt WinForms** - Bessere Druckunterstützung via FixedDocument/FlowDocument,
-   MVVM-Pattern, moderne UI
-2. **.NET 8** - Aktuelles LTS, guter WPF-Support, System.Text.Json eingebaut
-3. **JSON als Projektformat** - Einfach, menschenlesbar, kein Drittanbieter noetig
-4. **FixedDocument fuer Druck** - Pixelgenaue Positionierung der Beschriftungen auf A4
-5. **Zwei-Spalten-Layout** - Bewaehrtes Pattern aus GravurApp: Eingabe links, Vorschau rechts
+### HasPrintableContent (SIWAREX)
+`MpModule.HasText` zählt nur Benutzertext (Header, editierbare Zellen, Netzadressen, CPU).
+`HasPrintableContent` ist `HasText` **oder** `IsFixedPinout(definitions)`: alle Zellen
+nicht editierbar und mindestens ein Label. Damit druckt ein SIWAREX-Streifen ohne Eingabe,
+ein leeres DI-16-Modul (nur „L+“/„M“) dagegen nicht.
+
+### Produktfamilien, Formate, Varianten, Katalog
+- `ProductFamily` (ET200SP, S71500_ET200MP, S71500_ET200MP_25mm) → `ProductFamilyInfo`
+  (Anzeigename, Bogen-Artikelnummer, Default-Ränder, geschätzte Maße, `ModulesPerPage`,
+  `ColumnsPerPage`, Spaltenanteile `Col0–Col3Ratio`, `RowsPerHalf`, `BandOf/ColumnOf`,
+  `HasNetAddressColumn`).
+- `LabelFormat` (10 Werte) → `FormatInfo` (Spalten, Zeilen je Etikett, Kopfzeile, vertikal,
+  `LabelsPerRow × LabelRows`, Familie, `BandsPerPage`, `ChannelRowsPerBand`, `IsModuleBased`).
+  `FormatDefinitions.GetFormatsForFamily` filtert die ComboBox, `GetDefaultFormat` wählt
+  HorizontalDouble / MP_Horizontal / MP25_Horizontal.
+- `MpModuleVariant` (9 Werte) = **Layout**: `MpModuleLayoutFactory` liefert je Variante ein
+  `MpCellDefinition[]` (StartRow, RowSpan, StartCol, ColSpan, IsEditable, Label).
+  `VariantsForFamily` trennt 35-mm- und 25-mm-Varianten, `DefaultVariantFor` liefert
+  DI_DQ_16 bzw. MP25_16. `GetGenericDefinitions(variant, ioType)` setzt bei DO-Modulen
+  die Versorgungslabels je Kanalgruppe (K9/K10, K29/K30 zusätzlich).
+- `MpModuleCatalog` = **Struktur-Labels**: konkreter Artikel → Variante + verifizierte
+  Zellen. `GetDefinitions(module)` nimmt den Katalogeintrag, wenn `ArticleNumber` gesetzt ist
+  und seine Variante zur Modulvariante passt, sonst die generische Belegung zum `IoType`.
+  Der Variant-Setter im ViewModel löscht einen nicht mehr passenden Artikel.
+
+### Persistenz (.etprint, Version 5)
+`LabelProject` enthält `Version`, `ProductFamily`, `Format`, `Settings`, `Pages` (SP),
+`MpPages` (MP, sonst null), Kalibrier-Offsets und `PrintGridLines`. `ProjectService.Load`
+migriert beim Lesen:
+
+| von | nach | Aktion |
+|-----|------|--------|
+| v1 | v2 | flache `Labels`-Liste → eine `LabelPage` |
+| v2 | v3 | `ProductFamily = ET200SP` |
+| v3 | v4 | `MpPages` möglich (bleibt null für SP) |
+| v4 | v5 | MP-Seiten von 5 auf `ModulesPerPage` Module auffüllen (Default-Variante der Familie) |
+
+Zusätzlich: `Pages`/`Settings` null-sicher, `ModuleIndex` immer auf die Listenposition
+normalisiert, `AddressCells` null-sicher, mindestens eine Seite, 50-MB-Größenlimit.
+`Save` schreibt über `WriteAtomic` (`.tmp` + `File.Move`, vorherige Version als `.bak`).
+`MainViewModel.BuildProject()` und `ApplyLoadedProject()` sind die gemeinsamen Ein-/Ausgänge
+für Dialoge, Recovery und Test-Automation.
+
+### Kalibrierung
+`CalibrationService` liest/schreibt `%LOCALAPPDATA%\ETPrinter\calibration.json`
+(`OffsetX`, `OffsetY` in mm, positiv = rechts/unten). Die Werte fließen nur in den Druck
+ein. Beim Laden eines Projekts hat eine vorhandene lokale Datei Vorrang vor den
+Projektwerten (maschinenspezifisch). Gespeichert wird erst nach tatsächlich gesendetem Druck.
+
+### Wiederherstellung nach Absturz
+`App.xaml.cs` registriert `DispatcherUnhandledException`, `AppDomain.UnhandledException`
+und `TaskScheduler.UnobservedTaskException`. Bei einer unbehandelten Exception wird geloggt,
+das Projekt nach `%LOCALAPPDATA%\ETPrinter\recovery.etprint` gesichert und ein Hinweis
+mit Logpfad angezeigt. Beim nächsten Start bietet `OfferRecovery` die Wiederherstellung an
+(Ja: laden + als geändert markieren; die Datei wird danach immer gelöscht).
+
+### Fensterzustand (ui.json)
+`UiStateService` speichert Position, Größe, Maximiert, Zoom und Splitterbreite in
+`%LOCALAPPDATA%\ETPrinter\ui.json`. `Sanitize` prüft die Position gegen den virtuellen
+Bildschirm (abgesteckter Zweitmonitor) und fällt sonst auf die Windows-Platzierung zurück.
+Ohne gespeicherten Zoom wird beim Start „Ganze Seite“ berechnet.
+
+### Logging
+`Services/Log.cs`: `Info/Warn/Error` nach `%LOCALAPPDATA%\ETPrinter\log.txt` mit Zeitstempel,
+Klassen- und Methodenname (CallerFilePath/CallerMemberName). Über 1 MB wird nach
+`log.old.txt` rotiert. Der Logger wirft nie; IO-Fehler gehen an `Debug.WriteLine`.
+
+### Test-Automation
+`TestAutomationService` ist ein Named-Pipe-Server (`ETPrinter_TestAutomation`), der nur
+mit `--test-automation` oder `ETPRINTER_TEST=1` startet. Befehle sind Zeilen
+`command arg…`, Antworten JSON `{ "ok": true, "result": … }` bzw. `{ "ok": false, "error": … }`.
+Eine Dispatch-Tabelle (`Commands`) enthält Usage, Beschreibung und Handler; `help` wird
+daraus generiert. Handler laufen über `RunOnUI` auf dem Dispatcher (mit Abbruch-Hook
+beim Shutdown). Pipe-Fehler lösen 1 s Backoff aus. Im Automation-Modus werden modale
+Rückfragen (`SuppressContentLossConfirm`) und Import-Infoboxen unterdrückt.
+Clients: `test-send.ps1` (Einzelbefehl) und `tools/smoke.ps1` (Szenarien SP/MP/25mm/
+Import/UX/Roundtrip, Screenshots + Druck-PNGs unter `test_results/<Name>/`, Exit-Code 1
+bei Fehlern).
+
+## Geometrie
+
+### ET 200SP (alle 6 Formate identisch: 5 × 20 = 100 Etiketten)
+
+| Größe | Wert |
+|-------|------|
+| Papier | A4 Hochformat 210 × 297 mm |
+| Ränder oben/links/unten/rechts | 20,5 / 27,5 / 20,5 / 27,5 mm |
+| Druckbereich | 155 × 256 mm |
+| Etikett (Gruppe) | 31 × 12,8 mm (gemessen am Bogen 6ES7193-6LA10-0AA0) |
+| Kopfspalte bei „+Kopfzeile“ | 20 % der Gruppenbreite = 6,2 mm, Textfeld 24,8 mm |
+| Position 1 | unten rechts; Index steigt nach links und nach oben |
+| Vertikale Formate | 8 Slots je Reihe (Klemmen der BaseUnit), zwei Reihen bei zweizeilig |
+
+### ET 200MP 35 mm (6ES7592-1AX00-0AA0)
+
+| Größe | Wert |
+|-------|------|
+| Ränder oben/links/unten/rechts | 14 / 25 / 19 / 12 mm (unten ohne Wirkung) |
+| Streifen je Bogen | 2 Bänder × 5 Spalten = 10 Positionen (Index 0–4 Band 0, 5–9 Band 1) |
+| Streifenbreite | (210 − 25 − 12) / 5 = 34,6 mm |
+| Header Band 1 / Band 2 | 25,7 mm / 20,6 mm |
+| Datenzeilen | 20 × 5,6 mm = 112 mm je Band |
+| Gesamthöhe Raster | 25,7 + 112 + 20,6 + 112 = 270,3 mm |
+| Spaltenanteile Klemmen links / rechts / Netzadresse / CPU | 1499 / 1499 / 804 / 768 von 4570 |
+| Netzadress-Spalte | Block 0 = Zeilen 1–10, Block 1 = Zeilen 11–20 |
+
+### ET 200MP 25 mm (6ES7592-2AX00-0AA0)
+
+| Größe | Wert |
+|-------|------|
+| Ränder | wie 35 mm |
+| Streifen je Bogen | 2 Bänder × 10 Spalten = 20 Positionen |
+| Streifenbreite | (210 − 25 − 12) / 10 = 17,3 mm |
+| Spaltenanteile links / rechts / Netzadresse / CPU | 17,7 / 17,7 / 0 / 13,8 von 49,2 (keine Netzadress-Spalte) |
+| Varianten | MP25_16 (20 Zeilen, colspan 2) und MP25_32 (20 × 2 Slots) |
+
+## Schlüsselentscheidungen
+
+1. **WPF + FixedDocument** – pixelgenaue mm-Positionierung auf A4, Druckdialog und
+   PrintTicket aus dem Framework, kein Drittanbieter.
+2. **Eine Geometrieklasse in mm** (AP3) – die MP-Geometrie war dreifach dupliziert und die
+   SP-Vorschau wich ~2 % vom Druck ab; jetzt gilt „Preview = Druck“ per Konstruktion.
+3. **Dialogfreie Dokumenterzeugung** (AP0) – `Build*Document` getrennt von `Print`, damit
+   Test-Automation und Unit-Tests exakt die Druckseiten prüfen können (`RenderToPng`).
+4. **Variante = Layout, Katalog = Struktur-Labels** – dieselbe Zellenzahl je Variante,
+   damit Texte beim Wechsel migrieren; Katalog-Einträge nur nach Datenblatt-Verifikation.
+5. **Modulbasiertes Datenmodell parallel zu SP** – `MpModule`/`MpPages` statt einer
+   Verallgemeinerung von `LabelCell`; SP-Code blieb unverändert.
+6. **Eine Druckentscheidung** (`IsPrintable`) und `HasPrintableContent` – verhindert,
+   dass Vorschau und Druck unterschiedlich entscheiden (SIWAREX-Fall).
+7. **JSON als Projektformat mit Versionsnummer und additiver Migration** – alte Dateien
+   bleiben ladbar, neue Felder haben Defaults (`IoType` → DI, `ArticleNumber` → null).
+8. **Atomares Schreiben + .bak + Recovery** – kein stiller Datenverlust bei Absturz oder
+   voller Platte.
+9. **Kalibrierung maschinenspezifisch** – lokale `calibration.json` schlägt Projektwerte,
+   ein fremdes Projekt darf den eigenen Druckversatz nicht verstellen.
+10. **Test-Automation nur auf Anforderung** – Named Pipe startet nur mit Flag/ENV, um die
+    Angriffsfläche in Produktion klein zu halten; Regex-Parser mit `NonBacktracking` + Timeout.
+11. **Entprellte MP-Vorschau** – DispatcherTimer statt Neuaufbau pro Tastendruck
+    (1000–1700 Canvas-Elemente).
+12. **Kein automatisches Seitenanlegen im MP-Modus** – Varianten und Start-Bytes werden
+    je Modul geprüft; SP legt nach dem letzten Etikett automatisch eine Seite an.

@@ -135,10 +135,10 @@
 - [x] Speichern/Laden v4 mit MpPages
 - [x] Adress-Generator fuer MP-Module (Adressen auf Zellen verteilen)
 
-## Phase 12: v2.5 - ET200MP Architektur-Korrektur [TEILWEISE]
-- [x] ARCHITEKTUR-FIX: 5 Module pro Seite (statt 10)
-  - Band 1 + Band 2 derselben Spalte = EIN physischer Beschriftungsstreifen
-  - MpCellDefinition mit Half-Feld (0=oben, 1=unten)
+## Phase 12: v2.5 - ET200MP Architektur-Korrektur [UEBERHOLT durch Phase 19]
+- [x] ARCHITEKTUR-FIX (v2.5): 5 Module pro Seite — seit v3.0 (Phase 19) wieder
+      10 Streifen-Positionen (2 Baender x 5 Spalten), jede Position ein eigenes Modul
+  - MpCellDefinition mit Half-Feld (0=oben, 1=unten) — alle Layouts nutzen nur Half 0
 - [x] EIN zusammenhaengender Streifen (Header nur einmal, Trennlinie statt 2. Header)
 - [x] Klemmenbelegung DI 32x24VDC HF (40 Klemmen, CH0-31, M/L+/GND)
 - [x] Adress-Generator: sequenzielle Adressen, Byte-Reihenfolge 0,2,1,3
@@ -269,10 +269,18 @@
 - [x] AP3 SheetGeometry fuer Druck/Vorschau/Kalibrierung, Migrations- + Roundtrip-Tests (173 Tests, Smoke 48/48)
 - [x] AP4 Import-Robustheit CSV/Excel/PDF + async + Auto-Variante (197 Tests, Smoke 62/62)
 - [x] AP5 Komfort/UX: Fensterzustand, Drag&Drop, Tastatur, Zoom-Fit, Wertebereiche, Panel-Umbau, MP-Tab, Info (210 Tests, Smoke 74/74)
-- [ ] AP6 Doku-Konsolidierung + Version
+- [x] AP6 Doku-Konsolidierung: ARCHITECTURE/FEATURES/PRODUCT neu, README, PRINT-FORMATS bereinigt, Version 3.1.0
 - [ ] AP7 Release v3.1
-- [ ] AP8 MP25_32-Datenblatt (Stahllineal bleibt offen)
+- [x] AP8 25mm-BA-Module datenblattverifiziert, 14 Katalog-Eintraege, MP25-Layouts mit Struktur (Stahllineal bleibt offen)
 - [ ] AP9 Katalog-Rest, MainViewModel-Zerlegung, Undo/Redo, inkrementelles Rendering
+
+## Abschlusskriterien v3.1 (ABSCHLUSSPLAN)
+1. Kein bekannter Bug mit falschem/fehlendem Druck oder stillem Datenverlust (AP1/AP2)
+2. Preview = Druck aus einer Geometriequelle (AP3)
+3. Doku beschreibt den Code (AP6)
+4. Eine Versionsnummer (csproj = Info-Dialog = CHANGELOG = Release)
+5. Release-EXE + README (AP7)
+6. Tests: Geometrie, Generator je Variante, Migration v1-v5, Importe (AP1-AP4)
 
 ## Blockierte Aufgaben (warten auf Hardware)
 - [ ] Exakte Masse per Stahllineal (6ES7592-1AX00, -2AX00)

@@ -394,12 +394,22 @@ public class MainViewModel : ViewModelBase
             _selectedMpModule.IoType = isCustom ? GenModuleType.Type : value.IoType;
             _selectedMpModule.ArticleNumber = isCustom ? null : value.ArticleNo;
 
-            // Generator-Modultyp am Katalogeintrag vorbelegen (DI/DO/AI/AO)
+            // Generator-Modultyp am Katalogeintrag vorbelegen (DI/DO/AI/AO) und die
+            // Anzahl auf die volle Kanalzahl des Moduls setzen (digital: Bytes = editierbare
+            // Zellen / 8, gemischt: je Spalte), damit "Generieren" das Modul komplett fuellt.
             if (!isCustom)
             {
                 var typeInfo = AddressGenerator.ModuleTypes.FirstOrDefault(t => t.Type == value.IoType);
                 if (typeInfo is not null)
+                {
                     GenModuleType = typeInfo;
+                    if (typeInfo.IsBitAddressed)
+                    {
+                        int editable = _selectedMpModule.AddressCells.Count(c => c.IsEditable);
+                        int bytes = Math.Max(1, (value.MixedOutputRightColumn ? editable / 2 : editable) / 8);
+                        GenCount = bytes;
+                    }
+                }
             }
 
             OnPropertyChanged();
@@ -1312,25 +1322,40 @@ public class MainViewModel : ViewModelBase
 
         if (info.IsBitAddressed)
         {
-            // Byte-Anzahl: 35mm-Varianten haben ein festes Kanalraster -> aus den
-            // editierbaren Zellen ableiten. 25mm-Varianten haben generische 20/40
-            // Slots (mehr als Kanaele) -> genCount (Bytes) entscheidet, Rest leer.
-            int maxBytes = editableCount / 8;
-            bool is25 = MpModuleLayoutFactory.Is25mmVariant(module.Variant);
-            int byteCount = is25
-                ? Math.Clamp(genCount, 1, Math.Max(1, maxBytes))
-                : Math.Max(1, maxBytes);
+            // Byte-Anzahl: das Kanalraster der Variante/Belegung begrenzt (editierbare
+            // Zellen / 8), genCount waehlt darunter (z.B. 8-Kanal-Modul in einem
+            // 16er-Streifen). Katalogwahl setzt genCount auf die volle Bytezahl.
+            int maxBytes = Math.Max(1, editableCount / 8);
+            int byteCount = Math.Clamp(genCount, 1, maxBytes);
 
-            var addresses = new List<string>();
-            for (int b = 0; b < byteCount; b++)
+            // Gemischtes DI/DQ-Modul (DI16/DQ16 BA): rechte Spalte = Ausgaenge mit
+            // A-Praefix, Bytezaehlung beginnt rechts wieder bei startByte.
+            var entry = MpModuleCatalog.Find(module.ArticleNumber);
+            bool mixed = entry is { MixedOutputRightColumn: true } && entry.Variant == module.Variant;
+            string outPrefix = AddressGenerator.ModuleTypes.First(m => m.Type == ModuleType.DO).Prefix;
+
+            var left = mixed ? editableCells.Where(c => c.StartCol == 0).ToList() : editableCells;
+            var right = mixed ? editableCells.Where(c => c.StartCol == 1).ToList() : [];
+
+            static void Fill(List<MpAddressCellViewModel> cells, string prefix, int start, int bytes)
             {
-                int byteNum = startByte + b;
-                for (int bit = 0; bit < 8; bit++)
-                    addresses.Add($"{info.Prefix} {byteNum}.{bit}");
+                var addresses = new List<string>();
+                for (int b = 0; b < bytes; b++)
+                    for (int bit = 0; bit < 8; bit++)
+                        addresses.Add($"{prefix} {start + b}.{bit}");
+                for (int i = 0; i < cells.Count; i++)
+                    cells[i].Text = i < addresses.Count ? addresses[i] : string.Empty;
             }
-            for (int i = 0; i < editableCells.Count; i++)
-                editableCells[i].Text = i < addresses.Count ? addresses[i] : string.Empty;
 
+            if (mixed)
+            {
+                int perSide = Math.Clamp(genCount, 1, Math.Max(1, left.Count / 8));
+                Fill(left, info.Prefix, startByte, perSide);
+                Fill(right, outPrefix, startByte, perSide);
+                return perSide;
+            }
+
+            Fill(left, info.Prefix, startByte, byteCount);
             return byteCount;
         }
         else
@@ -2005,6 +2030,12 @@ public class MainViewModel : ViewModelBase
                                 // Zellen neu generieren falls noetig
                                 if (mod.AddressCells.Count == 0)
                                     mod.AddressCells = MpModuleLayoutFactory.CreateCells(mod.Variant);
+                                // Artikel, der nicht zur Familie passt (z.B. DI 16 BA war bis
+                                // v3.0 als 35mm gefuehrt, ist aber ein 25mm-Modul): abwaehlen,
+                                // Texte bleiben, Belegung wird generisch.
+                                var entry = MpModuleCatalog.Find(mod.ArticleNumber);
+                                if (entry is not null && !MpModuleCatalog.FitsFamily(entry, _selectedFormat.Family))
+                                    mod.ArticleNumber = null;
                                 return CreateMpModuleViewModel(mod);
                             })
                             .ToList();

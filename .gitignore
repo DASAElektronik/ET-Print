@@ -28,4 +28,5 @@ _archiv/
 publish/
 test_results/
 *.png
+!src/ETPrinter/Assets/*.png
 *.tif

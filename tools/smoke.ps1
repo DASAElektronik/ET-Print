@@ -226,6 +226,25 @@ try {
     Invoke-Cmd "set-module-variant MP25_32" | Out-Null
     Invoke-Cmd "set-generator M32 DI 20 4" | Out-Null
     Invoke-Cmd "trigger-generate" | Out-Null
+    # AP8: MP25_32 hat die 40-Klemmen-Struktur -> Byte 2 beginnt rechts (Zelle 20 = K21)
+    Invoke-Cmd "select-module 1" | Out-Null
+    $m = Get-MpState
+    Assert-Eq 32 $m.filledCells "25mm MP25_32: 32 Adressen"
+    Assert-Eq "E 22.0" $m.cellTexts[20] "25mm MP25_32: Byte 2 beginnt in Spalte 2 (K21)"
+    Assert-Eq "E 21.7" $m.cellTexts[17] "25mm MP25_32: Byte 1 endet auf K18"
+    # AP8: 25mm-Katalog (DI 32 BA, gemischtes DI16/DQ16 BA)
+    Invoke-Cmd "select-module 2" | Out-Null
+    Invoke-Cmd "set-module-article 6ES7523-1BL00-0AA0" | Out-Null
+    Invoke-Cmd "set-generator MIX DI 30 2" | Out-Null
+    Invoke-Cmd "trigger-generate" | Out-Null
+    Invoke-Cmd "select-module 2" | Out-Null
+    $m = Get-MpState
+    Assert-Eq "E 30.0" $m.cellTexts[0] "DI16/DQ16 BA: links Eingaenge"
+    Assert-Eq "A 30.0" $m.cellTexts[20] "DI16/DQ16 BA: rechts Ausgaenge"
+    Assert-True ($m.structureLabels -contains "1/8:2L+") "DI16/DQ16 BA: K29 = 2L+"
+    $s = Get-State
+    Assert-True ($s.availableArticles -contains "6ES7521-1BL10-0AA0") "25mm Artikel enthalten DI 32 BA"
+    Assert-True ($s.availableArticles -contains "6ES7521-1BH10-0AA0") "25mm Artikel enthalten DI 16 BA"
     Invoke-Cmd "screenshot $OutDir\mp25_preview.png" | Out-Null
     $rp = Invoke-Cmd "render-print $OutDir\mp25_print" | ConvertFrom-Json
     Assert-True ($rp.pages -ge 1) "25mm render-print Seiten = $($rp.pages)"
