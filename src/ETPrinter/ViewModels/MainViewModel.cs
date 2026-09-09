@@ -11,8 +11,6 @@ using MpModuleLayout = ETPrinter.Models.MpModuleLayout;
 
 namespace ETPrinter.ViewModels;
 
-public record RecentFileItem(string FilePath, string DisplayName);
-
 public class MainViewModel : ViewModelBase
 {
     private ProductFamily _selectedProductFamily = ProductFamily.ET200SP;
@@ -35,16 +33,16 @@ public class MainViewModel : ViewModelBase
     private bool _printGridLines;
     private double _calibrationOffsetX;
     private double _calibrationOffsetY;
-    private string? _currentFilePath;
     private string _statusMessage = "Bereit";
-    private bool _isDirty;
 
-    // Multi-page support
-    private List<List<LabelViewModel>> _allPages = [];
-    private int _currentPageIndex;
+    // Seiten je Modus (alle Seiten + sichtbare Seite); nur eines ist aktiv
+    private readonly PageDocument<LabelViewModel> _spDoc = new();
+    private readonly PageDocument<MpModuleViewModel> _mpDoc = new();
+
+    /// <summary>Projektdatei: Pfad, Dirty-Zustand, Zuletzt geoeffnet, Neu/Oeffnen/Speichern.</summary>
+    public ProjectSession Session { get; }
 
     // ET200MP Module-based support
-    private List<List<MpModuleViewModel>> _allMpPages = [];
     private MpModuleViewModel? _selectedMpModule;
     private MpAddressCellViewModel? _selectedMpCell;
 
@@ -69,10 +67,24 @@ public class MainViewModel : ViewModelBase
         Panel.MarginsChanged += OnPanelMarginsChanged;
         Panel.StatusRequested += msg => StatusMessage = msg;
 
+        Session = new ProjectSession(_dialogs)
+        {
+            Snapshot = BuildProject,
+            Restore = ApplyLoadedProject,
+            ResetToEmpty = ResetWorkspace,
+            PageCountProvider = () => PageCount
+        };
+        Session.StatusRequested += msg => StatusMessage = msg;
+        Session.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(ProjectSession.IsDirty))
+                OnPropertyChanged(nameof(IsDirty));
+            if (e.PropertyName is nameof(ProjectSession.IsDirty) or nameof(ProjectSession.CurrentFilePath))
+                OnPropertyChanged(nameof(WindowTitle));
+        };
+
         AvailableProductFamilies = new ObservableCollection<ProductFamilyInfo>(ProductFamilyDefinitions.All);
         AvailableFormats = new ObservableCollection<FormatInfo>(FormatDefinitions.GetFormatsForFamily(ProductFamily.ET200SP));
-        Labels = new ObservableCollection<LabelViewModel>();
-        MpModules = new ObservableCollection<MpModuleViewModel>();
         AvailableMpVariants = new ObservableCollection<MpModuleLayout>(
             Services.MpModuleLayoutFactory.VariantsForFamily(_selectedProductFamily));
         FontSizes = [4, 5, 6, 7, 8, 9, 10];
@@ -90,16 +102,16 @@ public class MainViewModel : ViewModelBase
         PrintCommand = new RelayCommand(PrintLabels);
         PrintCurrentPageCommand = new RelayCommand(PrintCurrentPage);
         PrintCalibrationCommand = new RelayCommand(PrintCalibration);
-        NewProjectCommand = new RelayCommand(NewProject);
-        SaveCommand = new RelayCommand(SaveProject);
-        SaveAsCommand = new RelayCommand(SaveProjectAs);
-        OpenCommand = new RelayCommand(OpenProject);
-        OpenRecentCommand = new RelayCommand<string>(OpenRecentFile);
+        NewProjectCommand = new RelayCommand(Session.NewProject);
+        SaveCommand = new RelayCommand(Session.Save);
+        SaveAsCommand = new RelayCommand(Session.SaveAs);
+        OpenCommand = new RelayCommand(Session.Open);
+        OpenRecentCommand = new RelayCommand<string>(Session.OpenRecent);
         UpdateHeaderCommand = new RelayCommand(UpdateHeader, () => SelectedLabel is not null || SelectedMpModule is not null);
 
         // Page navigation commands
-        NextPageCommand = new RelayCommand(NextPage, () => _currentPageIndex < PageCount - 1);
-        PrevPageCommand = new RelayCommand(PrevPage, () => _currentPageIndex > 0);
+        NextPageCommand = new RelayCommand(NextPage, () => CurrentPageIndex < PageCount - 1);
+        PrevPageCommand = new RelayCommand(PrevPage, () => CurrentPageIndex > 0);
         AddPageCommand = new RelayCommand(AddPage);
         RemovePageCommand = new RelayCommand(RemovePage, () => PageCount > 1);
 
@@ -121,16 +133,15 @@ public class MainViewModel : ViewModelBase
         PasteCommand = new RelayCommand(PasteFromClipboard, CanPaste);
 
         LoadCalibration();
-        RefreshRecentFiles();
         InitializeLabels();
     }
 
     public ObservableCollection<ProductFamilyInfo> AvailableProductFamilies { get; }
     public ObservableCollection<FormatInfo> AvailableFormats { get; }
-    public ObservableCollection<MpModuleViewModel> MpModules { get; }
+    public ObservableCollection<MpModuleViewModel> MpModules => _mpDoc.Visible;
     public ObservableCollection<MpModuleLayout> AvailableMpVariants { get; }
-    public ObservableCollection<LabelViewModel> Labels { get; }
-    public ObservableCollection<RecentFileItem> RecentFiles { get; } = new();
+    public ObservableCollection<LabelViewModel> Labels => _spDoc.Visible;
+    public ObservableCollection<RecentFileItem> RecentFiles => Session.RecentFiles;
     public ObservableCollection<string> AvailableFonts { get; }
     public int[] FontSizes { get; }
 
@@ -144,8 +155,10 @@ public class MainViewModel : ViewModelBase
     }
 
     private bool HasAnyContent() =>
-        _allPages.Any(p => p.Any(l => l.HasText))
-        || _allMpPages.Any(p => p.Any(m => m.HasPrintableContent));
+        _spDoc.AllItems.Any(l => l.HasText)
+        || _mpDoc.AllItems.Any(m => m.HasPrintableContent);
+
+    private int ModulesPerPage => ProductFamilyDefinitions.Get(_selectedFormat.Family).ModulesPerPage;
 
     /// <summary>Fuer die Notfall-Sicherung im globalen Exception-Handler.</summary>
     internal bool HasAnyContentForRecovery => HasAnyContent();
@@ -228,7 +241,7 @@ public class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsMultiBand));
             OnPropertyChanged(nameof(WindowTitle));
             // Verworfener Inhalt oder geaenderte Raender = ungespeicherte Aenderung
-            if (hadContent || _currentFilePath is not null) IsDirty = true;
+            if (hadContent || Session.CurrentFilePath is not null) IsDirty = true;
         }
     }
 
@@ -427,7 +440,7 @@ public class MainViewModel : ViewModelBase
                 InputTabIndex = value.IsModuleBased ? 2 : 0;
                 // Verworfener Inhalt = ungespeicherte Aenderung (Laden/Neu setzen danach
                 // selbst IsDirty=false)
-                if (hadContent || _currentFilePath is not null) IsDirty = true;
+                if (hadContent || Session.CurrentFilePath is not null) IsDirty = true;
                 OnPropertyChanged(nameof(IsMarginBottomEditable));
                 OnPropertyChanged(nameof(EditTargetInfo));
                 OnPropertyChanged(nameof(LayoutInfo));
@@ -474,7 +487,7 @@ public class MainViewModel : ViewModelBase
                     // Schrift-Einstellungen des Etiketts laden — Live-Apply aussetzen,
                     // sonst wuerde das Label sofort auf seine eigenen Werte "ueberschrieben".
                     Panel.LoadFont(value.CellFontSize, value.CellIsBold, value.CellIsItalic, value.CellFontFamily);
-                    StatusMessage = $"Etikett {value.DisplayPosition}/{Labels.Count} (Seite {_currentPageIndex + 1}/{PageCount})";
+                    StatusMessage = $"Etikett {value.DisplayPosition}/{Labels.Count} (Seite {CurrentPageIndex + 1}/{PageCount})";
                 }
                 OnPropertyChanged(nameof(SelectedLabelInfo));
                 OnPropertyChanged(nameof(EditTargetInfo));
@@ -485,7 +498,7 @@ public class MainViewModel : ViewModelBase
     }
 
     public string SelectedLabelInfo => SelectedLabel is not null
-        ? $"Etikett {SelectedLabel.DisplayPosition} von {Labels.Count} (Seite {_currentPageIndex + 1})"
+        ? $"Etikett {SelectedLabel.DisplayPosition} von {Labels.Count} (Seite {CurrentPageIndex + 1})"
         : "Kein Etikett ausgewaehlt";
 
     /// <summary>"Bearbeite:"-Zeile, familienbewusst (MP: Modul statt Etikett).</summary>
@@ -539,44 +552,32 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Ungespeicherte Aenderungen (Zustand liegt in <see cref="Session"/>).</summary>
     public bool IsDirty
     {
-        get => _isDirty;
-        private set
-        {
-            if (SetProperty(ref _isDirty, value))
-                OnPropertyChanged(nameof(WindowTitle));
-        }
+        get => Session.IsDirty;
+        private set => Session.IsDirty = value;
     }
 
     public string WindowTitle
     {
         get
         {
-            var dirty = _isDirty ? " *" : "";
-            return _currentFilePath is not null
-                ? $"ET-Printer - {Path.GetFileName(_currentFilePath)}{dirty}"
+            var dirty = Session.IsDirty ? " *" : "";
+            return Session.FileName is { } name
+                ? $"ET-Printer - {name}{dirty}"
                 : $"ET-Printer - {_selectedFormat.DisplayName}{dirty}";
         }
     }
 
     // === Multi-page properties ===
-    public int CurrentPageIndex
-    {
-        get => _currentPageIndex;
-        set
-        {
-            if (SetProperty(ref _currentPageIndex, value))
-            {
-                OnPropertyChanged(nameof(PageCount));
-                OnPropertyChanged(nameof(PageIndicator));
-            }
-        }
-    }
+    private IPageDocument ActiveDocument => _selectedFormat.IsModuleBased ? _mpDoc : _spDoc;
 
-    public int PageCount => _selectedFormat.IsModuleBased ? _allMpPages.Count : _allPages.Count;
+    public int CurrentPageIndex => ActiveDocument.CurrentIndex;
 
-    public string PageIndicator => $"Seite {_currentPageIndex + 1} / {PageCount}";
+    public int PageCount => ActiveDocument.PageCount;
+
+    public string PageIndicator => $"Seite {CurrentPageIndex + 1} / {PageCount}";
 
     // === Manuelle Eingabefelder ===
     public string InputHeader
@@ -764,14 +765,12 @@ public class MainViewModel : ViewModelBase
     private void ApplyFontToAll()
     {
         int count = 0;
-        foreach (var page in _allPages)
-            foreach (var l in page) { ApplyFontToLabel(l); count++; }
-        foreach (var page in _allMpPages)
-            foreach (var m in page)
-            {
-                m.FontSize = Panel.FontSize; m.IsBold = Panel.IsBold; m.IsItalic = Panel.IsItalic; m.FontFamily = Panel.FontFamily;
-                count++;
-            }
+        foreach (var l in _spDoc.AllItems) { ApplyFontToLabel(l); count++; }
+        foreach (var m in _mpDoc.AllItems)
+        {
+            m.FontSize = Panel.FontSize; m.IsBold = Panel.IsBold; m.IsItalic = Panel.IsItalic; m.FontFamily = Panel.FontFamily;
+            count++;
+        }
         Panel.StoreFontInSettings();
         IsDirty = true;
         NotifyMpPreviewChanged();
@@ -780,16 +779,7 @@ public class MainViewModel : ViewModelBase
 
     /// <summary>Oeffnet eine Projektdatei (Drag&Drop, Kommandozeile) mit Rueckfrage bei
     /// ungespeicherten Aenderungen.</summary>
-    public void OpenFile(string path)
-    {
-        if (!File.Exists(path))
-        {
-            StatusMessage = "Datei nicht gefunden";
-            return;
-        }
-        if (!ConfirmDiscardChanges()) return;
-        DoOpen(path);
-    }
+    public void OpenFile(string path) => Session.OpenFile(path);
     public ICommand NewProjectCommand { get; }
     public ICommand SaveCommand { get; }
     public ICommand SaveAsCommand { get; }
@@ -818,35 +808,17 @@ public class MainViewModel : ViewModelBase
 
     private void InitializeLabels()
     {
-        Labels.Clear();
-        MpModules.Clear();
         SelectedLabel = null;
         SelectedMpModule = null;
         SelectedMpCell = null;
-        _allPages.Clear();
-        _allMpPages.Clear();
+        _spDoc.Clear();
+        _mpDoc.Clear();
 
         if (_selectedFormat.IsModuleBased)
-        {
-            // ET200MP: Module erstellen
-            var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
-            int modulesPerPage = familyInfo.ModulesPerPage;
-            var firstPage = CreateEmptyMpPage(modulesPerPage);
-            _allMpPages.Add(firstPage);
-            foreach (var mod in firstPage)
-                MpModules.Add(mod);
-        }
+            _mpDoc.Reset(CreateEmptyMpPage(ModulesPerPage));
         else
-        {
-            // ET200SP: bisherige Logik
-            int count = _selectedFormat.LabelsPerPage;
-            var firstPage = CreateEmptyPage(count);
-            _allPages.Add(firstPage);
-            foreach (var lvm in firstPage)
-                Labels.Add(lvm);
-        }
+            _spDoc.Reset(CreateEmptyPage(_selectedFormat.LabelsPerPage));
 
-        _currentPageIndex = 0;
         NotifyPageProperties();
         OnPropertyChanged(nameof(IsModuleBased));
 
@@ -898,27 +870,20 @@ public class MainViewModel : ViewModelBase
         // unsichtbar markierte Etiketten einer anderen Seite.
         ClearChecksOnAllPages();
 
+        if (index < 0 || index >= PageCount) return;
         if (_selectedFormat.IsModuleBased)
         {
-            if (index < 0 || index >= _allMpPages.Count) return;
-            _currentPageIndex = index;
-            MpModules.Clear();
             SelectedMpModule = null;
             SelectedMpCell = null;
-            foreach (var mod in _allMpPages[index])
-                MpModules.Add(mod);
+            _mpDoc.Show(index);
             NotifyPageProperties();
             if (MpModules.Count > 0)
                 SelectedMpModule = MpModules[0];
         }
         else
         {
-            if (index < 0 || index >= _allPages.Count) return;
-            _currentPageIndex = index;
-            Labels.Clear();
             SelectedLabel = null;
-            foreach (var lvm in _allPages[index])
-                Labels.Add(lvm);
+            _spDoc.Show(index);
             NotifyPageProperties();
             if (Labels.Count > 0)
                 SelectedLabel = Labels[0];
@@ -934,32 +899,23 @@ public class MainViewModel : ViewModelBase
 
     private void NextPage()
     {
-        if (_currentPageIndex < PageCount - 1)
-            NavigateToPage(_currentPageIndex + 1);
+        if (CurrentPageIndex < PageCount - 1)
+            NavigateToPage(CurrentPageIndex + 1);
     }
 
     private void PrevPage()
     {
-        if (_currentPageIndex > 0)
-            NavigateToPage(_currentPageIndex - 1);
+        if (CurrentPageIndex > 0)
+            NavigateToPage(CurrentPageIndex - 1);
     }
 
     private void AddPage()
     {
         if (_selectedFormat.IsModuleBased)
-        {
-            var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
-            var newPage = CreateEmptyMpPage(familyInfo.ModulesPerPage);
-            _allMpPages.Add(newPage);
-            NavigateToPage(_allMpPages.Count - 1);
-        }
+            _mpDoc.AddPage(CreateEmptyMpPage(ModulesPerPage));
         else
-        {
-            int count = _selectedFormat.LabelsPerPage;
-            var newPage = CreateEmptyPage(count);
-            _allPages.Add(newPage);
-            NavigateToPage(_allPages.Count - 1);
-        }
+            _spDoc.AddPage(CreateEmptyPage(_selectedFormat.LabelsPerPage));
+        NavigateToPage(PageCount - 1);
         IsDirty = true;
         StatusMessage = $"Seite {PageCount} hinzugefuegt";
     }
@@ -970,24 +926,16 @@ public class MainViewModel : ViewModelBase
             ? MpModules.Any(m => m.HasPrintableContent)
             : Labels.Any(l => l.HasText);
         if (pageHasContent && !ConfirmDestructive(
-                $"Seite {_currentPageIndex + 1} enthaelt befuellte Etiketten/Module.\n\nSeite wirklich entfernen?",
+                $"Seite {CurrentPageIndex + 1} enthaelt befuellte Etiketten/Module.\n\nSeite wirklich entfernen?",
                 "Seite entfernen"))
             return;
 
-        if (_selectedFormat.IsModuleBased)
-        {
-            if (_allMpPages.Count <= 1) return;
-            int removedIndex = _currentPageIndex;
-            _allMpPages.RemoveAt(removedIndex);
-            NavigateToPage(Math.Min(removedIndex, _allMpPages.Count - 1));
-        }
-        else
-        {
-            if (_allPages.Count <= 1) return;
-            int removedIndex = _currentPageIndex;
-            _allPages.RemoveAt(removedIndex);
-            NavigateToPage(Math.Min(removedIndex, _allPages.Count - 1));
-        }
+        int removedIndex = CurrentPageIndex;
+        bool removed = _selectedFormat.IsModuleBased
+            ? _mpDoc.RemovePage(removedIndex)
+            : _spDoc.RemovePage(removedIndex);
+        if (!removed) return;
+        NavigateToPage(CurrentPageIndex); // Auswahl/Markierungen der neuen Seite setzen
         IsDirty = true;
         StatusMessage = $"Seite entfernt ({PageCount} Seiten verbleibend)";
     }
@@ -1186,10 +1134,10 @@ public class MainViewModel : ViewModelBase
         {
             SelectedLabel = Labels[nextIndex];
         }
-        else if (_currentPageIndex < PageCount - 1)
+        else if (CurrentPageIndex < PageCount - 1)
         {
             // At last label of current page, advance to first label of next page
-            NavigateToPage(_currentPageIndex + 1);
+            NavigateToPage(CurrentPageIndex + 1);
         }
         else
         {
@@ -1209,9 +1157,9 @@ public class MainViewModel : ViewModelBase
         {
             SelectedMpModule = MpModules[currentIndex + 1];
         }
-        else if (_currentPageIndex < PageCount - 1)
+        else if (CurrentPageIndex < PageCount - 1)
         {
-            NavigateToPage(_currentPageIndex + 1);
+            NavigateToPage(CurrentPageIndex + 1);
             if (MpModules.Count > 0)
                 SelectedMpModule = MpModules[0];
         }
@@ -1228,10 +1176,8 @@ public class MainViewModel : ViewModelBase
 
     private void ClearChecksOnAllPages()
     {
-        foreach (var page in _allPages)
-            foreach (var l in page) l.IsChecked = false;
-        foreach (var page in _allMpPages)
-            foreach (var m in page) m.IsChecked = false;
+        foreach (var l in _spDoc.AllItems) l.IsChecked = false;
+        foreach (var m in _mpDoc.AllItems) m.IsChecked = false;
     }
 
     public void ClearAllMpModuleChecks()
@@ -1421,57 +1367,17 @@ public class MainViewModel : ViewModelBase
                 "Alle loeschen"))
             return;
 
-        if (_selectedFormat.IsModuleBased)
+        // Alle Seiten auf eine leere Seite zuruecksetzen (SP wie MP)
+        InitializeLabels();
+        if (!_selectedFormat.IsModuleBased)
         {
-            // ET200MP: alle Modul-Seiten auf eine leere Seite zuruecksetzen
-            _allMpPages.Clear();
-            MpModules.Clear();
-            SelectedMpModule = null;
-            SelectedMpCell = null;
-
-            var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
-            var firstMpPage = CreateEmptyMpPage(familyInfo.ModulesPerPage);
-            _allMpPages.Add(firstMpPage);
-            _currentPageIndex = 0;
-
-            foreach (var vm in firstMpPage)
-                MpModules.Add(vm);
-
-            NotifyPageProperties();
-            NotifyMpPreviewChanged();
-
-            if (MpModules.Count > 0)
-                SelectedMpModule = MpModules[0];
-
-            IsDirty = true;
-            StatusMessage = "Alle Module geloescht";
-            return;
+            InputHeader = string.Empty;
+            InputLine1 = string.Empty;
+            InputLine2 = string.Empty;
         }
-
-        // Clear all pages and reset to single empty page
-        _allPages.Clear();
-        Labels.Clear();
-        SelectedLabel = null;
-
-        int count = _selectedFormat.LabelsPerPage;
-        var firstPage = CreateEmptyPage(count);
-        _allPages.Add(firstPage);
-        _currentPageIndex = 0;
-
-        foreach (var lvm in firstPage)
-            Labels.Add(lvm);
-
-        NotifyPageProperties();
-
-        InputHeader = string.Empty;
-        InputLine1 = string.Empty;
-        InputLine2 = string.Empty;
-
-        if (Labels.Count > 0)
-            SelectedLabel = Labels[0];
-
+        NotifyMpPreviewChanged();
         IsDirty = true;
-        StatusMessage = "Alle Etiketten geloescht";
+        StatusMessage = _selectedFormat.IsModuleBased ? "Alle Module geloescht" : "Alle Etiketten geloescht";
     }
 
     // === Live-Preview Apply-Helfer (aus Input-Settern aufgerufen) ===
@@ -1550,14 +1456,14 @@ public class MainViewModel : ViewModelBase
         label.CellFontFamily = Panel.FontFamily;
     }
 
-    private void NewProject()
+    /// <summary>Arbeitsbereich auf ein leeres SP-Projekt zuruecksetzen (fuer
+    /// <see cref="ProjectSession.NewProject"/>; Rueckfrage, Pfad und Dirty-Reset macht
+    /// die Session, daher hier kein zweiter Inhaltsverlust-Prompt).</summary>
+    private void ResetWorkspace()
     {
-        // Dirty-Check hat den User schon gefragt — kein zweiter Inhaltsverlust-Prompt
-        if (!ConfirmDiscardChanges()) return;
         _suppressContentLossConfirm = true;
         try
         {
-            _currentFilePath = null;
             ApplyFamilyCore(ProductFamily.ET200SP);
             _settings.Reset();
             ResetSettings();
@@ -1576,34 +1482,17 @@ public class MainViewModel : ViewModelBase
 
             OnPropertyChanged(nameof(BandsPerPage));
             OnPropertyChanged(nameof(IsMultiBand));
-            IsDirty = false;
-            OnPropertyChanged(nameof(WindowTitle));
-            StatusMessage = "Neues Projekt erstellt";
         }
         finally { _suppressContentLossConfirm = false; }
     }
 
-    private void SaveProject()
-    {
-        if (_currentFilePath is null) { SaveProjectAs(); return; }
-        DoSave(_currentFilePath);
-    }
-
-    private void SaveProjectAs()
-    {
-        var path = _dialogs.SaveFile(ProjectFileFilter, ".etprint",
-            Path.GetFileNameWithoutExtension(_currentFilePath ?? "Projekt"));
-        if (path is not null)
-            DoSave(path);
-    }
-
     /// <summary>Serialisiert den KOMPLETTEN Projektzustand (alle Seiten aus
-    /// _allPages/_allMpPages). Gemeinsame Quelle fuer DoSave und Test-Automation —
+    /// _spDoc/_mpDoc). Gemeinsame Quelle fuer ProjectSession.DoSave und Test-Automation —
     /// der Automation-Pfad speicherte frueher nur die sichtbare Seite.</summary>
     internal LabelProject BuildProject()
     {
-        // Build pages from _allPages (LabelViewModels -> LabelCells)
-        var pages = _allPages.Select(pageVms => new LabelPage
+        // Seiten serialisieren (LabelViewModels -> LabelCells)
+        var pages = _spDoc.Pages.Select(pageVms => new LabelPage
         {
             Labels = pageVms.Select(vm => vm.GetCell()).ToList()
         }).ToList();
@@ -1612,7 +1501,7 @@ public class MainViewModel : ViewModelBase
         List<MpModulePage>? mpPages = null;
         if (_selectedFormat.IsModuleBased)
         {
-            mpPages = _allMpPages.Select(pageMods => new MpModulePage
+            mpPages = _mpDoc.Pages.Select(pageMods => new MpModulePage
             {
                 Modules = pageMods.Select(vm => vm.GetModule()).ToList()
             }).ToList();
@@ -1629,75 +1518,6 @@ public class MainViewModel : ViewModelBase
             CalibrationOffsetY = CalibrationOffsetY,
             PrintGridLines = PrintGridLines
         };
-    }
-
-    private bool DoSave(string filePath)
-    {
-        try
-        {
-            ProjectService.Save(BuildProject(), filePath);
-            _currentFilePath = filePath;
-            IsDirty = false;
-            OnPropertyChanged(nameof(WindowTitle));
-            RefreshRecentFiles();
-            StatusMessage = $"Gespeichert: {Path.GetFileName(filePath)} ({PageCount} Seiten)";
-            return true;
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Speicherfehler: {ex.Message}";
-            // Modal melden: beim Schliessen/Neu/Oeffnen ist die Statusleiste nicht
-            // (mehr) sichtbar — ohne Dialog wuerden Daten kommentarlos verworfen.
-            _dialogs.ShowError($"Das Projekt konnte nicht gespeichert werden:\n{ex.Message}", "Speicherfehler");
-            return false;
-        }
-    }
-
-    private void OpenProject()
-    {
-        if (!ConfirmDiscardChanges()) return;
-        var path = _dialogs.OpenFile(ProjectFileFilter, "Projekt oeffnen");
-        if (path is not null)
-            DoOpen(path);
-    }
-
-    private void OpenRecentFile(string? filePath)
-    {
-        if (filePath is null) return;
-        if (!File.Exists(filePath))
-        {
-            // Toter Eintrag: anbieten, ihn aus der Liste zu entfernen
-            if (_dialogs.Confirm(
-                $"Die Datei wurde nicht gefunden:\n{filePath}\n\nEintrag aus der Liste entfernen?",
-                "Datei nicht gefunden"))
-            {
-                ProjectService.RemoveRecentFile(filePath);
-                RefreshRecentFiles();
-            }
-            StatusMessage = "Datei nicht gefunden";
-            return;
-        }
-        if (!ConfirmDiscardChanges()) return;
-        DoOpen(filePath);
-    }
-
-    private void DoOpen(string filePath)
-    {
-        try
-        {
-            // Recent-Eintrag erst nach erfolgreichem Laden (eine kaputte Datei
-            // wanderte sonst an die Spitze der Liste)
-            var project = ProjectService.Load(filePath, addToRecent: false);
-            ApplyLoadedProject(project, filePath);
-            ProjectService.AddRecentFile(filePath);
-            RefreshRecentFiles();
-            StatusMessage = $"Geladen: {Path.GetFileName(filePath)} ({PageCount} Seiten)";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Ladefehler: {ex.Message}";
-            _dialogs.ShowError($"Das Projekt konnte nicht geladen werden:\n{filePath}\n\n{ex.Message}", "Ladefehler");
-        }
     }
 
     /// <summary>Uebertraegt ein geladenes Projekt vollstaendig in den ViewModel-Zustand
@@ -1723,11 +1543,9 @@ public class MainViewModel : ViewModelBase
 
             if (_selectedFormat.IsModuleBased)
             {
-                // Build _allMpPages from project.MpPages
-                _allMpPages.Clear();
-                MpModules.Clear();
                 SelectedMpModule = null;
                 SelectedMpCell = null;
+                _mpDoc.Clear();
 
                 if (project.MpPages != null && project.MpPages.Count > 0)
                 {
@@ -1760,19 +1578,14 @@ public class MainViewModel : ViewModelBase
                             module.AddressCells = MpModuleLayoutFactory.CreateCells(module.Variant);
                             pageVms.Add(CreateMpModuleViewModel(module));
                         }
-                        _allMpPages.Add(pageVms);
+                        _mpDoc.AddPage(pageVms);
                     }
                 }
 
-                if (_allMpPages.Count == 0)
-                {
-                    var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
-                    _allMpPages.Add(CreateEmptyMpPage(familyInfo.ModulesPerPage));
-                }
+                if (_mpDoc.PageCount == 0)
+                    _mpDoc.AddPage(CreateEmptyMpPage(ModulesPerPage));
 
-                _currentPageIndex = 0;
-                foreach (var mod in _allMpPages[0])
-                    MpModules.Add(mod);
+                _mpDoc.Show(0);
                 NotifyPageProperties();
                 OnPropertyChanged(nameof(IsModuleBased));
                 if (MpModules.Count > 0)
@@ -1780,8 +1593,8 @@ public class MainViewModel : ViewModelBase
             }
             else
             {
-                // Build _allPages from project.Pages (ET200SP)
-                _allPages.Clear();
+                // Seiten aus project.Pages aufbauen (ET200SP)
+                _spDoc.Clear();
                 int labelsPerPage = _selectedFormat.LabelsPerPage;
 
                 foreach (var projectPage in project.Pages)
@@ -1804,17 +1617,14 @@ public class MainViewModel : ViewModelBase
                         }
                         pageVms.Add(CreateLabelViewModel(cell));
                     }
-                    _allPages.Add(pageVms);
+                    _spDoc.AddPage(pageVms);
                 }
 
-                if (_allPages.Count == 0)
-                    _allPages.Add(CreateEmptyPage(labelsPerPage));
+                if (_spDoc.PageCount == 0)
+                    _spDoc.AddPage(CreateEmptyPage(labelsPerPage));
 
-                _currentPageIndex = 0;
-                Labels.Clear();
                 SelectedLabel = null;
-                foreach (var lvm in _allPages[0])
-                    Labels.Add(lvm);
+                _spDoc.Show(0);
                 NotifyPageProperties();
                 OnPropertyChanged(nameof(IsModuleBased));
             }
@@ -1848,20 +1658,10 @@ public class MainViewModel : ViewModelBase
             }
             PrintGridLines = project.PrintGridLines;
 
-            _currentFilePath = filePath;
-            IsDirty = false;
-            OnPropertyChanged(nameof(WindowTitle));
-            RefreshRecentFiles();
+            Session.MarkLoaded(filePath);
             if (Labels.Count > 0) SelectedLabel = Labels[0];
         }
         finally { _suppressContentLossConfirm = false; }
-    }
-
-    private void RefreshRecentFiles()
-    {
-        RecentFiles.Clear();
-        foreach (var path in ProjectService.LoadRecentFiles())
-            RecentFiles.Add(new RecentFileItem(path, Path.GetFileName(path)));
     }
 
     /// <summary>Baut das Druckdokument des gesamten Projekts (alle Seiten) — ohne
@@ -1871,17 +1671,11 @@ public class MainViewModel : ViewModelBase
     {
         if (_selectedFormat.IsModuleBased)
         {
-            var mpPrintPages = _allMpPages
-                .Select(page => (IReadOnlyList<MpModuleViewModel>)page.AsReadOnly())
-                .ToList();
-            return PrintService.BuildMpDocument(mpPrintPages, _selectedFormat, _settings, PrintGridLines,
+            return PrintService.BuildMpDocument(_mpDoc.Pages, _selectedFormat, _settings, PrintGridLines,
                 CalibrationOffsetX, CalibrationOffsetY);
         }
 
-        var printPages = _allPages
-            .Select(page => (IReadOnlyList<LabelViewModel>)page.AsReadOnly())
-            .ToList();
-        return PrintService.BuildDocument(printPages, _selectedFormat, _settings, PrintGridLines,
+        return PrintService.BuildDocument(_spDoc.Pages, _selectedFormat, _settings, PrintGridLines,
             CalibrationOffsetX, CalibrationOffsetY);
     }
 
@@ -1894,11 +1688,11 @@ public class MainViewModel : ViewModelBase
     {
         if (_selectedFormat.IsModuleBased)
         {
-            IReadOnlyList<IReadOnlyList<MpModuleViewModel>> pages = [_allMpPages[_currentPageIndex].AsReadOnly()];
+            IReadOnlyList<IReadOnlyList<MpModuleViewModel>> pages = [_mpDoc.PageAt(CurrentPageIndex)];
             return PrintService.BuildMpDocument(pages, _selectedFormat, _settings, PrintGridLines,
                 CalibrationOffsetX, CalibrationOffsetY);
         }
-        IReadOnlyList<IReadOnlyList<LabelViewModel>> spPages = [_allPages[_currentPageIndex].AsReadOnly()];
+        IReadOnlyList<IReadOnlyList<LabelViewModel>> spPages = [_spDoc.PageAt(CurrentPageIndex)];
         return PrintService.BuildDocument(spPages, _selectedFormat, _settings, PrintGridLines,
             CalibrationOffsetX, CalibrationOffsetY);
     }
@@ -2063,7 +1857,7 @@ public class MainViewModel : ViewModelBase
     {
         int labelsPerPage = _selectedFormat.LabelsPerPage;
         int startIndex = SelectedLabel?.Index ?? 0;
-        int startPage = _currentPageIndex;
+        int startPage = CurrentPageIndex;
         int cellIndex = 0;
 
         int pageIdx = startPage;
@@ -2071,14 +1865,8 @@ public class MainViewModel : ViewModelBase
 
         while (cellIndex < cells.Count)
         {
-            // Ensure page exists
-            while (pageIdx >= _allPages.Count)
-            {
-                int count = _selectedFormat.LabelsPerPage;
-                _allPages.Add(CreateEmptyPage(count));
-            }
-
-            var pageVms = _allPages[pageIdx];
+            _spDoc.EnsurePage(pageIdx, () => CreateEmptyPage(_selectedFormat.LabelsPerPage));
+            var pageVms = _spDoc.PageAt(pageIdx);
             if (labelIdx < pageVms.Count)
             {
                 var src = cells[cellIndex];
@@ -2104,7 +1892,7 @@ public class MainViewModel : ViewModelBase
 
         if (!_suppressContentLossConfirm) // Automation: keine modale Box
             _dialogs.ShowInfo(
-                $"{cells.Count} Etiketten importiert.\nVerteilt auf {_allPages.Count} Seite(n).",
+                $"{cells.Count} Etiketten importiert.\nVerteilt auf {_spDoc.PageCount} Seite(n).",
                 "Import abgeschlossen");
     }
 
@@ -2220,7 +2008,7 @@ public class MainViewModel : ViewModelBase
     private void PopulateMpFromParsedModules(List<ParsedModule> modules)
     {
         var familyInfo = ProductFamilyDefinitions.Get(_selectedFormat.Family);
-        int startPage = _currentPageIndex;
+        int startPage = CurrentPageIndex;
         int pageIdx = startPage;
         int modIdx = SelectedMpModule is not null ? MpModules.IndexOf(SelectedMpModule) : 0;
         if (modIdx < 0) modIdx = 0;
@@ -2228,10 +2016,9 @@ public class MainViewModel : ViewModelBase
         int imported = 0;
         foreach (var parsed in modules)
         {
-            while (pageIdx >= _allMpPages.Count)
-                _allMpPages.Add(CreateEmptyMpPage(familyInfo.ModulesPerPage));
+            _mpDoc.EnsurePage(pageIdx, () => CreateEmptyMpPage(familyInfo.ModulesPerPage));
 
-            var target = _allMpPages[pageIdx][modIdx];
+            var target = _mpDoc.PageAt(pageIdx)[modIdx];
             var type = MapParsedModuleType(parsed.ModuleType);
             target.HeaderText = parsed.ModuleName;
             if (type is not null)
@@ -2266,7 +2053,7 @@ public class MainViewModel : ViewModelBase
 
         if (!_suppressContentLossConfirm)
             _dialogs.ShowInfo(
-                $"{imported} Module importiert.\nVerteilt auf {_allMpPages.Count} Seite(n).",
+                $"{imported} Module importiert.\nVerteilt auf {_mpDoc.PageCount} Seite(n).",
                 "Import abgeschlossen");
     }
 
@@ -2283,12 +2070,10 @@ public class MainViewModel : ViewModelBase
 
     private void SetPrintFlagForAll(Func<LabelViewModel, bool> labelRule, Func<MpModuleViewModel, bool> moduleRule)
     {
-        foreach (var page in _allPages)
-            foreach (var label in page)
-                label.IsPrintEnabled = labelRule(label);
-        foreach (var page in _allMpPages)
-            foreach (var mod in page)
-                mod.IsPrintEnabled = moduleRule(mod);
+        foreach (var label in _spDoc.AllItems)
+            label.IsPrintEnabled = labelRule(label);
+        foreach (var mod in _mpDoc.AllItems)
+            mod.IsPrintEnabled = moduleRule(mod);
         IsDirty = true;
         NotifyMpPreviewChanged();
     }
@@ -2339,51 +2124,18 @@ public class MainViewModel : ViewModelBase
     /// modale Rueckfrage geschlossen werden kann (headless haengt sonst).</summary>
     internal void DiscardChangesForShutdown() => IsDirty = false;
 
-    internal string? CurrentFilePath => _currentFilePath;
+    internal string? CurrentFilePath => Session.CurrentFilePath;
 
     /// <summary>Test-Automation: druckbare Etiketten/Module je Seite (dieselbe
     /// Entscheidung wie der Druck).</summary>
     internal int[] PrintablePerPage() => _selectedFormat.IsModuleBased
-        ? _allMpPages.Select(p => p.Count(PrintService.IsPrintable)).ToArray()
-        : _allPages.Select(p => p.Count(PrintService.IsPrintable)).ToArray();
+        ? _mpDoc.Pages.Select(p => p.Count(PrintService.IsPrintable)).ToArray()
+        : _spDoc.Pages.Select(p => p.Count(PrintService.IsPrintable)).ToArray();
 
     /// <summary>Test-Automation: "Neues Projekt" ohne Rueckfrage.</summary>
-    internal void NewProjectWithoutConfirm()
-    {
-        bool wasDirty = _isDirty;
-        IsDirty = false;
-        try { NewProject(); }
-        finally { if (_isDirty) IsDirty = wasDirty; }
-    }
+    internal void NewProjectWithoutConfirm() => Session.NewProjectWithoutConfirm();
 
-    /// <summary>
-    /// Fragt den Benutzer ob ungespeicherte Aenderungen verworfen werden sollen.
-    /// Gibt true zurueck wenn fortgefahren werden darf.
-    /// </summary>
-    public bool ConfirmDiscardChanges()
-    {
-        if (!_isDirty) return true;
-
-        return _dialogs.ConfirmSave(
-            "Es gibt ungespeicherte Aenderungen.\nMoechten Sie diese speichern?",
-            "Ungespeicherte Aenderungen") switch
-        {
-            SaveDecision.Save => DoSaveAndConfirm(),
-            SaveDecision.Discard => true,
-            _ => false // Cancel
-        };
-    }
-
-    internal const string ProjectFileFilter = "ET-Printer Projekt (*.etprint)|*.etprint";
-
-    private bool DoSaveAndConfirm()
-    {
-        if (_currentFilePath is null)
-        {
-            var path = _dialogs.SaveFile(ProjectFileFilter, ".etprint", "Projekt");
-            return path is not null && DoSave(path);
-        }
-
-        return DoSave(_currentFilePath);
-    }
+    /// <summary>Fragt, ob ungespeicherte Aenderungen verworfen werden sollen (Fenster
+    /// schliessen). True = fortfahren.</summary>
+    public bool ConfirmDiscardChanges() => Session.ConfirmDiscardChanges();
 }
